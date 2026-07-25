@@ -1,0 +1,736 @@
+{
+  "version": 1,
+  "companies": [
+    {
+      "name": "1Password",
+      "ats": "ashby",
+      "board": "1password",
+      "tier": "A",
+      "tags": [
+        "security",
+        "canada"
+      ]
+    },
+    {
+      "name": "Abnormal Security",
+      "ats": "greenhouse",
+      "board": "abnormalsecurity",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Abridge",
+      "ats": "ashby",
+      "board": "abridge",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Affirm",
+      "ats": "greenhouse",
+      "board": "affirm",
+      "tier": "B",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Airtable",
+      "ats": "greenhouse",
+      "board": "airtable",
+      "tier": "B",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "AlayaCare",
+      "ats": "greenhouse",
+      "board": "alayacare",
+      "tier": "C",
+      "tags": [
+        "canada"
+      ]
+    },
+    {
+      "name": "Anduril",
+      "ats": "greenhouse",
+      "board": "andurilindustries",
+      "tier": "A",
+      "tags": [
+        "defense"
+      ]
+    },
+    {
+      "name": "Anthropic",
+      "ats": "greenhouse",
+      "board": "anthropic",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Anysphere",
+      "ats": "ashby",
+      "board": "cursor",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Applied Intuition",
+      "ats": "ashby",
+      "board": "applied",
+      "tier": "A",
+      "tags": [
+        "autonomy"
+      ]
+    },
+    {
+      "name": "Baseten",
+      "ats": "ashby",
+      "board": "baseten",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Benchling",
+      "ats": "ashby",
+      "board": "benchling",
+      "tier": "B",
+      "tags": [
+        "biotech"
+      ]
+    },
+    {
+      "name": "Brex",
+      "ats": "greenhouse",
+      "board": "brex",
+      "tier": "B",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Chainguard",
+      "ats": "greenhouse",
+      "board": "chainguard",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Cloudflare",
+      "ats": "greenhouse",
+      "board": "cloudflare",
+      "tier": "A",
+      "tags": [
+        "security",
+        "infra"
+      ]
+    },
+    {
+      "name": "Cohere",
+      "ats": "ashby",
+      "board": "cohere",
+      "tier": "A",
+      "tags": [
+        "ai",
+        "canada"
+      ]
+    },
+    {
+      "name": "Cohere Health",
+      "ats": "greenhouse",
+      "board": "coherehealth",
+      "tier": "C",
+      "tags": []
+    },
+    {
+      "name": "Coinbase",
+      "ats": "greenhouse",
+      "board": "coinbase",
+      "tier": "A",
+      "tags": [
+        "crypto"
+      ]
+    },
+    {
+      "name": "Corelight",
+      "ats": "greenhouse",
+      "board": "corelight",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Cresta",
+      "ats": "greenhouse",
+      "board": "cresta",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Databricks",
+      "ats": "greenhouse",
+      "board": "databricks",
+      "tier": "A",
+      "tags": [
+        "ai",
+        "data"
+      ]
+    },
+    {
+      "name": "Datadog",
+      "ats": "greenhouse",
+      "board": "datadog",
+      "tier": "A",
+      "tags": [
+        "observability"
+      ]
+    },
+    {
+      "name": "Descope",
+      "ats": "greenhouse",
+      "board": "descope",
+      "tier": "B",
+      "tags": [
+        "security",
+        "identity"
+      ]
+    },
+    {
+      "name": "Dialpad",
+      "ats": "greenhouse",
+      "board": "dialpad",
+      "tier": "B",
+      "tags": [
+        "canada"
+      ]
+    },
+    {
+      "name": "Discord",
+      "ats": "greenhouse",
+      "board": "discord",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "DoorDash",
+      "ats": "greenhouse",
+      "board": "doordashusa",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Dragos",
+      "ats": "greenhouse",
+      "board": "dragos",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Drata",
+      "ats": "ashby",
+      "board": "drata",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "ElevenLabs",
+      "ats": "ashby",
+      "board": "elevenlabs",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Expel",
+      "ats": "greenhouse",
+      "board": "expel",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Faire",
+      "ats": "greenhouse",
+      "board": "faire",
+      "tier": "B",
+      "tags": [
+        "canada"
+      ]
+    },
+    {
+      "name": "Figma",
+      "ats": "greenhouse",
+      "board": "figma",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Fireworks AI",
+      "ats": "greenhouse",
+      "board": "fireworksai",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "GitLab",
+      "ats": "greenhouse",
+      "board": "gitlab",
+      "tier": "A",
+      "tags": [
+        "devtools"
+      ]
+    },
+    {
+      "name": "Glean",
+      "ats": "greenhouse",
+      "board": "gleanwork",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Harvey",
+      "ats": "ashby",
+      "board": "harvey",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Huntress",
+      "ats": "greenhouse",
+      "board": "huntress",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Instacart",
+      "ats": "greenhouse",
+      "board": "instacart",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Jane Software",
+      "ats": "ashby",
+      "board": "jane",
+      "tier": "B",
+      "tags": [
+        "canada"
+      ]
+    },
+    {
+      "name": "LangChain",
+      "ats": "ashby",
+      "board": "langchain",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Linear",
+      "ats": "ashby",
+      "board": "linear",
+      "tier": "B",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Luma AI",
+      "ats": "ashby",
+      "board": "lumaai",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Material Security",
+      "ats": "ashby",
+      "board": "materialsecurity",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Modal",
+      "ats": "ashby",
+      "board": "modal",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Netskope",
+      "ats": "greenhouse",
+      "board": "netskope",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Notion",
+      "ats": "ashby",
+      "board": "notion",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Okta",
+      "ats": "greenhouse",
+      "board": "okta",
+      "tier": "A",
+      "tags": [
+        "security",
+        "identity"
+      ]
+    },
+    {
+      "name": "OpenAI",
+      "ats": "ashby",
+      "board": "openai",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Orca Security",
+      "ats": "greenhouse",
+      "board": "orcasecurity",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Oso",
+      "ats": "ashby",
+      "board": "oso",
+      "tier": "B",
+      "tags": [
+        "security",
+        "authorization"
+      ]
+    },
+    {
+      "name": "Perplexity AI",
+      "ats": "ashby",
+      "board": "perplexity",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Persona",
+      "ats": "ashby",
+      "board": "persona",
+      "tier": "B",
+      "tags": [
+        "security",
+        "identity"
+      ]
+    },
+    {
+      "name": "Pinecone",
+      "ats": "ashby",
+      "board": "pinecone",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Plaid",
+      "ats": "ashby",
+      "board": "plaid",
+      "tier": "B",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Ramp",
+      "ats": "ashby",
+      "board": "ramp",
+      "tier": "A",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Reddit",
+      "ats": "greenhouse",
+      "board": "reddit",
+      "tier": "A",
+      "tags": [
+        "product"
+      ]
+    },
+    {
+      "name": "Replit",
+      "ats": "ashby",
+      "board": "replit",
+      "tier": "B",
+      "tags": [
+        "devtools"
+      ]
+    },
+    {
+      "name": "Robinhood",
+      "ats": "greenhouse",
+      "board": "robinhood",
+      "tier": "A",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Runway",
+      "ats": "ashby",
+      "board": "runway",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Samsara",
+      "ats": "greenhouse",
+      "board": "samsara",
+      "tier": "B",
+      "tags": [
+        "iot"
+      ]
+    },
+    {
+      "name": "Scale AI",
+      "ats": "greenhouse",
+      "board": "scaleai",
+      "tier": "A",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Semgrep",
+      "ats": "ashby",
+      "board": "semgrep",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Sierra",
+      "ats": "ashby",
+      "board": "sierra",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Sigma Computing",
+      "ats": "greenhouse",
+      "board": "sigmacomputing",
+      "tier": "B",
+      "tags": [
+        "data"
+      ]
+    },
+    {
+      "name": "Socket",
+      "ats": "greenhouse",
+      "board": "socket",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Sourcegraph",
+      "ats": "greenhouse",
+      "board": "sourcegraph91",
+      "tier": "B",
+      "tags": [
+        "devtools"
+      ]
+    },
+    {
+      "name": "Stripe",
+      "ats": "greenhouse",
+      "board": "stripe",
+      "tier": "A",
+      "tags": [
+        "fintech"
+      ]
+    },
+    {
+      "name": "Stytch",
+      "ats": "ashby",
+      "board": "stytch",
+      "tier": "B",
+      "tags": [
+        "identity"
+      ]
+    },
+    {
+      "name": "Sysdig",
+      "ats": "lever",
+      "board": "sysdig",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Tailscale",
+      "ats": "greenhouse",
+      "board": "tailscale",
+      "tier": "B",
+      "tags": [
+        "security",
+        "canada"
+      ]
+    },
+    {
+      "name": "Teleport",
+      "ats": "ashby",
+      "board": "goteleport",
+      "tier": "B",
+      "tags": [
+        "security",
+        "identity"
+      ]
+    },
+    {
+      "name": "Thinkific",
+      "ats": "greenhouse",
+      "board": "thinkific",
+      "tier": "C",
+      "tags": [
+        "canada"
+      ]
+    },
+    {
+      "name": "Together AI",
+      "ats": "greenhouse",
+      "board": "togetherai",
+      "tier": "B",
+      "tags": [
+        "ai"
+      ]
+    },
+    {
+      "name": "Vanta",
+      "ats": "ashby",
+      "board": "vanta",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "Vercel",
+      "ats": "greenhouse",
+      "board": "vercel",
+      "tier": "B",
+      "tags": [
+        "devtools"
+      ]
+    },
+    {
+      "name": "Verkada",
+      "ats": "greenhouse",
+      "board": "verkada",
+      "tier": "B",
+      "tags": [
+        "security",
+        "hardware"
+      ]
+    },
+    {
+      "name": "Wealthsimple",
+      "ats": "ashby",
+      "board": "wealthsimple",
+      "tier": "A",
+      "tags": [
+        "canada",
+        "fintech"
+      ]
+    },
+    {
+      "name": "Wiz",
+      "ats": "greenhouse",
+      "board": "wizinc",
+      "tier": "A",
+      "tags": [
+        "security",
+        "cloud"
+      ]
+    },
+    {
+      "name": "WorkOS",
+      "ats": "ashby",
+      "board": "workos",
+      "tier": "B",
+      "tags": [
+        "identity"
+      ]
+    },
+    {
+      "name": "Zscaler",
+      "ats": "greenhouse",
+      "board": "zscaler",
+      "tier": "B",
+      "tags": [
+        "security"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Personal campaign data: profile, resumes, database, artifacts.
+# Never commit these - they contain PII and application history.
+config/
+data/
+artifacts/
+*.sqlite
+*.sqlite-journal
+*.db
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+Thumbs.db

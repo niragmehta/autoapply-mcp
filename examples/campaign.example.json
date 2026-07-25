@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "name": "example-campaign",
+  "targetApplications": 100,
+  "tracks": [
+    {
+      "id": "backend",
+      "label": "Backend and Platform Engineering",
+      "allocation": 1.0,
+      "titleIncludes": ["software engineer", "backend engineer", "platform engineer", "infrastructure engineer"],
+      "titleExcludes": ["sales engineer", "solutions engineer", "support engineer"],
+      "keywords": [
+        { "term": "distributed systems", "weight": 3 },
+        { "term": "kubernetes", "weight": 2, "aliases": ["k8s"] },
+        { "term": "python", "weight": 2 },
+        { "term": "microservices", "weight": 1 },
+        { "term": "observability", "weight": 1 }
+      ],
+      "resumeId": "backend"
+    }
+  ],
+  "locations": {
+    "allow": ["bay-area", "canada", "remote-canada"],
+    "workplaceTypes": ["onsite", "hybrid", "remote", "unknown"],
+    "includePatterns": [],
+    "excludePatterns": []
+  },
+  "compensation": {
+    "currency": "USD",
+    "floors": { "US": 200000, "CA": 165000 },
+    "fx": { "USD": 1, "CAD": 0.73 },
+    "allowUnknown": true,
+    "rejectBelowFloor": true
+  },
+  "seniority": {
+    "allow": ["senior", "staff", "principal", "unspecified"],
+    "reject": ["intern", "new-grad", "junior", "manager", "director", "executive"]
+  },
+  "exclusions": {
+    "titlePatterns": ["recruiter", "account executive", "sales", "marketing"],
+    "descriptionPatterns": [],
+    "companies": []
+  },
+  "scoring": {
+    "weights": {
+      "roleAlignment": 25,
+      "domainAlignment": 25,
+      "stackAlignment": 15,
+      "seniority": 10,
+      "compensation": 10,
+      "workAuthorization": 10,
+      "freshness": 5
+    },
+    "thresholds": { "tierA": 85, "tierB": 75, "tierC": 68 }
+  },
+  "freshnessDays": 45,
+  "submission": {
+    "mode": "manual",
+    "allowedAtsDomains": ["boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"],
+    "allowedCompanies": [],
+    "dailyLimit": 20,
+    "minDelaySeconds": 60,
+    "captureScreenshots": true
+  }
+}
