@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "companies": [
+    { "name": "Example Greenhouse Co", "ats": "greenhouse", "board": "examplegreenhouse", "tier": "A", "tags": ["example"] },
+    { "name": "Example Lever Co", "ats": "lever", "board": "examplelever", "tier": "B", "tags": ["example"] },
+    { "name": "Example Ashby Co", "ats": "ashby", "board": "exampleashby", "tier": "B", "tags": ["example"] }
+  ]
+}

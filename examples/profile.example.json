@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "identity": {
+    "fullName": "Jordan Example",
+    "headline": "Senior Software Engineer",
+    "email": "jordan@example.com",
+    "phone": "555-0100",
+    "location": { "city": "Toronto", "region": "Ontario", "country": "Canada" },
+    "links": {
+      "linkedin": "https://linkedin.com/in/example",
+      "github": "https://github.com/example",
+      "website": "https://example.com"
+    }
+  },
+  "workAuthorization": {
+    "citizenships": ["Canada"],
+    "authorizedIn": ["CA"],
+    "requiresSponsorshipIn": ["US"],
+    "statement": "Canadian citizen authorized to work in Canada. US roles require employer support for work authorization.",
+    "alwaysReviewManually": true
+  },
+  "compensation": {
+    "currency": "USD",
+    "targetTotal": 280000,
+    "minimumTotal": 200000,
+    "disclosurePolicy": "decline",
+    "rangeStatement": "Open to discussing compensation once we have both assessed fit."
+  },
+  "preferences": {
+    "willingToRelocate": true,
+    "relocationTargets": ["San Francisco Bay Area"],
+    "workplaceTypes": ["onsite", "hybrid", "remote"],
+    "noticePeriod": "4 weeks"
+  },
+  "resumes": [
+    {
+      "id": "backend",
+      "label": "Backend and Platform",
+      "path": "C:/path/to/resume-backend.pdf",
+      "tracks": ["backend"],
+      "isDefault": true
+    }
+  ],
+  "skills": [
+    { "name": "Python", "aliases": ["py"], "level": "expert", "tags": ["language"] },
+    { "name": "Kubernetes", "aliases": ["k8s"], "level": "strong", "tags": ["infrastructure"] },
+    { "name": "distributed systems", "level": "strong", "tags": ["architecture"] }
+  ],
+  "facts": [
+    {
+      "id": "scaling",
+      "statement": "Scaled a payments API from 2k to 40k requests per second by redesigning its caching layer.",
+      "metrics": ["40k rps", "60% latency reduction"],
+      "tags": ["distributed systems", "performance", "python"]
+    }
+  ],
+  "experience": [
+    {
+      "company": "Example Corp",
+      "title": "Senior Software Engineer",
+      "location": "Toronto, Canada",
+      "start": "2021-03",
+      "end": "present",
+      "highlights": ["Led the platform reliability workstream across four teams."]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Example University",
+      "credential": "BSc Computer Science",
+      "field": "Computer Science",
+      "location": "Toronto, Canada",
+      "start": "2016-09",
+      "end": "2020-12"
+    }
+  ],
+  "answers": [
+    {
+      "key": "source",
+      "label": "How did you hear about us?",
+      "patterns": ["how did you hear", "how did you find"],
+      "answer": "Company careers page",
+      "allowAutoFill": true
+    },
+    {
+      "key": "start-date",
+      "label": "Earliest start date",
+      "patterns": ["start date", "notice period", "available to start"],
+      "answer": "Four weeks from offer acceptance",
+      "allowAutoFill": true
+    },
+    {
+      "key": "salary-expectation",
+      "label": "Salary expectation",
+      "patterns": ["salary expectation", "desired salary", "compensation expectation"],
+      "answer": "Open to discussing compensation once we have both assessed fit.",
+      "allowAutoFill": false,
+      "note": "Never auto-filled: anchoring on a number too early is costly."
+    }
+  ]
+}
