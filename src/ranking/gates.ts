@@ -161,22 +161,28 @@ export function evaluateGates(job: Job, context: GateContext): GateResult {
 }
 
 /**
- * Work authorization is evaluated per country: a "must be authorized in Canada"
- * line is fine for a Canadian citizen, while the same line about the US is a
- * hard stop when the employer also rules out sponsorship.
+ * Work authorization is evaluated per country. A "must be authorized in Canada"
+ * line is fine for a Canadian citizen, and a "we do not sponsor" line is not
+ * disqualifying in a country the candidate can work in without sponsorship,
+ * such as a Canadian using TN status under USMCA.
  */
 export function evaluateWorkAuthorizationGate(job: Job, profile: Profile): GateResult {
   const country = job.country.toUpperCase();
   const description = job.descriptionText ?? "";
   const authorized = profile.workAuthorization.authorizedIn.map((code) => code.toUpperCase());
+  const noSponsorshipNeeded = profile.workAuthorization.noSponsorshipRequiredIn.map((code) => code.toUpperCase());
   const needsSponsorship = profile.workAuthorization.requiresSponsorshipIn.map((code) => code.toUpperCase());
 
   if (authorized.includes(country)) return pass();
 
+  // Citizenship and clearance requirements are absolute; no visa route satisfies
+  // them, so they gate out regardless of the sponsorship position.
   const citizenship = findPattern(description, CITIZENSHIP_PATTERNS);
   if (citizenship) {
     return fail("citizenship-required", "posting requires citizenship the candidate does not hold", citizenship);
   }
+
+  if (noSponsorshipNeeded.includes(country)) return pass();
 
   if (needsSponsorship.includes(country) || country === "UNKNOWN") {
     const noSponsorship = findPattern(description, NO_SPONSORSHIP_PATTERNS);

@@ -123,6 +123,9 @@ export function buildMatchReport(
   const compensationCheck = checkCompensationFloor(job.compensation, job.country, campaign.compensation);
   const resume = selectResume(profile, evaluation.trackId);
   const authorized = profile.workAuthorization.authorizedIn.map((code) => code.toUpperCase()).includes(job.country.toUpperCase());
+  const noSponsorship = profile.workAuthorization.noSponsorshipRequiredIn
+    .map((code) => code.toUpperCase())
+    .includes(job.country.toUpperCase());
 
   return {
     jobId: job.id,
@@ -142,7 +145,9 @@ export function buildMatchReport(
     },
     workAuthorizationNote: authorized
       ? `Candidate is already authorized to work in ${job.country}.`
-      : profile.workAuthorization.statement,
+      : noSponsorship
+        ? `Candidate can work in ${job.country} without employer sponsorship. ${profile.workAuthorization.statement}`
+        : profile.workAuthorization.statement,
     matchedKeywords: matched,
     missingKeywords: missing,
     claimsToAvoid,

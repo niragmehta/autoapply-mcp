@@ -24,15 +24,20 @@ Approval binds to a SHA-256 hash of the exact packet: job, apply URL, resume, co
 
 ## Truthfulness
 
-The answer policy engine can produce an answer from exactly three sources:
+The answer policy engine can produce an answer from exactly four sources:
 
 1. A verified field in `profile.json`, cited by path (for example `identity.email`).
 2. A pre-approved answer in `profile.answers` whose pattern matches the question.
 3. A field in `profile.personal` that the candidate marked `autoFill: true`.
+4. A `profile.narratives` template, rendered from the specific posting.
 
 Everything else is returned with `source: "blocked"` and an empty answer. The server has no fallback that guesses, infers or generates a plausible response.
 
+Narrative templates fill `{topics}` only from keywords the posting asks for **and** the profile supports; anything in `claimsToAvoid` is excluded, so a template cannot claim experience the candidate does not have.
+
 Storing a personal value is not consent to send it. Each field carries its own `autoFill` flag, and the flag is the consent.
+
+Where question phrasings overlap, the longest matching pattern wins. This matters for sponsorship: a generic "do you require sponsorship" answer must not pre-empt one written for a form that defines sponsorship to include TN.
 
 Match reports include a `claimsToAvoid` list: requirements the posting asks for that your profile cannot support. An agent writing your cover letter is told explicitly not to claim them.
 

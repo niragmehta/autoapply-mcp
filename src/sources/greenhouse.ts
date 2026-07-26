@@ -92,10 +92,15 @@ export const greenhouseAdapter: SourceAdapter = {
 
 export type GreenhouseQuestionField = { name?: unknown; type?: unknown; values?: unknown };
 export type GreenhouseQuestion = { label?: unknown; required?: unknown; fields?: GreenhouseQuestionField[] };
+/** Compliance sections group their questions under a description. */
+export type GreenhouseComplianceGroup = { type?: unknown; description?: unknown; questions?: GreenhouseQuestion[] };
 
 /**
  * Fetches one posting including its application questions, which drives the
  * answer policy engine before a submission is prepared.
+ *
+ * Compliance and demographic sections nest their questions one level deeper
+ * than the main question list, so they are flattened here.
  */
 export async function fetchGreenhouseJobDetail(
   board: string,
@@ -104,13 +109,20 @@ export async function fetchGreenhouseJobDetail(
   const url = `${BASE}/${encodeURIComponent(board)}/jobs/${encodeURIComponent(jobId)}?questions=true&pay_transparency=true`;
   const payload = await fetchJson<{
     questions?: GreenhouseQuestion[];
-    compliance?: GreenhouseQuestion[];
+    compliance?: GreenhouseComplianceGroup[];
+    demographic_questions?: { questions?: GreenhouseQuestion[] };
     location_questions?: GreenhouseQuestion[];
     pay_input_ranges?: GreenhousePayRange[];
   }>(url);
+
+  const compliance = (payload.compliance ?? []).flatMap((group) =>
+    Array.isArray(group.questions) ? group.questions : [],
+  );
+  const demographic = payload.demographic_questions?.questions ?? [];
+
   return {
     questions: [...(payload.questions ?? []), ...(payload.location_questions ?? [])],
-    compliance: payload.compliance ?? [],
+    compliance: [...compliance, ...demographic],
     payRanges: payload.pay_input_ranges ?? [],
   };
 }

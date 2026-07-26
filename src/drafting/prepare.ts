@@ -66,7 +66,18 @@ export async function prepareApplicationFor(
   const resumeCheck = validateResumeFile(resume.path);
 
   const { questions, source } = await loadQuestions(job.ats, job.board, job.externalId);
-  const drafted = draftAnswers(questions, profile, campaign);
+
+  // Narrative templates are filled from this specific posting, using only the
+  // topics the profile genuinely supports.
+  const narrativeContext = {
+    company: job.companyName,
+    role: job.title,
+    location: job.locationsRaw[0] ?? job.locationClass,
+    topics: report.matchedKeywords
+      .map((entry) => entry.term)
+      .filter((term) => !report.claimsToAvoid.includes(term)),
+  };
+  const drafted = draftAnswers(questions, profile, campaign, narrativeContext);
 
   const application: Application = {
     id: existing?.id ?? newId("app"),

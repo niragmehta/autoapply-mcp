@@ -3,13 +3,23 @@
  *
  * Application history is sensitive: it contains contact details, immigration
  * answers and demographic responses. None of that belongs in a log file.
+ *
+ * Patterns are anchored so they cannot fire inside longer alphanumeric tokens.
+ * Packet and manifest hashes are hex digits, and a phone-shaped run inside one
+ * would corrupt the very audit record the log exists to preserve.
  */
+
+const NOT_ALNUM_BEFORE = "(?<![A-Za-z0-9])";
+const NOT_ALNUM_AFTER = "(?![A-Za-z0-9])";
 
 const PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "[email]"],
-  [/(?:\+?\d{1,2}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, "[phone]"],
-  [/\b\d{3}-\d{2}-\d{4}\b/g, "[gov-id]"],
-  [/\b(?:\d[ -]*?){13,16}\b/g, "[card]"],
+  [
+    new RegExp(`${NOT_ALNUM_BEFORE}(?:\\+?\\d{1,2}[\\s.-]?)?\\(?\\d{3}\\)?[\\s.-]?\\d{3}[\\s.-]?\\d{4}${NOT_ALNUM_AFTER}`, "g"),
+    "[phone]",
+  ],
+  [new RegExp(`${NOT_ALNUM_BEFORE}\\d{3}-\\d{2}-\\d{4}${NOT_ALNUM_AFTER}`, "g"), "[gov-id]"],
+  [new RegExp(`${NOT_ALNUM_BEFORE}(?:\\d[ -]?){13,16}${NOT_ALNUM_AFTER}`, "g"), "[card]"],
   [/(?:api[_-]?key|token|secret|password|authorization)["'\s:=]+[A-Za-z0-9._~+/-]{8,}/gi, "[secret]"],
 ];
 

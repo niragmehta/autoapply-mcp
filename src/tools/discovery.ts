@@ -102,7 +102,7 @@ export function registerDiscoveryTools(server: McpServer): void {
         companies: z.array(z.string()).optional(),
         minCompensation: z.number().optional().describe("Minimum annualized top-of-range pay in the campaign currency."),
         allowUnknownCompensation: z.boolean().optional().describe("Include postings with no published pay."),
-        limit: z.number().int().positive().max(200).optional(),
+        limit: z.number().int().positive().max(500).optional(),
       },
       annotations: { readOnlyHint: true },
     },

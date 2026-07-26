@@ -66,6 +66,76 @@ Run `reload_config`, then `prepare_batch` again. The count drops.
 
 `essay` questions are deliberately never pre-answered: a generic answer to "why do you want to work here" is worse than none.
 
+## Work authorization
+
+Three lists describe where you can work, and they mean different things:
+
+```json
+"workAuthorization": {
+  "citizenships": ["Canada"],
+  "authorizedIn": ["CA"],
+  "noSponsorshipRequiredIn": ["US"],
+  "requiresSponsorshipIn": [],
+  "statement": "...",
+  "alwaysReviewManually": false
+}
+```
+
+| Field | Meaning | Effect |
+|---|---|---|
+| `authorizedIn` | Authorized today, no employer action | Gate passes; full scoring credit |
+| `noSponsorshipRequiredIn` | Can obtain authorization without employer sponsorship, e.g. a Canadian using TN under USMCA | Gate passes even when the posting says it will not sponsor; 90% scoring credit |
+| `requiresSponsorshipIn` | Employer must petition | Gate rejects postings that rule out sponsorship |
+
+Separating the middle case matters. A blanket "authorized" claim is inaccurate for someone who has not yet entered on TN, while treating TN as ordinary sponsorship discards employers who simply will not file an H-1B.
+
+Citizenship and clearance requirements still gate out regardless: no visa route satisfies "must be a U.S. citizen" or "must hold TS/SCI".
+
+### Answering sponsorship questions
+
+Set `alwaysReviewManually: false` and add matching entries to `profile.answers` with `allowAutoFill: true`.
+
+Employers phrase this several ways and the phrasings do not mean the same thing. Real examples from live boards:
+
+| Question | Consideration |
+|---|---|
+| "Do you require visa sponsorship?" | TN needs no petition or lottery, so "No" is defensible |
+| "...require sponsorship (e.g., H-1B, E-3, **TN**, O-1...) requiring a written submission to a government agency?" | This definition **includes TN**. "No" would be false here |
+| "Are you a U.S. Person (Citizen, LPR, Refugee, Asylee)?" | A separate factual question, usually export-control related |
+| "Are you legally authorized to work in the country where the job is located?" | Country-relative; the answer changes with the posting |
+
+Because these overlap, the longest matching pattern wins rather than the first, so a specific answer is never pre-empted by a generic one. Write a distinct entry for each phrasing you care about.
+
+These are legal attestations on a document you sign. Confirm your wording with an immigration lawyer, and remember that Form I-9 verifies status at onboarding.
+
+## Narrative templates
+
+`profile.narratives` answers open-ended questions such as "Why this company?" and cover-letter fields without either storing boilerplate or letting a model invent something.
+
+```json
+"narratives": [{
+  "key": "why-company",
+  "label": "Why this company?",
+  "patterns": ["why {company}", "why do you want to work", "cover letter"],
+  "template": "I have spent five years building security infrastructure... {company}'s work on {topics} lines up with that, and {role} is where I would apply it.",
+  "allowAutoFill": true,
+  "minTopics": 1
+}]
+```
+
+| Placeholder | Filled with |
+|---|---|
+| `{company}` | Employer name |
+| `{role}` | Job title |
+| `{topics}` | Keywords the posting asks for **that your profile actually supports** |
+| `{location}` | Posting location |
+
+`{company}` also works inside `patterns`, so one entry matches "Why Anthropic?", "Why Stripe?" and the generic phrasings.
+
+`topics` is drawn from the match report and excludes anything in `claimsToAvoid`, so a template cannot claim experience you do not have. `minTopics` declines to render when the posting produced too little to say something specific — a handed-back question is better than a generic paragraph.
+
+A template is not a substitute for a real cover letter on roles you care most about. It is a reasonable floor for volume.
+
 ## Personal and demographic data
 
 `profile.personal` caches the details most forms require. Every field has its own `autoFill` flag, and **nothing is sent unless that flag is true**. Storing a value is not consent to send it.
@@ -83,7 +153,9 @@ Run `reload_config`, then `prepare_batch` again. The count drops.
     "raceEthnicity": { "value": "Decline to self-identify", "autoFill": true },
     "hispanicLatino": { "value": "Decline to self-identify", "autoFill": true },
     "veteranStatus": { "value": "I am not a protected veteran", "autoFill": true },
-    "disabilityStatus": { "value": "I do not wish to answer", "autoFill": true }
+    "disabilityStatus": { "value": "I do not wish to answer", "autoFill": true },
+    "sexualOrientation": { "value": "Decline to self-identify", "autoFill": true },
+    "transgenderIdentity": { "value": "Decline to self-identify", "autoFill": true }
   }
 }
 ```
@@ -92,16 +164,15 @@ US self-identification questions are voluntary. "Decline to self-identify" is a 
 
 `personal` is redacted from logs and audit payloads, and `config/` is gitignored.
 
-## Work authorization stays deliberate
+## Deliberately blank answers
 
-Work authorization, sponsorship and citizenship questions are not covered by `personal`. They are legal attestations, and a wrong answer can void an offer.
+Optional free-text fields such as "Additional Information" are often better empty than filled with something generic. Recording that as a decision stops them blocking every application:
 
-They only auto-fill when **both** are true:
+```json
+{ "key": "additional-information", "patterns": ["additional information"], "answer": "", "skip": true }
+```
 
-1. `profile.workAuthorization.alwaysReviewManually` is `false`
-2. A `profile.answers` entry matches the question with `allowAutoFill: true`
-
-The default configuration satisfies neither, so these questions stop for a decision. If you set an answer, set the one that is true for you: for a citizen of one country applying in another, "I do not require sponsorship" and "I am authorized to work here" are usually not accurate, and the accurate phrasing depends on the visa route. Confirm the wording with an immigration lawyer before enabling auto-fill.
+`skip` is the difference between "I decided to leave this blank" and "nobody has looked at this yet". A blank answer without `skip` still stops for a human.
 
 ## Submission
 
