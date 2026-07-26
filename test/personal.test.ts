@@ -65,6 +65,21 @@ describe("resolvePersonal", () => {
     expect(fields).toContain("personal.demographics.gender");
     expect(fields).not.toContain("personal.demographics.disabilityStatus");
   });
+
+  it("resolves camel case compliance labels", () => {
+    const p = withPersonal({
+      demographics: {
+        gender: { value: "Decline to self-identify", autoFill: true },
+        veteranStatus: { value: "I am not a protected veteran", autoFill: true },
+        disabilityStatus: { value: "I do not want to answer", autoFill: true },
+        hispanicLatino: { value: "Decline to self-identify", autoFill: true },
+      },
+    });
+    expect(resolvePersonal("DisabilityStatus", p)?.answer).toBe("I do not want to answer");
+    expect(resolvePersonal("VeteranStatus", p)?.answer).toBe("I am not a protected veteran");
+    expect(resolvePersonal("HispanicLatino", p)?.answer).toBe("Decline to self-identify");
+    expect(resolvePersonal("Gender", p)?.authorized).toBe(true);
+  });
 });
 
 describe("draftAnswers with personal data", () => {

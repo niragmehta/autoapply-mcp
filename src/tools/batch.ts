@@ -139,21 +139,19 @@ export function registerBatchTools(server: McpServer): void {
             workspace.campaign,
           );
           const blocked = prepared.application.status === "needs_human";
+          // Keep each reason whole; truncating the joined string would split a
+          // category mid-word and corrupt the grouped counts below.
+          const reasons = [
+            ...(prepared.resumeCheck.ok ? [] : [`resume: ${prepared.resumeCheck.reason}`]),
+            ...prepared.outstanding.map((question) => `${question.category}: ${question.label.slice(0, 70)}`),
+          ];
           items.push({
             batchId,
             applicationId: prepared.application.id,
             jobId: entry.job.id,
             packetHash: prepared.application.packetHash,
             state: blocked ? "needs_human" : "ready",
-            detail: blocked
-              ? [
-                  prepared.resumeCheck.ok ? "" : prepared.resumeCheck.reason,
-                  ...prepared.outstanding.map((question) => `${question.category}: ${question.label}`),
-                ]
-                  .filter((line) => line.length > 0)
-                  .join(" | ")
-                  .slice(0, 500)
-              : "",
+            detail: blocked ? reasons.slice(0, 8).join(" | ") : "",
           });
         } catch (error) {
           failures.push({ jobId: entry.job.id, error: toErrorMessage(error) });

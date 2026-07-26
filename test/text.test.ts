@@ -90,6 +90,16 @@ describe("redact", () => {
     expect(output).toContain("[email]");
   });
 
+  it("does not corrupt hex hashes that contain phone-shaped digit runs", () => {
+    const hash = "cd229602201076465f502723e0c7d57fedf8d7a12a99b0943637f0454944334442";
+    expect(redact(`manifest ${hash} ok`)).toContain(hash);
+  });
+
+  it("still redacts a phone number adjacent to punctuation", () => {
+    expect(redact("call (604) 555-0134.")).toContain("[phone]");
+    expect(redact("phone=6045550134")).toContain("[phone]");
+  });
+
   it("withholds answers in sensitive categories", () => {
     expect(redactAnswerForStorage("demographic", "Prefer not to say")).toContain("withheld");
     expect(redactAnswerForStorage("contact", "Alex")).toBe("Alex");

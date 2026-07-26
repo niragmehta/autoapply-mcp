@@ -64,16 +64,50 @@ export const ApprovedAnswerSchema = z.object({
   label: nonEmpty,
   /** Case-insensitive substrings matched against the ATS question label. */
   patterns: z.array(nonEmpty).min(1),
-  answer: nonEmpty,
+  /** May be empty to record a known question that must still be decided. */
+  answer: z.string().default(""),
   allowAutoFill: z.boolean().default(false),
+  /**
+   * Deliberately leave this question blank. Optional free-text fields are often
+   * better empty than filled with something generic, and recording that as a
+   * decision stops the question blocking every application.
+   */
+  skip: z.boolean().default(false),
   note: z.string().optional(),
 });
+
+/**
+ * Templated answers for open-ended questions such as "why this company".
+ *
+ * A template is the candidate's own words with slots for details taken from the
+ * posting, so a generated answer stays truthful and specific rather than
+ * becoming boilerplate. Supported placeholders: {company}, {role}, {topics},
+ * {location}. Patterns may also contain {company}, which expands to the
+ * employer's name before matching.
+ */
+export const NarrativeTemplateSchema = z.object({
+  key: nonEmpty,
+  label: nonEmpty,
+  patterns: z.array(nonEmpty).min(1),
+  template: nonEmpty,
+  allowAutoFill: z.boolean().default(false),
+  /** Skip the template when the posting yields fewer matched topics than this. */
+  minTopics: z.number().int().min(0).default(0),
+  note: z.string().optional(),
+});
+export type NarrativeTemplate = z.infer<typeof NarrativeTemplateSchema>;
 
 export const WorkAuthorizationSchema = z.object({
   citizenships: z.array(nonEmpty).min(1),
   /** ISO country codes where the candidate can work with no employer action. */
   authorizedIn: z.array(nonEmpty).default([]),
-  /** ISO country codes where an employer must support work authorization. */
+  /**
+   * ISO country codes where the candidate can obtain work authorization without
+   * employer sponsorship, for example a Canadian citizen using TN status under
+   * USMCA. Distinct from `authorizedIn`, which means already authorized today.
+   */
+  noSponsorshipRequiredIn: z.array(nonEmpty).default([]),
+  /** ISO country codes where an employer must petition for work authorization. */
   requiresSponsorshipIn: z.array(nonEmpty).default([]),
   /** Verbatim disclosure used when a form asks about authorization. */
   statement: nonEmpty,
@@ -118,6 +152,8 @@ export const DemographicsSchema = z.object({
   hispanicLatino: storedAnswer(),
   veteranStatus: storedAnswer(),
   disabilityStatus: storedAnswer(),
+  sexualOrientation: storedAnswer(),
+  transgenderIdentity: storedAnswer(),
 });
 
 export const PostalAddressSchema = z.object({
@@ -178,6 +214,7 @@ export const ProfileSchema = z.object({
   experience: z.array(ExperienceSchema).default([]),
   education: z.array(EducationSchema).default([]),
   answers: z.array(ApprovedAnswerSchema).default([]),
+  narratives: z.array(NarrativeTemplateSchema).default([]),
 });
 
 export type Profile = z.infer<typeof ProfileSchema>;

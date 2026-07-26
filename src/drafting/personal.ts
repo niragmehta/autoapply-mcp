@@ -1,4 +1,5 @@
 import type { Personal, Profile, StoredAnswer } from "../domain/profile.js";
+import { normalizeQuestionLabel } from "./blockedQuestions.js";
 
 /**
  * Resolvers for personal and demographic form fields.
@@ -53,13 +54,25 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.demographics.pronouns",
   },
   {
+    pattern: /\b(sexual orientation|orientation)\b/i,
+    category: "demographic",
+    resolve: (personal) => personal.demographics.sexualOrientation,
+    citation: "personal.demographics.sexualOrientation",
+  },
+  {
+    pattern: /\b(transgender|gender identity)\b/i,
+    category: "demographic",
+    resolve: (personal) => personal.demographics.transgenderIdentity,
+    citation: "personal.demographics.transgenderIdentity",
+  },
+  {
     pattern: /\b(hispanic|latino|latinx)\b/i,
     category: "demographic",
     resolve: (personal) => personal.demographics.hispanicLatino,
     citation: "personal.demographics.hispanicLatino",
   },
   {
-    pattern: /\b(race|ethnicity|ethnic group|racial)\b/i,
+    pattern: /\b(race|racial|ethnic\w*)\b/i,
     category: "demographic",
     resolve: (personal) => personal.demographics.raceEthnicity,
     citation: "personal.demographics.raceEthnicity",
@@ -102,8 +115,9 @@ const RESOLVERS: readonly Resolver[] = [
  * opted this field in for automatic use.
  */
 export function resolvePersonal(label: string, profile: Profile): (PersonalResolution & { category: string }) | null {
+  const normalized = normalizeQuestionLabel(label);
   for (const resolver of RESOLVERS) {
-    if (!resolver.pattern.test(label)) continue;
+    if (!resolver.pattern.test(label) && !resolver.pattern.test(normalized)) continue;
     const raw = resolver.resolve(profile.personal, profile);
     const stored: StoredAnswer = typeof raw === "string" ? { value: raw, autoFill: false } : raw;
     if (stored.value.trim().length === 0) return null;
@@ -131,6 +145,8 @@ export function autoFillableFields(profile: Profile): string[] {
     ["personal.demographics.hispanicLatino", personal.demographics.hispanicLatino],
     ["personal.demographics.veteranStatus", personal.demographics.veteranStatus],
     ["personal.demographics.disabilityStatus", personal.demographics.disabilityStatus],
+    ["personal.demographics.sexualOrientation", personal.demographics.sexualOrientation],
+    ["personal.demographics.transgenderIdentity", personal.demographics.transgenderIdentity],
   ];
   return entries
     .filter(([, value]) => (typeof value === "boolean" ? value : value.autoFill && value.value.trim().length > 0))

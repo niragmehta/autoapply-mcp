@@ -13,7 +13,7 @@ const CATEGORY_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
   ["clearance", /\bclearance\b|\bts\/sci\b|\btop secret\b|\bpublic trust\b/i],
   ["criminal-history", /\b(convicted|conviction|felony|misdemeanor|criminal (?:record|history)|background check)\b/i],
   ["compensation", /\b(salary|compensation|pay)\b[^?]{0,30}\b(expectation|requirement|range|desired|current)\b|\bdesired (?:salary|compensation)\b|\bcurrent (?:salary|compensation)\b|\bexpected (?:salary|compensation)\b/i],
-  ["demographic", /\b(gender|race|ethnic\w*|hispanic|latino|pronoun|sexual orientation|lgbtq)\b/i],
+  ["demographic", /\b(gender|race|racial|ethnic\w*|hispanic|latino|pronoun|sexual orientation|lgbtq|transgender)\b/i],
   ["veteran", /\bveteran\b|\bmilitary service\b|\barmed forces\b/i],
   ["disability", /\bdisabilit\w*\b|\baccommodation\b/i],
   ["legal-attestation", /\b(certify|attest|acknowledge|i agree|consent|gdpr|privacy (?:policy|notice)|terms and conditions)\b/i],
@@ -24,11 +24,30 @@ const CATEGORY_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
   ["essay", /\bwhy (?:do you|are you|would you)\b|\btell us\b|\bdescribe\b|\bwhat (?:interests|excites|motivates)\b|\bin your own words\b/i],
 ];
 
+/**
+ * Normalizes an ATS question label before matching.
+ *
+ * Compliance sections use camel case identifiers such as "DisabilityStatus" and
+ * "HispanicLatino", where word-boundary patterns would not fire. Splitting them
+ * into words lets one set of patterns cover both styles.
+ */
+export function normalizeQuestionLabel(label: string): string {
+  return label
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function classifyQuestion(label: string): string {
-  const text = label.trim();
-  if (text.length === 0) return "general";
+  const raw = label.trim();
+  if (raw.length === 0) return "general";
+  // Test both forms: normalization splits camel case, which helps compliance
+  // labels but would break single-token names such as "LinkedIn".
+  const normalized = normalizeQuestionLabel(raw);
   for (const [category, pattern] of CATEGORY_PATTERNS) {
-    if (pattern.test(text)) return category;
+    if (pattern.test(raw) || pattern.test(normalized)) return category;
   }
   return "general";
 }

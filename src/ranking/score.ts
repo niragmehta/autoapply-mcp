@@ -142,6 +142,13 @@ function scoreWorkAuthorization(job: Job, profile: Profile): { ratio: number; ra
   if (profile.workAuthorization.authorizedIn.map((code) => code.toUpperCase()).includes(country)) {
     return { ratio: 1, rationale: `candidate is already authorized to work in ${country}`, flags: [] };
   }
+  if (profile.workAuthorization.noSponsorshipRequiredIn.map((code) => code.toUpperCase()).includes(country)) {
+    return {
+      ratio: 0.9,
+      rationale: `candidate can work in ${country} without employer sponsorship`,
+      flags: ["work-authorization-via-treaty"],
+    };
+  }
   const description = job.descriptionText.toLowerCase();
   const positive = SPONSORSHIP_POSITIVE.find((phrase) => description.includes(phrase));
   if (positive) {

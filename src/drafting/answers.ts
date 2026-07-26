@@ -2,6 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { classifyQuestion, isBlockedCategory, looksLikeEssay } from "./blockedQuestions.js";
+import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { resolvePersonal } from "./personal.js";
 
 /**
@@ -40,9 +41,35 @@ function formatLocation(profile: Profile): string {
   return [city, region, country].filter((part) => part.length > 0).join(", ");
 }
 
+/**
+ * Finds the pre-approved answer whose pattern matches most specifically.
+ *
+ * Longest match wins rather than array order, because sponsorship questions
+ * overlap: a generic "do you require sponsorship" answer must not pre-empt the
+ * answer written for "...require sponsorship (e.g. H-1B, E-3, TN, O-1...)",
+ * which names a route the candidate would in fact use.
+ */
 function matchApprovedAnswer(profile: Profile, label: string) {
   const haystack = label.toLowerCase();
-  return profile.answers.find((entry) => entry.patterns.some((pattern) => haystack.includes(pattern.toLowerCase())));
+  let best: { entry: Profile["answers"][number]; length: number } | null = null;
+  for (const entry of profile.answers) {
+    for (const pattern of entry.patterns) {
+      const needle = pattern.toLowerCase();
+      if (!haystack.includes(needle)) continue;
+      if (!best || needle.length > best.length) best = { entry, length: needle.length };
+    }
+  }
+  return best?.entry;
+}
+
+/**
+ * An answer may be auto-filled when it is authorized and non-empty, or when it
+ * is explicitly marked to be skipped. A blank entry that is neither records
+ * that a question is known and still needs a decision.
+ */
+function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boolean }): boolean {
+  if (entry.skip === true) return true;
+  return entry.allowAutoFill && entry.answer.trim().length > 0;
 }
 
 function blocked(question: FormQuestion, category: string, reason: string): DraftAnswer {
@@ -65,14 +92,20 @@ export function draftAnswers(
   questions: readonly FormQuestion[],
   profile: Profile,
   campaign: Campaign,
+  context?: NarrativeContext,
 ): { answers: DraftAnswer[]; blockedQuestions: string[] } {
   const blockedCategories = campaign.submission.blockedQuestionCategories;
-  const answers = questions.map((question) => answerOne(question, profile, blockedCategories));
+  const answers = questions.map((question) => answerOne(question, profile, blockedCategories, context));
   const blockedQuestions = answers.filter((answer) => answer.requiresHuman).map((answer) => answer.label);
   return { answers, blockedQuestions };
 }
 
-function answerOne(question: FormQuestion, profile: Profile, blockedCategories: readonly string[]): DraftAnswer {
+function answerOne(
+  question: FormQuestion,
+  profile: Profile,
+  blockedCategories: readonly string[],
+  context?: NarrativeContext,
+): DraftAnswer {
   const category = classifyQuestion(question.label);
 
   // File uploads are satisfied by attaching the resume, not by a typed answer.
@@ -105,7 +138,7 @@ function answerOne(question: FormQuestion, profile: Profile, blockedCategories: 
   // candidate still confirms it: the wording is legally material.
   if (category === "work-authorization" || category === "sponsorship" || category === "citizenship") {
     const approved = matchApprovedAnswer(profile, question.label);
-    const useApproved = approved?.allowAutoFill === true && !profile.workAuthorization.alwaysReviewManually;
+    const useApproved = approved !== undefined && canAutoFill(approved) && !profile.workAuthorization.alwaysReviewManually;
     return {
       questionKey: question.key,
       label: question.label,
@@ -121,7 +154,7 @@ function answerOne(question: FormQuestion, profile: Profile, blockedCategories: 
   // otherwise blocked category. Checked before the block so the candidate's own
   // stored choice is honoured.
   const approvedEarly = matchApprovedAnswer(profile, question.label);
-  if (approvedEarly?.allowAutoFill === true) {
+  if (approvedEarly && canAutoFill(approvedEarly)) {
     return {
       questionKey: question.key,
       label: question.label,
@@ -161,7 +194,7 @@ function answerOne(question: FormQuestion, profile: Profile, blockedCategories: 
       answer: approved.answer,
       source: "approved-answer",
       citation: `profile.answers.${approved.key}`,
-      requiresHuman: !approved.allowAutoFill,
+      requiresHuman: !canAutoFill(approved),
       category,
     };
   }
@@ -178,6 +211,23 @@ function answerOne(question: FormQuestion, profile: Profile, blockedCategories: 
         citation: resolver[2],
         requiresHuman: value.trim().length === 0 && question.required,
         category,
+      };
+    }
+  }
+
+  // Open-ended questions can be answered from a narrative template, which is
+  // the candidate's own wording filled in from this specific posting.
+  if (context) {
+    const narrative = resolveNarrative(question.label, profile, context);
+    if (narrative) {
+      return {
+        questionKey: question.key,
+        label: question.label,
+        answer: narrative.answer,
+        source: "approved-answer",
+        citation: narrative.citation,
+        requiresHuman: !narrative.authorized,
+        category: "narrative",
       };
     }
   }

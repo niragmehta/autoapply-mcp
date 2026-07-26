@@ -23,6 +23,14 @@ describe("classifyQuestion", () => {
     expect(classifyQuestion("Do you hold an active security clearance?")).toBe("clearance");
   });
 
+  it("recognizes camel case compliance labels", () => {
+    expect(classifyQuestion("DisabilityStatus")).toBe("disability");
+    expect(classifyQuestion("VeteranStatus")).toBe("veteran");
+    expect(classifyQuestion("HispanicLatino")).toBe("demographic");
+    expect(classifyQuestion("Gender")).toBe("demographic");
+    expect(classifyQuestion("Race")).toBe("demographic");
+  });
+
   it("recognizes ordinary contact fields", () => {
     expect(classifyQuestion("First Name")).toBe("contact");
     expect(classifyQuestion("Email")).toBe("contact");
