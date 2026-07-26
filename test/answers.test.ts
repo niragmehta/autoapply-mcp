@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { draftAnswers, unresolvedRequired, type FormQuestion } from "../src/drafting/answers.js";
 import { classifyQuestion } from "../src/drafting/blockedQuestions.js";
+import { greenhouseQuestionsToForm } from "../src/drafting/questions.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 
 const profile = makeProfile();
@@ -88,6 +89,79 @@ describe("draftAnswers", () => {
     const { answers } = draftAnswers([question("Tell us about a project", { type: "textarea" })], profile, campaign);
     expect(answers[0]?.category).toBe("essay");
     expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("treats file uploads as satisfied by the resume attachment", () => {
+    const { answers, blockedQuestions } = draftAnswers(
+      [question("Resume/CV", { type: "input_file", required: true })],
+      profile,
+      campaign,
+    );
+    expect(answers[0]?.category).toBe("attachment");
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(blockedQuestions).toHaveLength(0);
+  });
+
+  it("does not demand human input for hidden form fields", () => {
+    const { answers } = draftAnswers(
+      [question("Latitude", { type: "input_hidden", required: true })],
+      profile,
+      campaign,
+    );
+    expect(answers[0]?.category).toBe("hidden");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+});
+
+describe("greenhouseQuestionsToForm", () => {
+  it("prefers the file input for a resume question", () => {
+    const [resume] = greenhouseQuestionsToForm([
+      {
+        label: "Resume/CV",
+        required: true,
+        fields: [
+          { name: "resume", type: "input_file" },
+          { name: "resume_text", type: "textarea" },
+        ],
+      },
+    ]);
+    expect(resume?.type).toBe("input_file");
+    expect(resume?.key).toBe("resume");
+  });
+
+  it("prefers the text field for a cover letter so it can be written", () => {
+    const [cover] = greenhouseQuestionsToForm([
+      {
+        label: "Cover Letter",
+        required: false,
+        fields: [
+          { name: "cover_letter", type: "input_file" },
+          { name: "cover_letter_text", type: "textarea" },
+        ],
+      },
+    ]);
+    expect(cover?.type).toBe("textarea");
+    expect(cover?.key).toBe("cover_letter_text");
+  });
+
+  it("keeps select options", () => {
+    const [q] = greenhouseQuestionsToForm([
+      {
+        label: "Do you require sponsorship?",
+        required: true,
+        fields: [
+          {
+            name: "question_1",
+            type: "multi_value_single_select",
+            values: [
+              { value: 0, label: "No" },
+              { value: 1, label: "Yes" },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(q?.options).toEqual(["No", "Yes"]);
   });
 });
 

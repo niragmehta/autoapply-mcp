@@ -1,8 +1,31 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CampaignSchema, type Campaign } from "../src/domain/campaign.js";
 import { ProfileSchema, type Profile } from "../src/domain/profile.js";
 import type { Job } from "../src/domain/job.js";
 
 /** Test fixtures shared across the suite. */
+
+const MINIMAL_PDF = Buffer.from(
+  "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+  "latin1",
+);
+
+let cachedResumePath: string | null = null;
+
+/**
+ * A real, structurally valid PDF on disk. Submission guards reject unusable
+ * resume files, so fixtures need an actual file rather than a placeholder path.
+ */
+export function fixtureResumePath(): string {
+  if (cachedResumePath) return cachedResumePath;
+  const dir = mkdtempSync(join(tmpdir(), "autoapply-fixture-"));
+  const path = join(dir, "resume.pdf");
+  writeFileSync(path, MINIMAL_PDF);
+  cachedResumePath = path;
+  return path;
+}
 
 export function makeProfile(overrides: Record<string, unknown> = {}): Profile {
   return ProfileSchema.parse({
@@ -24,8 +47,8 @@ export function makeProfile(overrides: Record<string, unknown> = {}): Profile {
     },
     compensation: { currency: "USD", targetTotal: 300000, minimumTotal: 200000, disclosurePolicy: "decline" },
     resumes: [
-      { id: "ai-security", label: "AI Security", path: "/tmp/ai-security.pdf", tracks: ["ai-security"] },
-      { id: "general", label: "General", path: "/tmp/general.pdf", tracks: [], isDefault: true },
+      { id: "ai-security", label: "AI Security", path: fixtureResumePath(), tracks: ["ai-security"] },
+      { id: "general", label: "General", path: fixtureResumePath(), tracks: [], isDefault: true },
     ],
     skills: [
       { name: "Python", level: "strong", tags: ["language"] },

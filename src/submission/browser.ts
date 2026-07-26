@@ -5,6 +5,7 @@ import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { assertUrlAllowed, checkUrlAllowed } from "./allowlist.js";
 import { buildFillPlan, detectCaptcha, type FieldDescriptor } from "./formFields.js";
+import { validateResumeFile } from "./resume.js";
 import type { SubmissionPacket } from "./packet.js";
 
 /**
@@ -288,12 +289,22 @@ async function fillControl(locator: AnyLocator, type: string, value: string): Pr
 }
 
 async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
-  if (!resumePath) return;
+  const check = validateResumeFile(resumePath);
+  if (!check.ok) {
+    throw new AppError("resume_unusable", check.reason, { path: resumePath });
+  }
   const fileInput = page.locator('input[type="file"]').first();
-  if ((await fileInput.count()) === 0) return;
-  await fileInput.setInputFiles(resumePath).catch((error: unknown) => {
-    logger.warn("resume upload failed", { error: String(error) });
-  });
+  if ((await fileInput.count()) === 0) {
+    logger.warn("no file input found on the application form", { url: page.url() });
+    return;
+  }
+  // A failed upload must abort: submitting without the resume is worse than
+  // failing loudly and handing the application back to a person.
+  try {
+    await fileInput.setInputFiles(resumePath);
+  } catch (error) {
+    throw new AppError("resume_upload_failed", `could not attach resume: ${String(error)}`, { path: resumePath });
+  }
 }
 
 async function clickSubmit(page: AnyPage): Promise<boolean> {

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
 import { loadCampaign, loadCompanies, loadProfile } from "../config/load.js";
 import { resolvePaths } from "../config/paths.js";
 import { adapterFor } from "../sources/registry.js";
 import { probeJson } from "../sources/http.js";
+import { validateResumeFile } from "../submission/resume.js";
 import { toErrorMessage } from "../util/errors.js";
 
 /**
@@ -54,8 +54,11 @@ async function main(): Promise<void> {
   }
 
   for (const resume of profile?.resumes ?? []) {
-    const exists = existsSync(resume.path);
-    checks.push({ name: `resume "${resume.id}"`, ok: exists, detail: exists ? resume.path : `missing file: ${resume.path}` });
+    const check = validateResumeFile(resume.path);
+    const detail = check.ok
+      ? `${check.format}, ${Math.round(check.sizeBytes / 1024)} KB${check.warnings.length > 0 ? ` - ${check.warnings.join("; ")}` : ""}`
+      : check.reason;
+    checks.push({ name: `resume "${resume.id}"`, ok: check.ok, detail });
   }
 
   if (profile && campaign) {
