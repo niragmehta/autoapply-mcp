@@ -66,6 +66,12 @@ export const ApprovedAnswerSchema = z.object({
   patterns: z.array(nonEmpty).min(1),
   /** May be empty to record a known question that must still be decided. */
   answer: z.string().default(""),
+  /**
+   * Ordered fallbacks for questions rendered as a fixed set of choices.
+   * The first entry that matches an option the employer actually offers is
+   * used, so one preference list works across differing dropdowns.
+   */
+  alternatives: z.array(z.string()).default([]),
   allowAutoFill: z.boolean().default(false),
   /**
    * Deliberately leave this question blank. Optional free-text fields are often

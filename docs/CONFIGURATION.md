@@ -57,12 +57,17 @@ Pre-approved answers to recurring questions:
   "key": "source",
   "label": "How did you hear about us?",
   "patterns": ["how did you hear", "how did you find"],
-  "answer": "Company careers page",
+  "answer": "Friend",
+  "alternatives": ["Friend", "Referral", "Company careers page", "LinkedIn"],
   "allowAutoFill": true
 }
 ```
 
-`patterns` are case-insensitive substrings matched against the employer's question label. Set `allowAutoFill` to false for anything you want to review each time; the answer is still suggested.
+`patterns` are case-insensitive substrings matched against the employer's question label, and the **longest** matching pattern wins, so a specific entry overrides a general one. Set `allowAutoFill` to false for anything you want to review each time; the answer is still offered as a suggestion and `note` is shown as guidance.
+
+`alternatives` is an ordered preference list for questions rendered as a fixed set of choices. The first entry the employer actually offers is used; if none are offered, the question is handed back rather than submitted with an unlisted value. See [BATCH.md](BATCH.md).
+
+`skip: true` records a deliberate decision to leave an optional field blank.
 
 ## campaign.json
 

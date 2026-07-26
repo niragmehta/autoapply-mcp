@@ -42,7 +42,7 @@ npm test
 
 ## Configure
 
-Create a config directory and copy the examples:
+Personal data lives outside the repository, so a checkout can be published as-is. The default home is `~/.autoapply`:
 
 ```bash
 mkdir -p ~/.autoapply
@@ -54,12 +54,14 @@ cp presets/ai-security-us-canada.json ~/.autoapply/companies.json
 Then edit them and verify:
 
 ```bash
-AUTOAPPLY_HOME=~/.autoapply node dist/cli/doctor.js --probe
+node dist/cli/doctor.js --probe
 ```
 
-`doctor` validates all three files, checks that your resume files exist, confirms every track points at a real resume variant, and probes each configured board.
+`doctor` validates all three files, checks that your resume files exist and are real PDFs, confirms every track points at a resume variant, and probes each configured board.
 
 `presets/ai-security-us-canada.json` ships 80 company boards that were verified live against the ATS APIs, weighted toward AI, security and infrastructure companies in the US and Canada.
+
+Nothing in this repository is specific to one candidate. Keep `profile.json`, resumes and the database in `~/.autoapply` and they can never be committed by accident.
 
 ### Environment variables
 
@@ -83,13 +85,13 @@ AUTOAPPLY_HOME=~/.autoapply node dist/cli/doctor.js --probe
     "autoapply": {
       "command": "node",
       "args": ["/absolute/path/to/autoapply-mcp/dist/index.js"],
-      "env": { "AUTOAPPLY_HOME": "/absolute/path/to/your/config" }
+      "env": { "AUTOAPPLY_HOME": "/absolute/path/to/your/.autoapply" }
     }
   }
 }
 ```
 
-The server speaks stdio. All logs go to stderr, so stdout stays clean for the protocol.
+The server speaks stdio. All logs go to stderr, so stdout stays clean for the protocol. `AUTOAPPLY_HOME` can be omitted if you use the default `~/.autoapply`.
 
 ## Typical session
 

@@ -3,6 +3,7 @@ import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { classifyQuestion, isBlockedCategory, looksLikeEssay } from "./blockedQuestions.js";
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
+import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
 
 /**
@@ -70,6 +71,23 @@ function matchApprovedAnswer(profile: Profile, label: string) {
 function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boolean }): boolean {
   if (entry.skip === true) return true;
   return entry.allowAutoFill && entry.answer.trim().length > 0;
+}
+
+/**
+ * Resolves a stored answer against the choices a question actually offers.
+ * Falls back to the plain answer when the entry declares no alternatives.
+ */
+function resolveApprovedValue(
+  entry: { answer: string; alternatives: string[] },
+  question: FormQuestion,
+): { value: string; unmatchedChoice: boolean } {
+  if (entry.alternatives.length === 0) {
+    return { value: entry.answer, unmatchedChoice: false };
+  }
+  const preferences = [entry.answer, ...entry.alternatives].filter((value) => value.trim().length > 0);
+  const match = selectBestOption(preferences, question.options);
+  const hadOptions = (question.options?.length ?? 0) > 0;
+  return { value: match.value, unmatchedChoice: hadOptions && !match.matchedOption };
 }
 
 function blocked(question: FormQuestion, category: string, reason: string, guidance = ""): DraftAnswer {
@@ -159,15 +177,20 @@ function answerOne(
   // stored choice is honoured.
   const approvedEarly = matchApprovedAnswer(profile, question.label);
   if (approvedEarly && canAutoFill(approvedEarly)) {
+    const resolved = resolveApprovedValue(approvedEarly, question);
     return {
       questionKey: question.key,
       label: question.label,
-      answer: approvedEarly.answer,
+      answer: resolved.value,
       source: "approved-answer",
       citation: `profile.answers.${approvedEarly.key}`,
-      requiresHuman: false,
+      // A choice question offering none of the stored preferences is handed
+      // back: submitting a value the form does not list would fail.
+      requiresHuman: resolved.unmatchedChoice,
       category,
-      guidance: "",
+      guidance: resolved.unmatchedChoice
+        ? `None of the stored preferences match the offered options: ${(question.options ?? []).join(" | ")}`
+        : "",
     };
   }
 

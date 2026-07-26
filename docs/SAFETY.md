@@ -82,6 +82,7 @@ Requests are throttled per host, retried with backoff only on 429 and 5xx, and i
 ## Privacy
 
 - Configuration, database and artifacts stay on your machine. Nothing is sent anywhere except the employer boards you configure.
+- Personal data belongs in `~/.autoapply`, outside the repository, so publishing a checkout cannot leak it. Nothing in the repository is candidate-specific.
 - Logs and audit payloads pass through redaction that strips emails, phone numbers, government identifiers, card numbers and credential-shaped strings.
 - Answers in sensitive categories are never persisted in plain text by the redacting storage helper.
 - `config/`, `data/` and `artifacts/` are gitignored. Keep them that way: application history is sensitive.
