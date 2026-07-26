@@ -117,10 +117,10 @@ Prepares many applications at once from a queue filter, using the same drafting 
 | `allowUnknownCompensation` | `boolean?` — default false |
 | `limit` | `number?` — default 50, max 300 |
 
-Returns the batch id, ready versus needs-human counts, `blockingReasons` grouped by category, the auto-filled personal fields, and the manifest hash.
+Returns the batch id, ready versus needs-human counts, `blockingReasons` grouped by category, `recurringQuestions` listing the exact repeated question text with suggestions and guidance, the auto-filled personal fields, and the manifest hash.
 
 ### `preview_batch`
-Every application in the batch with company, role, compensation, readiness and what is blocking it. Returns the current manifest hash and whether the stored one is stale.
+Every application in the batch with company, role, compensation, readiness and what is blocking it, including each application's `outstanding` questions with their suggestions and guidance. Returns the current manifest hash and whether the stored one is stale.
 
 ### `approve_batch`
 Approves every ready application. Requires `batchId`, `manifestHash` and `expectedCount`; a mismatch in either fails with `manifest_mismatch` or `count_mismatch`.

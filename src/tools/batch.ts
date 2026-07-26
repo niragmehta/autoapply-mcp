@@ -128,6 +128,7 @@ export function registerBatchTools(server: McpServer): void {
       const batchId = newId("batch");
       const items: BatchItem[] = [];
       const failures: Array<{ jobId: string; error: string }> = [];
+      const preparedRecords: Array<{ outstanding: Array<{ label: string; category: string; suggested: string; guidance: string }> }> = [];
 
       for (const entry of queue) {
         try {
@@ -138,6 +139,7 @@ export function registerBatchTools(server: McpServer): void {
             workspace.profile,
             workspace.campaign,
           );
+          preparedRecords.push({ outstanding: prepared.outstanding });
           const blocked = prepared.application.status === "needs_human";
           // Keep each reason whole; truncating the joined string would split a
           // category mid-word and corrupt the grouped counts below.
@@ -188,6 +190,20 @@ export function registerBatchTools(server: McpServer): void {
         return acc;
       }, {});
 
+      // The same question text recurs across employers, so listing it once with
+      // its suggestion turns many blocked applications into one decision.
+      const questionCounts = new Map<string, { label: string; category: string; suggested: string; guidance: string; count: number }>();
+      for (const prepared of preparedRecords) {
+        for (const question of prepared.outstanding) {
+          const existing = questionCounts.get(question.label);
+          if (existing) existing.count += 1;
+          else questionCounts.set(question.label, { ...question, count: 1 });
+        }
+      }
+      const recurringQuestions = [...questionCounts.values()]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15);
+
       return ok({
         batchId,
         selected: queue.length,
@@ -197,6 +213,7 @@ export function registerBatchTools(server: McpServer): void {
         failures,
         manifestHash,
         blockingReasons: reasonCounts,
+        recurringQuestions,
         autoFilledPersonalFields: autoFillableFields(workspace.profile),
         companies: [...new Set(queue.map((entry) => entry.job.companyName))],
         nextStep:
@@ -227,6 +244,18 @@ export function registerBatchTools(server: McpServer): void {
       const items = listBatchItems(workspace.db, batch.id);
       const detail = items.map((item) => {
         const job = getJob(workspace.db, item.jobId);
+        const application = getApplication(workspace.db, item.applicationId);
+        // Carry each outstanding question with its suggestion, so one review
+        // pass has everything needed to answer without reopening each job.
+        const outstanding = (application?.answers ?? [])
+          .filter((answer) => answer.requiresHuman)
+          .map((answer) => ({
+            key: answer.questionKey,
+            label: answer.label,
+            category: answer.category,
+            suggested: answer.answer,
+            guidance: answer.guidance,
+          }));
         return {
           applicationId: item.applicationId,
           state: item.state,
@@ -236,6 +265,7 @@ export function registerBatchTools(server: McpServer): void {
           compensation: job?.compensation?.raw ?? "not published",
           applyUrl: job?.applyUrl ?? "",
           blockedBy: item.detail,
+          outstanding,
         };
       });
 

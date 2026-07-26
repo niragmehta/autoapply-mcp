@@ -25,7 +25,7 @@ export type PreparedApplication = {
   report: MatchReport;
   resumeCheck: ResumeCheck;
   questionSource: string;
-  outstanding: Array<{ key: string; label: string; category: string; suggested: string }>;
+  outstanding: Array<{ key: string; label: string; category: string; suggested: string; guidance: string }>;
   autoFilled: Array<{ key: string; label: string; answer: string; citation: string }>;
 };
 
@@ -123,6 +123,7 @@ export async function prepareApplicationFor(
         label: answer.label,
         category: answer.category,
         suggested: answer.answer,
+        guidance: answer.guidance,
       })),
     autoFilled: drafted.answers
       .filter((answer) => !answer.requiresHuman)

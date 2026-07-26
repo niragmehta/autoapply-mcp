@@ -44,27 +44,37 @@ Single approval binds to one packet hash. Batch approval binds to a hash of ever
 
 The lever is `profile.answers` and `profile.personal`. Every question you pre-answer removes that question from every future application.
 
-After a `prepare_batch` run, read `blockingReasons`:
+After a `prepare_batch` run, read `blockingReasons` for the category counts and `recurringQuestions` for the exact question text:
 
 ```json
-{ "general": 45, "sponsorship": 17, "work-authorization": 12, "essay": 7, "contact": 9 }
+"recurringQuestions": [
+  { "count": 5, "category": "general", "label": "AI Policy for Application",
+    "suggested": "", "guidance": "Read the employer's exact policy..." },
+  { "count": 3, "category": "general", "label": "Where have you learned about us?" }
+]
 ```
 
-Then add matching entries to `profile.answers`:
+One entry added to `profile.answers` clears every application that asks the same thing. Run `reload_config`, then `prepare_batch` again.
+
+### Suggestions on questions that stay with you
+
+An entry with `allowAutoFill: false` still supplies its `answer` as a **suggestion** and its `note` as **guidance**, so a question that needs your decision does not arrive as a blank field:
 
 ```json
 {
-  "key": "based-in-bay-area",
-  "label": "Are you currently based in the Bay Area?",
-  "patterns": ["currently based in", "do you live in"],
-  "answer": "No - I am based in Vancouver, Canada and am willing to relocate.",
-  "allowAutoFill": true
+  "key": "ai-policy",
+  "patterns": ["ai policy", "did you use ai"],
+  "answer": "",
+  "allowAutoFill": false,
+  "note": "Read the employer's exact policy on the application page before answering..."
 }
 ```
 
-Run `reload_config`, then `prepare_batch` again. The count drops.
+Both surface in `prepare_application` under `questionsNeedingHuman`, and in `preview_batch` under each application's `outstanding`.
 
-`essay` questions are deliberately never pre-answered: a generic answer to "why do you want to work here" is worse than none.
+This is the right shape for attestations about the application itself. Whether AI assistance was used is a fact only you can attest to, and some employers - Anthropic among them - explicitly ask for unmediated writing on questions like "Why this company?". Where an employer asks that, write that answer yourself rather than relying on a narrative template.
+
+`essay` questions are never pre-answered: a generic answer to "why do you want to work here" is worse than none.
 
 ## Work authorization
 
