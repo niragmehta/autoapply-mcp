@@ -2,6 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { Application, Job } from "../domain/job.js";
 import type { ApprovalRecord } from "../db/repositories/applications.js";
 import { checkUrlAllowed } from "./allowlist.js";
+import { validateResumeFile } from "./resume.js";
 
 /**
  * The approval boundary.
@@ -68,6 +69,12 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
       .map((answer) => answer.label)
       .slice(0, 5)
       .join("; ")}`);
+  }
+
+  // An application without its resume is worse than no application at all.
+  const resume = validateResumeFile(application.resumePath);
+  if (!resume.ok) {
+    return deny("resume_unusable", resume.reason);
   }
 
   const destination = checkUrlAllowed(job.applyUrl, policy);

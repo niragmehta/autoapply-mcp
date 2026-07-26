@@ -6,6 +6,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.js";
 import { resetWorkspaceCache } from "../src/config/load.js";
+import { fixtureResumePath } from "./factories.js";
 
 /**
  * End-to-end test through a real MCP client: configuration loading, tool
@@ -33,7 +34,7 @@ const profile = {
     alwaysReviewManually: true,
   },
   compensation: { currency: "USD", targetTotal: 300000, minimumTotal: 200000, disclosurePolicy: "decline" },
-  resumes: [{ id: "ai-security", label: "AI Security", path: "/tmp/ai-security.pdf", tracks: ["ai-security"], isDefault: true }],
+  resumes: [{ id: "ai-security", label: "AI Security", path: fixtureResumePath(), tracks: ["ai-security"], isDefault: true }],
   skills: [
     { name: "Open Policy Agent", aliases: ["OPA"], level: "expert", tags: ["policy"] },
     { name: "Python", level: "strong", tags: ["language"] },
@@ -214,6 +215,12 @@ describe("MCP server", () => {
     const prepared = parse((await callTool("prepare_application", { jobId })).text);
     const applicationId = String(prepared.applicationId);
     expect(prepared.status).toBe("needs_human");
+
+    // The resume must be validated up front, not discovered broken at upload.
+    const resume = prepared.resume as Record<string, unknown>;
+    expect(resume.valid).toBe(true);
+    expect(resume.format).toBe("pdf");
+    expect(prepared.resumeBlocker).toBeUndefined();
 
     const needsHuman = prepared.questionsNeedingHuman as Array<Record<string, string>>;
     expect(needsHuman.map((entry) => entry.key)).toContain("sponsorship");

@@ -3,7 +3,7 @@ import { checkSubmissionAllowed } from "../src/submission/guards.js";
 import { checkUrlAllowed } from "../src/submission/allowlist.js";
 import { computePacketHash, renderPacketPreview } from "../src/submission/packet.js";
 import type { Application, DraftAnswer } from "../src/domain/job.js";
-import { makeCampaign, makeJob } from "./factories.js";
+import { makeCampaign, makeJob, fixtureResumePath } from "./factories.js";
 
 const campaign = makeCampaign();
 const job = makeJob();
@@ -27,7 +27,7 @@ function application(overrides: Partial<Application> = {}): Application {
     jobId: job.id,
     status: "approved",
     resumeId: "ai-security",
-    resumePath: "/tmp/resume.pdf",
+    resumePath: fixtureResumePath(),
     packetHash: "hash-1",
     coverLetter: "",
     answers: [answer()],
@@ -167,7 +167,7 @@ describe("packet hashing", () => {
       jobTitle: "Senior Security Engineer",
       applyUrl: job.applyUrl,
       resumeId: "ai-security",
-      resumePath: "/tmp/resume.pdf",
+      resumePath: fixtureResumePath(),
       coverLetter: "",
       answers: [answer({ label: "Work authorization", answer: "", requiresHuman: true })],
     });

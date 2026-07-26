@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getWorkspace } from "../config/load.js";
@@ -11,6 +10,7 @@ import { buildMatchReport, selectResume } from "../drafting/matchReport.js";
 import { defaultQuestionSet, greenhouseQuestionsToForm } from "../drafting/questions.js";
 import { fetchGreenhouseJobDetail } from "../sources/greenhouse.js";
 import { computePacketHash, renderPacketPreview, type SubmissionPacket } from "../submission/packet.js";
+import { validateResumeFile } from "../submission/resume.js";
 import { AppError, toErrorMessage } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
 import { logger } from "../util/logger.js";
@@ -77,7 +77,7 @@ export function registerDraftingTools(server: McpServer): void {
 
       const report = buildMatchReport(job, evaluation, workspace.profile, workspace.campaign);
       const resume = selectResume(workspace.profile, evaluation.trackId);
-      const resumeExists = resume.path.length > 0 && existsSync(resume.path);
+      const resumeCheck = validateResumeFile(resume.path);
 
       const { questions, source } = await loadQuestions(job.ats, job.board, job.externalId);
       const drafted = draftAnswers(questions, workspace.profile, workspace.campaign);
@@ -87,10 +87,11 @@ export function registerDraftingTools(server: McpServer): void {
         throw new AppError("already_submitted", `this job was already submitted at ${existing.submittedAt}`);
       }
 
+      const blockedByResume = !resumeCheck.ok;
       const application: Application = {
         id: existing?.id ?? newId("app"),
         jobId: job.id,
-        status: drafted.blockedQuestions.length > 0 ? "needs_human" : "awaiting_approval",
+        status: drafted.blockedQuestions.length > 0 || blockedByResume ? "needs_human" : "awaiting_approval",
         resumeId: resume.id,
         resumePath: resume.path,
         packetHash: "",
@@ -114,8 +115,15 @@ export function registerDraftingTools(server: McpServer): void {
         status: application.status,
         packetHash: application.packetHash,
         questionSource: source,
-        resume: { ...report.resume, fileExists: resumeExists },
-        resumeWarning: resumeExists ? undefined : `resume file not found at ${resume.path}; upload will fail`,
+        resume: {
+          ...report.resume,
+          fileExists: resumeCheck.exists,
+          format: resumeCheck.format,
+          sizeBytes: resumeCheck.sizeBytes,
+          valid: resumeCheck.ok,
+          warnings: resumeCheck.warnings,
+        },
+        resumeBlocker: resumeCheck.ok ? undefined : resumeCheck.reason,
         matchReport: report,
         questionsNeedingHuman: drafted.answers
           .filter((answer) => answer.requiresHuman)
@@ -123,8 +131,9 @@ export function registerDraftingTools(server: McpServer): void {
         autoFilledAnswers: drafted.answers
           .filter((answer) => !answer.requiresHuman)
           .map((answer) => ({ key: answer.questionKey, label: answer.label, answer: answer.answer, citation: answer.citation })),
-        nextStep:
-          drafted.blockedQuestions.length > 0
+        nextStep: blockedByResume
+          ? `Resume unusable: ${resumeCheck.reason}. Fix the file or profile.resumes path, then run prepare_application again.`
+          : drafted.blockedQuestions.length > 0
             ? "Answer the flagged questions with set_application_content, then approve_application."
             : "Review with preview_application, then approve_application.",
       });

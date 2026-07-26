@@ -105,7 +105,7 @@ submit_application   mode      -> manual, assisted or auto
 record_outcome                 -> track what happened
 ```
 
-See [docs/TOOLS.md](docs/TOOLS.md) for every tool, [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the schemas, and [docs/SAFETY.md](docs/SAFETY.md) for the guarantees and their limits.
+See [docs/TOOLS.md](docs/TOOLS.md) for every tool, [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the schemas, [docs/RESUMES.md](docs/RESUMES.md) for resume variants and LaTeX builds, and [docs/SAFETY.md](docs/SAFETY.md) for the guarantees and their limits.
 
 ## Submission modes
 
@@ -139,7 +139,7 @@ npm test
 npm run coverage
 ```
 
-156 tests cover location classification, compensation parsing, every gate, scoring, the answer policy, submission guards, packet hashing, persistence, the ATS adapters and an end-to-end run through a real in-memory MCP client.
+174 tests cover location classification, compensation parsing, every gate, scoring, the answer policy, resume validation, submission guards, packet hashing, persistence, the ATS adapters and an end-to-end run through a real in-memory MCP client.
 
 ## License
 

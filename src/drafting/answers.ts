@@ -74,6 +74,32 @@ export function draftAnswers(
 function answerOne(question: FormQuestion, profile: Profile, blockedCategories: readonly string[]): DraftAnswer {
   const category = classifyQuestion(question.label);
 
+  // File uploads are satisfied by attaching the resume, not by a typed answer.
+  if (question.type === "input_file") {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: "",
+      source: "profile",
+      citation: "profile.resumes (uploaded as a file)",
+      requiresHuman: false,
+      category: "attachment",
+    };
+  }
+
+  // Hidden fields are populated by the form's own scripts (geocoding, tokens).
+  if (question.type === "input_hidden") {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: "",
+      source: "profile",
+      citation: "populated by the application form",
+      requiresHuman: false,
+      category: "hidden",
+    };
+  }
+
   // Work authorization gets the verified statement as a suggestion, but the
   // candidate still confirms it: the wording is legally material.
   if (category === "work-authorization" || category === "sponsorship" || category === "citizenship") {

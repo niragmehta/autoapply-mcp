@@ -7,14 +7,40 @@ function asRecordArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? (value.filter((item) => typeof item === "object" && item !== null) as Array<Record<string, unknown>>) : [];
 }
 
+/**
+ * Chooses the field that actually carries the answer.
+ *
+ * Greenhouse groups alternatives under one question: "Resume" offers a file
+ * input and a textarea, as does "Cover Letter". A resume is satisfied by
+ * uploading the PDF, whereas a cover letter is written, so the preferred field
+ * type differs by question.
+ */
+function selectPrimaryField(label: string, fields: Array<Record<string, unknown>>): Record<string, unknown> {
+  if (fields.length <= 1) return fields[0] ?? {};
+  const typeOf = (field: Record<string, unknown>) => (typeof field.type === "string" ? field.type : "");
+  const isResume = /\b(resume|cv)\b/i.test(label);
+
+  if (isResume) {
+    const file = fields.find((field) => typeOf(field) === "input_file");
+    if (file) return file;
+  }
+  const order = ["textarea", "input_text", "multi_value_single_select", "multi_value_multi_select", "input_file"];
+  for (const wanted of order) {
+    const match = fields.find((field) => typeOf(field) === wanted);
+    if (match) return match;
+  }
+  return fields[0] ?? {};
+}
+
 export function greenhouseQuestionsToForm(questions: readonly GreenhouseQuestion[]): FormQuestion[] {
   return questions.map((question, index) => {
     const fields = asRecordArray(question.fields);
-    const primary = fields[0] ?? {};
+    const label = typeof question.label === "string" ? question.label : `Question ${index + 1}`;
+    const primary = selectPrimaryField(label, fields);
     const values = asRecordArray(primary.values);
     return {
       key: typeof primary.name === "string" && primary.name.length > 0 ? primary.name : `question_${index}`,
-      label: typeof question.label === "string" ? question.label : `Question ${index + 1}`,
+      label,
       required: question.required === true,
       type: typeof primary.type === "string" ? primary.type : "input_text",
       options: values.map((value) => String(value.label ?? "")).filter((label) => label.length > 0),
