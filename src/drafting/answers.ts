@@ -72,7 +72,7 @@ function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boo
   return entry.allowAutoFill && entry.answer.trim().length > 0;
 }
 
-function blocked(question: FormQuestion, category: string, reason: string): DraftAnswer {
+function blocked(question: FormQuestion, category: string, reason: string, guidance = ""): DraftAnswer {
   return {
     questionKey: question.key,
     label: question.label,
@@ -81,6 +81,7 @@ function blocked(question: FormQuestion, category: string, reason: string): Draf
     citation: reason,
     requiresHuman: true,
     category,
+    guidance,
   };
 }
 
@@ -118,6 +119,7 @@ function answerOne(
       citation: "profile.resumes (uploaded as a file)",
       requiresHuman: false,
       category: "attachment",
+      guidance: "",
     };
   }
 
@@ -131,6 +133,7 @@ function answerOne(
       citation: "populated by the application form",
       requiresHuman: false,
       category: "hidden",
+      guidance: "",
     };
   }
 
@@ -147,6 +150,7 @@ function answerOne(
       citation: approved ? `profile.answers.${approved.key}` : "profile.workAuthorization.statement",
       requiresHuman: !useApproved,
       category,
+      guidance: "",
     };
   }
 
@@ -163,6 +167,7 @@ function answerOne(
       citation: `profile.answers.${approvedEarly.key}`,
       requiresHuman: false,
       category,
+      guidance: "",
     };
   }
 
@@ -179,11 +184,19 @@ function answerOne(
       citation: personal.citation,
       requiresHuman: !personal.authorized,
       category: personal.category,
+      guidance: "",
     };
   }
 
   if (isBlockedCategory(category, blockedCategories)) {
-    return blocked(question, category, `category "${category}" always requires a human decision`);
+    // A stored entry for a blocked category still supplies a suggestion and
+    // guidance, so the person deciding is not starting from a blank field.
+    return blocked(
+      question,
+      category,
+      `category "${category}" always requires a human decision`,
+      approvedEarly?.note ?? "",
+    );
   }
 
   const approved = approvedEarly;
@@ -196,6 +209,7 @@ function answerOne(
       citation: `profile.answers.${approved.key}`,
       requiresHuman: !canAutoFill(approved),
       category,
+      guidance: canAutoFill(approved) ? "" : approved.note ?? "",
     };
   }
 
@@ -211,6 +225,7 @@ function answerOne(
         citation: resolver[2],
         requiresHuman: value.trim().length === 0 && question.required,
         category,
+        guidance: "",
       };
     }
   }
@@ -228,6 +243,7 @@ function answerOne(
         citation: narrative.citation,
         requiresHuman: !narrative.authorized,
         category: "narrative",
+        guidance: "",
       };
     }
   }

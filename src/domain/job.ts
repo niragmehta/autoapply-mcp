@@ -98,6 +98,8 @@ export const DraftAnswerSchema = z.object({
   citation: z.string().default(""),
   requiresHuman: z.boolean().default(false),
   category: z.string().default("general"),
+  /** Advice shown alongside a question that a person must decide. */
+  guidance: z.string().default(""),
 });
 export type DraftAnswer = z.infer<typeof DraftAnswerSchema>;
 

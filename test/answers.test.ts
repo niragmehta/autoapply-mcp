@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { draftAnswers, unresolvedRequired, type FormQuestion } from "../src/drafting/answers.js";
 import { classifyQuestion } from "../src/drafting/blockedQuestions.js";
 import { greenhouseQuestionsToForm } from "../src/drafting/questions.js";
+import { ProfileSchema } from "../src/domain/profile.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 
 const profile = makeProfile();
@@ -97,6 +98,68 @@ describe("draftAnswers", () => {
     const { answers } = draftAnswers([question("Tell us about a project", { type: "textarea" })], profile, campaign);
     expect(answers[0]?.category).toBe("essay");
     expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("carries a suggestion and guidance on questions it hands back", () => {
+    const p = ProfileSchema.parse({
+      ...profile,
+      answers: [
+        {
+          key: "ai-policy",
+          label: "AI policy",
+          patterns: ["ai policy"],
+          answer: "",
+          allowAutoFill: false,
+          note: "Read the employer's exact policy before answering.",
+        },
+      ],
+    });
+    const { answers } = draftAnswers([question("AI Policy for Application")], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(answers[0]?.guidance).toContain("Read the employer");
+  });
+
+  it("does not attach guidance to answers it fills automatically", () => {
+    const p = ProfileSchema.parse({
+      ...profile,
+      answers: [
+        {
+          key: "relocation",
+          label: "Relocation assistance",
+          patterns: ["relocation assistance"],
+          answer: "No",
+          allowAutoFill: true,
+          note: "No relocation assistance required.",
+        },
+      ],
+    });
+    const { answers } = draftAnswers(
+      [question("Do you require relocation assistance?")],
+      p,
+      campaign,
+    );
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.answer).toBe("No");
+    expect(answers[0]?.guidance).toBe("");
+  });
+
+  it("supplies guidance even for a hard-blocked category", () => {
+    const p = ProfileSchema.parse({
+      ...profile,
+      answers: [
+        {
+          key: "salary",
+          label: "Salary expectation",
+          patterns: ["desired salary"],
+          answer: "",
+          allowAutoFill: false,
+          note: "Do not anchor before scope is agreed.",
+        },
+      ],
+    });
+    const { answers } = draftAnswers([question("Desired salary")], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(answers[0]?.guidance).toContain("Do not anchor");
   });
 
   it("treats file uploads as satisfied by the resume attachment", () => {
