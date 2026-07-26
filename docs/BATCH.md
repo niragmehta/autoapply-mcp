@@ -40,6 +40,61 @@ Single approval binds to one packet hash. Batch approval binds to a hash of ever
 
 `approve_batch` also requires `expectedCount`. Passing the hash alone would let a batch that silently grew be approved by replay; requiring the count means the number is confirmed by a person who has seen it.
 
+## Where your data lives
+
+Keep personal data outside the repository. The server's default home is `~/.autoapply`, which is where profile, campaign, resumes, database and artifacts belong:
+
+```
+~/.autoapply/
+  profile.json        identity, personal data, answers, narratives
+  campaign.json       tracks, gates, scoring, submission policy
+  companies.json      ATS board list
+  resumes/            the files actually uploaded
+  data/               SQLite database
+  artifacts/          screenshots and submission evidence
+```
+
+Nothing in the repository is specific to one candidate, so a checkout can be published without stripping anything. `config/` is gitignored as a convenience for local experiments, but the safer habit is to keep real data in `~/.autoapply` and point `AUTOAPPLY_HOME` there.
+
+## Ordered preference lists
+
+Employers ask the same question with different option sets. "How did you hear about us?" might offer "Referral", "Employee referral" or "Word of mouth" for the same underlying answer, and a stored string that matches none of them cannot be submitted.
+
+`alternatives` is an ordered preference list. The first entry the employer actually offers is used:
+
+```json
+{
+  "key": "source",
+  "patterns": ["how did you hear", "where have you learned about"],
+  "answer": "Friend",
+  "alternatives": [
+    "Friend", "Referral", "Employee Referral", "Word of mouth",
+    "Company careers page", "Company website", "LinkedIn", "Other"
+  ],
+  "allowAutoFill": true
+}
+```
+
+| Situation | Result |
+|---|---|
+| Free-text field | Top preference, `Friend` |
+| Options include `Friend` | `Friend` |
+| Options are `LinkedIn`, `Job board`, `Company careers page` | `Company careers page` |
+| Options are `Indeed`, `Glassdoor` | Handed back, with the offered options in `guidance` |
+
+Preference order is primary and match quality secondary, so a first choice of "Referral" beats an exact "LinkedIn" option lower in the list. Matching ignores case and punctuation, and an option that contains a preference counts as a match, so "Employee Referral (current employee)" matches "Employee Referral".
+
+## Overriding a general answer for one employer
+
+Pattern matching prefers the longest match, so a specific entry beats a general one without needing rules about ordering:
+
+```json
+{ "key": "employed-before",    "patterns": ["worked for", "been employed by"], "answer": "No" }
+{ "key": "employed-microsoft", "patterns": ["worked for microsoft", "employed by microsoft"], "answer": "Yes" }
+```
+
+"Have you ever worked for this company?" answers `No`, while "Have you been employed by Microsoft?" answers `Yes`.
+
 ## Reducing what needs a human
 
 The lever is `profile.answers` and `profile.personal`. Every question you pre-answer removes that question from every future application.

@@ -93,9 +93,20 @@
     {
       "key": "source",
       "label": "How did you hear about us?",
-      "patterns": ["how did you hear", "how did you find"],
-      "answer": "Company careers page",
-      "allowAutoFill": true
+      "patterns": ["how did you hear", "how did you find", "where have you learned about"],
+      "answer": "Friend",
+      "alternatives": [
+        "Friend",
+        "Referral",
+        "Employee Referral",
+        "Word of mouth",
+        "Company careers page",
+        "Company website",
+        "LinkedIn",
+        "Other"
+      ],
+      "allowAutoFill": true,
+      "note": "Ordered preference: the first entry the employer actually offers is used."
     },
     {
       "key": "start-date",
