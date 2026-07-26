@@ -36,9 +36,18 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.dateOfBirth",
   },
   {
-    pattern: /\b(street address|address line|mailing address|home address|residential address)\b/i,
+    // Forms with numbered address lines have separate city and postal fields,
+    // so only the street belongs here.
+    pattern: /\baddress line\b|\bstreet$/i,
     category: "contact",
-    resolve: (personal) => (personal.addressAutoFill ? { value: formatAddress(personal), autoFill: true } : { value: formatAddress(personal), autoFill: false }),
+    resolve: (personal) => ({ value: personal.address.street, autoFill: personal.addressAutoFill }),
+    citation: "personal.address.street",
+  },
+  {
+    // Bare "Address" fields, guarded so "Email Address" does not match.
+    pattern: /^(?!.*\be-?mail\b).*\b(street address|mailing address|home address|residential address|current address|address)\b/i,
+    category: "contact",
+    resolve: (personal) => ({ value: formatAddress(personal), autoFill: personal.addressAutoFill }),
     citation: "personal.address",
   },
   {

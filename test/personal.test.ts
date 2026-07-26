@@ -54,6 +54,23 @@ describe("resolvePersonal", () => {
     expect(resolvePersonal("Street Address", profile)?.answer).toContain("1 Main St");
   });
 
+  it("keeps a bare City question on the identity location, not the postal address", () => {
+    // City and Location fields are answered from identity, so a candidate can
+    // present a metro area while still giving an exact address when asked.
+    expect(resolvePersonal("City", profile)).toBeNull();
+    expect(resolvePersonal("Current Location", profile)).toBeNull();
+  });
+
+  it("does not treat an email field as a postal address", () => {
+    expect(resolvePersonal("Email Address", profile)).toBeNull();
+  });
+
+  it("answers numbered address lines with the street only", () => {
+    const result = resolvePersonal("Address Line 1", profile);
+    expect(result?.answer).toBe("1 Main St");
+    expect(result?.citation).toBe("personal.address.street");
+  });
+
   it("returns null when nothing is stored", () => {
     expect(resolvePersonal("What is your favourite colour?", profile)).toBeNull();
     expect(resolvePersonal("Are you a protected veteran?", profile)).toBeNull();
