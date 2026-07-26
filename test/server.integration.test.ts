@@ -174,20 +174,25 @@ describe("MCP server", () => {
     expect(names).toEqual(
       [
         "approve_application",
+        "approve_batch",
         "audit_log",
         "campaign_status",
         "discover_jobs",
         "explain_job",
         "list_applications",
+        "list_batches",
         "list_queue",
         "prepare_application",
+        "prepare_batch",
         "preview_application",
+        "preview_batch",
         "record_outcome",
         "record_submission",
         "reload_config",
         "resolve_company_board",
         "set_application_content",
         "submit_application",
+        "submit_batch",
       ].sort(),
     );
   });

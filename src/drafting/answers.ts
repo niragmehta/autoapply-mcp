@@ -2,6 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { classifyQuestion, isBlockedCategory, looksLikeEssay } from "./blockedQuestions.js";
+import { resolvePersonal } from "./personal.js";
 
 /**
  * Answer policy engine.
@@ -116,11 +117,43 @@ function answerOne(question: FormQuestion, profile: Profile, blockedCategories: 
     };
   }
 
+  // A pre-approved answer is an explicit prior decision, so it can satisfy an
+  // otherwise blocked category. Checked before the block so the candidate's own
+  // stored choice is honoured.
+  const approvedEarly = matchApprovedAnswer(profile, question.label);
+  if (approvedEarly?.allowAutoFill === true) {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: approvedEarly.answer,
+      source: "approved-answer",
+      citation: `profile.answers.${approvedEarly.key}`,
+      requiresHuman: false,
+      category,
+    };
+  }
+
+  // Personal and demographic fields: usable only where the candidate opted that
+  // specific field in. Otherwise the stored value is offered as a suggestion
+  // and the question still stops for a decision.
+  const personal = resolvePersonal(question.label, profile);
+  if (personal) {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: personal.answer,
+      source: "profile",
+      citation: personal.citation,
+      requiresHuman: !personal.authorized,
+      category: personal.category,
+    };
+  }
+
   if (isBlockedCategory(category, blockedCategories)) {
     return blocked(question, category, `category "${category}" always requires a human decision`);
   }
 
-  const approved = matchApprovedAnswer(profile, question.label);
+  const approved = approvedEarly;
   if (approved) {
     return {
       questionKey: question.key,

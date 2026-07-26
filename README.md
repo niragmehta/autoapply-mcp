@@ -93,6 +93,8 @@ The server speaks stdio. All logs go to stderr, so stdout stays clean for the pr
 
 ## Typical session
 
+Single application:
+
 ```
 discover_jobs                  -> fetch every board, gate, score, store
 list_queue                     -> the ranked, de-duplicated shortlist
@@ -105,7 +107,17 @@ submit_application   mode      -> manual, assisted or auto
 record_outcome                 -> track what happened
 ```
 
-See [docs/TOOLS.md](docs/TOOLS.md) for every tool, [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the schemas, [docs/RESUMES.md](docs/RESUMES.md) for resume variants and LaTeX builds, and [docs/SAFETY.md](docs/SAFETY.md) for the guarantees and their limits.
+High volume:
+
+```
+prepare_batch  {tiers:["A","B"], locationClasses:["bay-area"], minCompensation:250000}
+preview_batch                  -> the set, plus grouped blocking questions
+approve_batch  + manifestHash + expectedCount
+submit_batch   mode            -> honours daily limit and pacing
+list_batches                   -> progress
+```
+
+See [docs/TOOLS.md](docs/TOOLS.md) for every tool, [docs/BATCH.md](docs/BATCH.md) for high-volume campaigns and cached personal data, [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the schemas, [docs/RESUMES.md](docs/RESUMES.md) for resume variants and LaTeX builds, and [docs/SAFETY.md](docs/SAFETY.md) for the guarantees and their limits.
 
 ## Submission modes
 

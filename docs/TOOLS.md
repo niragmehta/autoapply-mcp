@@ -101,6 +101,43 @@ Runs every guard, then acts according to mode.
 ### `record_submission`
 Marks an application submitted after you sent it manually, keeping counts, pacing and duplicate checks accurate.
 
+## Batch operations
+
+### `prepare_batch`
+Prepares many applications at once from a queue filter, using the same drafting and validation as the single path. See [BATCH.md](BATCH.md).
+
+| Input | Type |
+|---|---|
+| `tiers` | `("A"\|"B"\|"C")[]?` — defaults to A and B |
+| `trackIds` | `string[]?` |
+| `locationClasses` | `string[]?` |
+| `companies` | `string[]?` |
+| `minScore` | `number?` |
+| `minCompensation` | `number?` — annualized top-of-range, campaign currency |
+| `allowUnknownCompensation` | `boolean?` — default false |
+| `limit` | `number?` — default 50, max 300 |
+
+Returns the batch id, ready versus needs-human counts, `blockingReasons` grouped by category, the auto-filled personal fields, and the manifest hash.
+
+### `preview_batch`
+Every application in the batch with company, role, compensation, readiness and what is blocking it. Returns the current manifest hash and whether the stored one is stale.
+
+### `approve_batch`
+Approves every ready application. Requires `batchId`, `manifestHash` and `expectedCount`; a mismatch in either fails with `manifest_mismatch` or `count_mismatch`.
+
+### `submit_batch`
+Submits the approved set in `manual`, `assisted` or `auto` mode, re-running all guards per application and honouring the daily limit and pacing. Stops cleanly at the cap so the remainder can continue later.
+
+| Input | Type |
+|---|---|
+| `batchId` | `string` |
+| `mode` | `"manual" \| "assisted" \| "auto"` |
+| `maxSubmissions` | `number?` — defaults to the campaign daily limit |
+| `headless` | `boolean?` |
+
+### `list_batches`
+Recent batches with status and per-state counts.
+
 ## Tracking
 
 ### `record_outcome`

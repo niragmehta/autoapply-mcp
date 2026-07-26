@@ -99,6 +99,27 @@ CREATE TABLE IF NOT EXISTS events (
   payload TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, ts);
+
+CREATE TABLE IF NOT EXISTS batches (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  filter_json TEXT NOT NULL DEFAULT '{}',
+  manifest_hash TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'prepared',
+  approved_at TEXT,
+  note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS batch_items (
+  batch_id TEXT NOT NULL,
+  application_id TEXT NOT NULL,
+  job_id TEXT NOT NULL,
+  packet_hash TEXT NOT NULL DEFAULT '',
+  state TEXT NOT NULL DEFAULT 'ready',
+  detail TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (batch_id, application_id)
+);
+CREATE INDEX IF NOT EXISTS idx_batch_items_batch ON batch_items(batch_id, state);
 `;
 
 export type Db = DatabaseSync;

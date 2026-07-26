@@ -89,6 +89,62 @@ export const CompensationPreferenceSchema = z.object({
   rangeStatement: z.string().optional(),
 });
 
+/**
+ * A stored answer to a personal or demographic question.
+ *
+ * `autoFill` is the record of a decision the candidate has already made about
+ * this specific field. When true, the value may be used without stopping for a
+ * fresh decision on every application; when false it is only ever a suggestion.
+ */
+export const StoredAnswerSchema = z.object({
+  value: z.string().default(""),
+  autoFill: z.boolean().default(false),
+});
+export type StoredAnswer = z.infer<typeof StoredAnswerSchema>;
+
+const storedAnswer = () => StoredAnswerSchema.prefault({});
+
+/**
+ * Voluntary self-identification data.
+ *
+ * These questions are legally sensitive and, in the US, voluntary. Nothing here
+ * is filled unless the candidate sets `autoFill` on that specific field.
+ * "Decline to self-identify" is a valid and common value.
+ */
+export const DemographicsSchema = z.object({
+  gender: storedAnswer(),
+  pronouns: storedAnswer(),
+  raceEthnicity: storedAnswer(),
+  hispanicLatino: storedAnswer(),
+  veteranStatus: storedAnswer(),
+  disabilityStatus: storedAnswer(),
+});
+
+export const PostalAddressSchema = z.object({
+  street: z.string().default(""),
+  city: z.string().default(""),
+  region: z.string().default(""),
+  postalCode: z.string().default(""),
+  country: z.string().default(""),
+});
+
+/**
+ * Personal details that application forms routinely require. Kept separate from
+ * `identity` because this is higher-sensitivity data: it is redacted from logs
+ * and must never be committed to a repository.
+ */
+export const PersonalSchema = z.object({
+  dateOfBirth: storedAnswer(),
+  address: PostalAddressSchema.prefault({}),
+  addressAutoFill: z.boolean().default(false),
+  demographics: DemographicsSchema.prefault({}),
+  /** Answer to "are you at least 18 years of age". */
+  legalAgeConfirmation: storedAnswer(),
+  /** Answer to "have you previously worked for this company". */
+  previousEmployment: storedAnswer(),
+});
+export type Personal = z.infer<typeof PersonalSchema>;
+
 export const IdentitySchema = z.object({
   fullName: nonEmpty,
   headline: z.string().default(""),
@@ -105,6 +161,7 @@ export const IdentitySchema = z.object({
 export const ProfileSchema = z.object({
   version: z.literal(1),
   identity: IdentitySchema,
+  personal: PersonalSchema.prefault({}),
   workAuthorization: WorkAuthorizationSchema,
   compensation: CompensationPreferenceSchema,
   preferences: z
