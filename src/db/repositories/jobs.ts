@@ -173,9 +173,26 @@ export type QueueFilter = {
   minScore?: number;
   tiers?: string[];
   trackId?: string | null;
+  trackIds?: string[];
+  locationClasses?: string[];
+  companies?: string[];
   limit?: number;
   excludeApplied?: boolean;
+  /** Minimum annualized top-of-range compensation, in campaign currency. */
+  minCompensation?: number;
+  /** Keep postings that publish no compensation. */
+  allowUnknownCompensation?: boolean;
+  /** FX rates for converting posted currencies to the campaign currency. */
+  fx?: Record<string, number>;
 };
+
+function annualizedMaxIn(job: Job, fx: Record<string, number>): number | null {
+  const range = job.compensation;
+  if (!range || range.max === null) return null;
+  const annual = range.period === "hour" ? range.max * 2080 : range.period === "month" ? range.max * 12 : range.max;
+  const rate = fx[range.currency.toUpperCase()];
+  return rate ? annual * rate : null;
+}
 
 /** Ranked queue of gated-in jobs with no application for the same role yet. */
 export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
@@ -207,7 +224,28 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
   return rows
     .map((row) => ({ job: rowToJob(row), evaluation: rowToEvaluation(row) }))
     .filter((item) => (filter.tiers ? filter.tiers.includes(item.evaluation.tier) : true))
-    .filter((item) => (filter.trackId ? item.evaluation.trackId === filter.trackId : true));
+    .filter((item) => (filter.trackId ? item.evaluation.trackId === filter.trackId : true))
+    .filter((item) =>
+      filter.trackIds && filter.trackIds.length > 0
+        ? filter.trackIds.includes(item.evaluation.trackId ?? "")
+        : true,
+    )
+    .filter((item) =>
+      filter.locationClasses && filter.locationClasses.length > 0
+        ? filter.locationClasses.includes(item.job.locationClass)
+        : true,
+    )
+    .filter((item) =>
+      filter.companies && filter.companies.length > 0
+        ? filter.companies.some((name) => name.toLowerCase() === item.job.companyName.toLowerCase())
+        : true,
+    )
+    .filter((item) => {
+      if (filter.minCompensation === undefined) return true;
+      const value = annualizedMaxIn(item.job, filter.fx ?? { USD: 1 });
+      if (value === null) return filter.allowUnknownCompensation === true;
+      return value >= filter.minCompensation;
+    });
 }
 
 export type RejectionSummary = { rule: string; count: number };

@@ -12,6 +12,21 @@
       "website": "https://example.com"
     }
   },
+  "personal": {
+    "dateOfBirth": { "value": "", "autoFill": false },
+    "address": { "street": "", "city": "Toronto", "region": "Ontario", "postalCode": "", "country": "Canada" },
+    "addressAutoFill": false,
+    "legalAgeConfirmation": { "value": "Yes", "autoFill": true },
+    "previousEmployment": { "value": "No", "autoFill": false },
+    "demographics": {
+      "gender": { "value": "Decline to self-identify", "autoFill": true },
+      "pronouns": { "value": "", "autoFill": false },
+      "raceEthnicity": { "value": "Decline to self-identify", "autoFill": true },
+      "hispanicLatino": { "value": "Decline to self-identify", "autoFill": true },
+      "veteranStatus": { "value": "I am not a protected veteran", "autoFill": true },
+      "disabilityStatus": { "value": "I do not wish to answer", "autoFill": true }
+    }
+  },
   "workAuthorization": {
     "citizenships": ["Canada"],
     "authorizedIn": ["CA"],

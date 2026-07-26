@@ -24,24 +24,38 @@ Approval binds to a SHA-256 hash of the exact packet: job, apply URL, resume, co
 
 ## Truthfulness
 
-The answer policy engine can produce an answer from exactly two sources:
+The answer policy engine can produce an answer from exactly three sources:
 
 1. A verified field in `profile.json`, cited by path (for example `identity.email`).
 2. A pre-approved answer in `profile.answers` whose pattern matches the question.
+3. A field in `profile.personal` that the candidate marked `autoFill: true`.
 
 Everything else is returned with `source: "blocked"` and an empty answer. The server has no fallback that guesses, infers or generates a plausible response.
+
+Storing a personal value is not consent to send it. Each field carries its own `autoFill` flag, and the flag is the consent.
 
 Match reports include a `claimsToAvoid` list: requirements the posting asks for that your profile cannot support. An agent writing your cover letter is told explicitly not to claim them.
 
 ## Questions that always require a human
 
-By default these categories never auto-fill, regardless of what is in your profile:
+By default these categories never auto-fill:
 
 `work-authorization`, `sponsorship`, `citizenship`, `clearance`, `criminal-history`, `compensation`, `demographic`, `veteran`, `disability`, `legal-attestation`, `essay`, `reference`
 
 They are legally material, ethically sensitive, or negotiation-relevant. Getting them wrong can invalidate an application or an offer.
 
-For work authorization the server *suggests* your verified statement so you can see it, but still marks the answer as requiring a human while `workAuthorization.alwaysReviewManually` is true. Have immigration counsel review that wording before you rely on it.
+A category block can be satisfied in advance, but only by an explicit prior decision recorded in the profile: a `profile.answers` entry with `allowAutoFill: true`, or a `profile.personal` field with `autoFill: true`. This does not weaken the rule; it moves the decision earlier, where it gets more thought than it would on the hundredth form.
+
+Work authorization is held to a stricter standard. It auto-fills only when `workAuthorization.alwaysReviewManually` is `false` **and** a matching approved answer exists. The shipped default satisfies neither. If you enable it, use wording that is accurate for your situation: for a citizen of one country applying in another, "I do not require sponsorship" is frequently untrue, and the accurate phrasing depends on the visa route. Have it reviewed by an immigration lawyer.
+
+## Batch approval
+
+Batches do not bypass any guard. `approve_batch` records a separate approval per application, each bound to that application's packet hash, and additionally requires:
+
+- a **manifest hash** covering every packet in the set, so the batch cannot grow or change between review and approval
+- an **expected count**, so a batch that changed size cannot be approved by replaying an earlier call
+
+`submit_batch` re-runs every per-application guard for each submission rather than trusting the batch-level decision.
 
 ## Untrusted content
 

@@ -95,16 +95,39 @@ export function registerDiscoveryTools(server: McpServer): void {
         minScore: z.number().optional(),
         tiers: z.array(z.enum(["A", "B", "C"])).optional(),
         trackId: z.string().optional(),
+        trackIds: z.array(z.string()).optional(),
+        locationClasses: z
+          .array(z.enum(["bay-area", "us-other", "canada", "remote-us", "remote-canada", "remote-global", "other", "unknown"]))
+          .optional(),
+        companies: z.array(z.string()).optional(),
+        minCompensation: z.number().optional().describe("Minimum annualized top-of-range pay in the campaign currency."),
+        allowUnknownCompensation: z.boolean().optional().describe("Include postings with no published pay."),
         limit: z.number().int().positive().max(200).optional(),
       },
       annotations: { readOnlyHint: true },
     },
-    handler(async (args: { minScore?: number; tiers?: string[]; trackId?: string; limit?: number }) => {
+    handler(async (args: {
+      minScore?: number;
+      tiers?: string[];
+      trackId?: string;
+      trackIds?: string[];
+      locationClasses?: string[];
+      companies?: string[];
+      minCompensation?: number;
+      allowUnknownCompensation?: boolean;
+      limit?: number;
+    }) => {
       const workspace = getWorkspace();
       const items = listQueue(workspace.db, {
         minScore: args.minScore ?? workspace.campaign.scoring.thresholds.tierC,
         tiers: args.tiers,
         trackId: args.trackId ?? null,
+        trackIds: args.trackIds,
+        locationClasses: args.locationClasses,
+        companies: args.companies,
+        minCompensation: args.minCompensation,
+        allowUnknownCompensation: args.allowUnknownCompensation ?? true,
+        fx: workspace.campaign.compensation.fx,
         limit: args.limit ?? 25,
       });
 
