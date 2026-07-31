@@ -4,7 +4,22 @@ import type { SubmissionPolicy } from "../domain/campaign.js";
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { assertUrlAllowed, checkUrlAllowed } from "./allowlist.js";
-import { buildFillPlan, detectCaptcha, type FieldDescriptor } from "./formFields.js";
+import {
+  answerValueForField,
+  augmentAnswersForBrowser,
+  buildFillPlan,
+  detectCaptcha,
+  detectSubmissionConfirmation,
+  fallbackAnswersForFields,
+  looksLikeApplicationForm,
+  optionSearchCandidates,
+  orderFieldsForBrowser,
+  pickOptionIndex,
+  type ApprovedAnswerEntry,
+  type FieldDescriptor,
+  type PersonalResolver,
+  type NarrativeResolver,
+} from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
 import type { SubmissionPacket } from "./packet.js";
 
@@ -27,9 +42,12 @@ type AnyPage = {
   waitForTimeout: (ms: number) => Promise<void>;
   waitForLoadState: (state: string, options?: unknown) => Promise<void>;
   title: () => Promise<string>;
+  keyboard: { press: (key: string) => Promise<void> };
 };
 type AnyLocator = {
   first: () => AnyLocator;
+  nth: (index: number) => AnyLocator;
+  locator: (selector: string) => AnyLocator;
   count: () => Promise<number>;
   fill: (value: string, options?: unknown) => Promise<void>;
   selectOption: (value: unknown, options?: unknown) => Promise<unknown>;
@@ -38,6 +56,9 @@ type AnyLocator = {
   click: (options?: unknown) => Promise<void>;
   isVisible: () => Promise<boolean>;
   innerText: () => Promise<string>;
+  getAttribute: (name: string) => Promise<string | null>;
+  allInnerTexts: () => Promise<string[]>;
+  waitFor: (options?: unknown) => Promise<void>;
 };
 
 async function loadPlaywright(): Promise<Record<string, { launch: (options: unknown) => Promise<AnyBrowser> }>> {
@@ -62,6 +83,15 @@ export type BrowserRunOptions = {
   submit: boolean;
   artifactsDir: string;
   policy: SubmissionPolicy;
+  candidateCountry?: string;
+  /**
+   * Pre-approved answers used to fill questions the packet never enumerated,
+   * which happens on boards that publish no question schema.
+   */
+  answerBank?: readonly ApprovedAnswerEntry[];
+  /** Resolves stored personal and demographic answers for live field labels. */
+  personalResolver?: PersonalResolver;
+  narrativeResolver?: NarrativeResolver;
   timeoutMs?: number;
   /**
    * Milliseconds to leave a filled form open for a person to review and submit
@@ -75,6 +105,12 @@ export type BrowserRunResult = {
   reason: string;
   filledFields: Array<{ label: string; source: string }>;
   unmatchedRequired: string[];
+  /**
+   * Fields left for a person: optional questions with no approved answer, and
+   * anything the campaign deliberately withholds such as arbitration receipts.
+   * Only populated once a form has been analysed.
+   */
+  leftForHuman?: string[];
   unusedAnswers: string[];
   screenshotPath: string | null;
   finalUrl: string;
@@ -83,11 +119,12 @@ export type BrowserRunResult = {
 };
 
 /** Runs in the page: tags every form control and returns its descriptor. */
-const COLLECT_FIELDS = `() => {
+export const COLLECT_FIELDS = `(() => {
   const controls = Array.from(document.querySelectorAll('input, textarea, select'));
   const visible = (el) => {
     const style = window.getComputedStyle(el);
-    return style.display !== 'none' && style.visibility !== 'hidden' && el.type !== 'hidden';
+    const ashbyBoolean = el.type === 'checkbox' && el.closest('.ashby-application-form-field-entry');
+    return ashbyBoolean || (style.display !== 'none' && style.visibility !== 'hidden' && el.type !== 'hidden');
   };
   const labelFor = (el) => {
     if (el.id) {
@@ -95,6 +132,9 @@ const COLLECT_FIELDS = `() => {
       if (explicit && explicit.innerText.trim()) return explicit.innerText.trim();
     }
     const wrapper = el.closest('label');
+    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
+    const ashbyLabel = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
+    if (ashbyLabel && ashbyLabel.innerText.trim()) return ashbyLabel.innerText.trim();
     if (wrapper && wrapper.innerText.trim()) return wrapper.innerText.trim();
     const aria = el.getAttribute('aria-label');
     if (aria) return aria.trim();
@@ -107,19 +147,68 @@ const COLLECT_FIELDS = `() => {
     if (placeholder) return placeholder.trim();
     return el.getAttribute('name') || '';
   };
+  const optionLabelFor = (el) => {
+    if (el.id) {
+      const explicit = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+      if (explicit && explicit.innerText.trim()) return explicit.innerText.trim();
+    }
+    // Ashby nests the input inside its option label, with no id to point at.
+    const wrapper = el.closest('label');
+    if (wrapper && wrapper.innerText.trim()) return wrapper.innerText.trim();
+    const sibling = el.nextElementSibling;
+    if (sibling && sibling.innerText && sibling.innerText.trim()) return sibling.innerText.trim();
+    const aria = el.getAttribute('aria-label');
+    if (aria && aria.trim()) return aria.trim();
+    return (el.getAttribute('value') || '').trim();
+  };
+  const groupLabel = (el) => {
+    const fieldset = el.closest('fieldset');
+    if (fieldset) {
+      const selectors = [
+        ':scope > legend',
+        ':scope > .ashby-application-form-question-title',
+        ':scope > label',
+      ];
+      for (const selector of selectors) {
+        const title = fieldset.querySelector(selector);
+        if (title && title.innerText.trim()) return title.innerText.trim();
+      }
+    }
+    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
+    const ashbyTitle = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
+    if (ashbyTitle && ashbyTitle.innerText.trim()) return ashbyTitle.innerText.trim();
+    const radiogroup = el.closest('[role="radiogroup"]');
+    const aria = radiogroup && radiogroup.getAttribute('aria-label');
+    return aria ? aria.trim() : '';
+  };
   const out = [];
-  controls.filter(visible).forEach((el, index) => {
+  controls.filter(visible).forEach((el) => {
+    const isRadio = el.type === 'radio';
+    const optionLabel = (isRadio ? optionLabelFor(el) : labelFor(el)).slice(0, 200);
+    const group = isRadio ? groupLabel(el).slice(0, 200) : '';
+    const label = group || optionLabel;
+    const name = el.getAttribute('name') || '';
+    const role = el.getAttribute('role') || '';
+    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
+    const ashbyLabel = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
+    if (!label && !name && !el.id && role !== 'combobox') return;
+    const index = out.length;
     el.setAttribute('data-autoapply-idx', String(index));
     out.push({
       selectorIndex: index,
-      label: labelFor(el).slice(0, 200),
+      label,
+      optionLabel: group ? optionLabel : undefined,
       type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
-      name: el.getAttribute('name') || '',
-      required: el.hasAttribute('required') || el.getAttribute('aria-required') === 'true',
+      name,
+      required:
+        el.hasAttribute('required') ||
+        el.getAttribute('aria-required') === 'true' ||
+        Boolean(ashbyLabel && String(ashbyLabel.className).includes('_required_')),
+      role,
     });
   });
   return out;
-}`;
+})()`;
 
 const SUBMIT_SELECTORS = [
   'button[type="submit"]',
@@ -128,6 +217,12 @@ const SUBMIT_SELECTORS = [
   'button:has-text("Submit Application")',
   'button:has-text("Submit")',
   'button:has-text("Apply")',
+];
+
+const ACTIVE_CAPTCHA_SELECTORS = [
+  'iframe[title*="challenge" i]',
+  '[role="dialog"] iframe[src*="captcha" i]',
+  '[role="dialog"] iframe[src*="turnstile" i]',
 ];
 
 /**
@@ -154,8 +249,8 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       return aborted(`page redirected off the allowlist to ${page.url()}`, page.url());
     }
 
-    const html = await page.content();
-    if (detectCaptcha(html)) {
+    const pageText = await readBodyText(page);
+    if (detectCaptcha(pageText)) {
       const shot = await capture(page, options.artifactsDir, packet.applicationId, "captcha");
       return {
         status: "aborted",
@@ -170,24 +265,74 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       };
     }
 
-    const fields = (await page.evaluate(COLLECT_FIELDS)) as FieldDescriptor[];
-    const plan = buildFillPlan(fields, packet.answers);
-    const filled: Array<{ label: string; source: string }> = [];
+    await attachResume(page, packet.resumePath);
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    if (/\.ashbyhq\.com$/i.test(new URL(page.url()).hostname)) {
+      await page
+        .locator("text=Autofill completed!")
+        .first()
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .catch(() => undefined);
+    }
+    await page.waitForTimeout(1000);
 
-    for (const match of plan.toFill) {
+    const fields = (await page.evaluate(COLLECT_FIELDS)) as FieldDescriptor[];
+    if (!looksLikeApplicationForm(fields)) {
+      const shot = await capture(page, options.artifactsDir, packet.applicationId, "no-form");
+      return {
+        status: "aborted",
+        reason:
+          "no application form found at the final URL; the posting has most likely been removed and the board redirected to its job index",
+        filledFields: [],
+        unmatchedRequired: [],
+        unusedAnswers: [],
+        screenshotPath: shot,
+        finalUrl: page.url(),
+        confirmationText: "",
+        captchaDetected: false,
+      };
+    }
+    const packetAnswers = augmentAnswersForBrowser(packet.answers, options.candidateCountry);
+    const plan = buildFillPlan(fields, [
+      ...packetAnswers,
+      ...fallbackAnswersForFields(
+        fields,
+        packetAnswers,
+        options.answerBank ?? [],
+        options.personalResolver,
+        options.narrativeResolver,
+      ),
+    ]);
+    const filled: Array<{ label: string; source: string }> = [];
+    const failedRequired: string[] = [];
+    const choiceLog: ChoiceSelection[] = [];
+
+    for (const match of orderFieldsForBrowser(plan.toFill)) {
       const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
-      const value = match.answer!.answer;
+      const value = answerValueForField(match.field, match.answer!);
+      const candidates = optionSearchCandidates(match.field, match.answer!);
       try {
-        await fillControl(locator, match.field.type, value);
+        await fillControl(page, locator, match.field, value, candidates, choiceLog);
         filled.push({ label: match.field.label, source: match.answer!.source });
       } catch (error) {
         logger.warn("field fill failed", { label: match.field.label, error: String(error) });
+        if (match.field.required) failedRequired.push(match.field.label);
       }
     }
 
-    await attachResume(page, packet.resumePath);
+    const lostChoices = await reassertChoices(page, choiceLog);
+    for (const label of lostChoices) {
+      logger.warn("choice would not hold", { label });
+      const index = filled.findIndex((entry) => entry.label === label);
+      if (index >= 0) filled.splice(index, 1);
+      failedRequired.push(label);
+    }
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
+    const unmatchedRequired = [
+      ...plan.unmatchedRequired.map((field) => field.label),
+      ...failedRequired,
+    ].filter((label, index, labels) => labels.indexOf(label) === index);
 
     if (!options.submit) {
       const keepOpenMs = options.keepOpenMs ?? 0;
@@ -202,7 +347,8 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
             ? "form filled and left open for human review and submission"
             : "form filled and captured; submission not requested",
         filledFields: filled,
-        unmatchedRequired: plan.unmatchedRequired.map((field) => field.label),
+        unmatchedRequired,
+        leftForHuman: plan.unfilled.map((entry) => entry.label),
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
         screenshotPath,
         finalUrl: page.url(),
@@ -211,12 +357,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       };
     }
 
-    if (plan.unmatchedRequired.length > 0) {
+    if (unmatchedRequired.length > 0) {
       return {
         status: "aborted",
-        reason: `required field(s) could not be filled: ${plan.unmatchedRequired.map((f) => f.label).join("; ")}`,
+        reason: `required field(s) could not be filled: ${unmatchedRequired.join("; ")}`,
         filledFields: filled,
-        unmatchedRequired: plan.unmatchedRequired.map((field) => field.label),
+        unmatchedRequired,
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
         screenshotPath,
         finalUrl: page.url(),
@@ -242,12 +388,47 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
     await page.waitForTimeout(1500);
+    const postSubmitText = await readBodyText(page);
+    const captchaDetected = detectCaptcha(postSubmitText) || (await hasVisibleCaptchaChallenge(page));
+    if (captchaDetected) {
+      const shot = await capture(page, options.artifactsDir, packet.applicationId, "captcha");
+      return {
+        status: "aborted",
+        reason: "anti-bot challenge activated after submit; this application must be completed by a human",
+        filledFields: filled,
+        unmatchedRequired: [],
+        unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+        screenshotPath: shot,
+        finalUrl: page.url(),
+        confirmationText: "",
+        captchaDetected: true,
+      };
+    }
+
+    if (!checkUrlAllowed(page.url(), options.policy).allowed) {
+      return aborted(`page redirected off the allowlist to ${page.url()}`, page.url());
+    }
+
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
-    const confirmationText = (await page.locator("body").first().innerText().catch(() => "")).slice(0, 600);
+    if (!detectSubmissionConfirmation(postSubmitText)) {
+      return {
+        status: "aborted",
+        reason: "submit control clicked but no submission confirmation was detected; verify this application manually",
+        filledFields: filled,
+        unmatchedRequired: [],
+        unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+        screenshotPath: confirmationShot,
+        finalUrl: page.url(),
+        confirmationText: "",
+        captchaDetected: false,
+      };
+    }
+
+    const confirmationText = postSubmitText.slice(0, 600);
 
     return {
       status: "submitted",
-      reason: "submit control clicked and confirmation captured",
+      reason: "submission confirmation detected and captured",
       filledFields: filled,
       unmatchedRequired: [],
       unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -275,17 +456,188 @@ function aborted(reason: string, finalUrl: string): BrowserRunResult {
   };
 }
 
-async function fillControl(locator: AnyLocator, type: string, value: string): Promise<void> {
-  if (type === "select") {
-    await locator.selectOption({ label: value });
+type ChoiceSelection = { button: AnyLocator; label: string; choice: string };
+
+async function fillControl(
+  page: AnyPage,
+  locator: AnyLocator,
+  field: FieldDescriptor,
+  value: string,
+  candidates: readonly string[] = [value],
+  choiceLog?: ChoiceSelection[],
+): Promise<void> {
+  if (field.role === "combobox") {
+    await fillCombobox(page, locator, candidates);
     return;
   }
-  if (type === "checkbox" || type === "radio") {
-    if (/^(yes|true|1|on|i agree|agree)$/i.test(value.trim())) await locator.check();
+  if (field.type === "select") {
+    await fillNativeSelect(locator, candidates);
     return;
   }
-  if (type === "file") return;
+  if (field.type === "checkbox" || field.type === "radio") {
+    const affirmative = /^(yes|true|1|on|i agree|agree)$/i.test(value.trim());
+    const negative = /^(no|false|0|off)$/i.test(value.trim());
+    const ashbyChoice = affirmative ? "Yes" : negative ? "No" : null;
+    const button = ashbyChoice
+      ? locator.locator(
+          `xpath=ancestor::div[contains(@class,"ashby-application-form-field-entry")][1]//button[normalize-space()="${ashbyChoice}"]`,
+        )
+      : null;
+    if (button && (await button.count()) === 1) {
+      await clickUntilActive(page, button, field.label, ashbyChoice!);
+      choiceLog?.push({ button, label: field.label, choice: ashbyChoice! });
+      return;
+    }
+    if (field.optionLabel) {
+      await checkOption(locator);
+      return;
+    }
+    if (affirmative) await locator.check();
+    return;
+  }
+  if (field.type === "file") return;
   await locator.fill(value);
+}
+
+/**
+ * Ashby's Yes/No controls are buttons over a hidden checkbox that never changes
+ * its own checked state, so the only evidence a choice registered is the
+ * `_active_` class the board adds. Without checking it a lost click is reported
+ * as a filled field and the reviewer finds the question blank.
+ */
+async function clickUntilActive(
+  page: AnyPage,
+  button: AnyLocator,
+  label: string,
+  choice: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await button.click({ timeout: 4000 });
+    await page.waitForTimeout(300);
+    if (await isActive(button)) return;
+  }
+  throw new Error(`"${choice}" did not register for "${label}"`);
+}
+
+async function isActive(button: AnyLocator): Promise<boolean> {
+  const className = (await button.getAttribute("class")) ?? "";
+  return className.includes("_active_");
+}
+
+/**
+ * Ashby re-renders the form while it parses the uploaded resume, which can drop
+ * a choice that was verified as active moments earlier. Re-assert every choice
+ * once the rest of the form has settled, and report the ones that will not hold.
+ */
+async function reassertChoices(
+  page: AnyPage,
+  choices: ChoiceSelection[],
+): Promise<string[]> {
+  if (choices.length === 0) return [];
+  const lost: string[] = [];
+  for (let pass = 0; pass < 2; pass += 1) {
+    await page.waitForTimeout(1500);
+    lost.length = 0;
+    for (const entry of choices) {
+      if (await isActive(entry.button)) continue;
+      try {
+        await clickUntilActive(page, entry.button, entry.label, entry.choice);
+      } catch {
+        lost.push(entry.label);
+      }
+    }
+  }
+  return lost;
+}
+
+const OPTION_WAIT_MS = 6000;
+
+/**
+ * The group was already reduced to the one option that states the approved
+ * answer, so this option is simply selected. Boards style radios by hiding the
+ * real input behind its own label, which defeats a plain check(), so fall back
+ * to forcing it and then to clicking the surrounding option row.
+ */
+async function checkOption(locator: AnyLocator): Promise<void> {
+  try {
+    await locator.check({ timeout: 4000 });
+    return;
+  } catch {
+    // Falls through to the styled-control strategies below.
+  }
+  try {
+    await locator.check({ timeout: 4000, force: true });
+    return;
+  } catch {
+    // Falls through to clicking the visible option row.
+  }
+  await locator.locator("xpath=ancestor::*[self::label or self::div][1]").first().click({ timeout: 4000 });
+}
+
+/**
+ * React-select comboboxes render their listbox asynchronously, and location
+ * pickers query a remote geocoder, so options can take seconds to appear.
+ * Candidates are tried in order because boards word the same choice
+ * differently; the trailing empty filter lists everything as a last resort.
+ *
+ * The flyout is always dismissed on the way out — an open listbox overlays the
+ * fields below it and makes every later click time out.
+ */
+export async function fillCombobox(
+  page: AnyPage,
+  locator: AnyLocator,
+  candidates: readonly string[],
+): Promise<void> {
+  try {
+    for (const candidate of [...candidates, ""]) {
+      await closeFlyout(page);
+      await openFlyout(locator);
+      await locator.fill(candidate);
+      const optionTexts = await waitForVisibleOptions(page, OPTION_WAIT_MS);
+      const index = pickOptionIndex(optionTexts, candidates);
+      if (index >= 0) {
+        await page.locator('[role="option"]:visible').nth(index).click();
+        return;
+      }
+    }
+    throw new Error(`no visible option matched ${JSON.stringify(candidates)}`);
+  } finally {
+    await closeFlyout(page);
+  }
+}
+
+async function closeFlyout(page: AnyPage): Promise<void> {
+  await page.keyboard.press("Escape").catch(() => undefined);
+}
+
+async function openFlyout(locator: AnyLocator): Promise<void> {
+  const toggle = locator.locator(
+    'xpath=ancestor::div[contains(@class,"select__control")][1]//button[@aria-label="Toggle flyout"]',
+  );
+  if ((await toggle.count()) > 0) {
+    await toggle.click();
+    return;
+  }
+  await locator.click();
+}
+
+async function waitForVisibleOptions(page: AnyPage, timeoutMs: number): Promise<string[]> {
+  const options = page.locator('[role="option"]:visible');
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if ((await options.count()) > 0) return await options.allInnerTexts();
+    if (Date.now() >= deadline) return [];
+    await page.waitForTimeout(250);
+  }
+}
+
+async function fillNativeSelect(locator: AnyLocator, candidates: readonly string[]): Promise<void> {
+  const optionTexts = await locator.locator("option").allInnerTexts();
+  const index = pickOptionIndex(optionTexts, candidates);
+  if (index < 0) {
+    throw new Error(`no option matched ${JSON.stringify(candidates)}`);
+  }
+  await locator.selectOption({ label: optionTexts[index]!.trim() });
 }
 
 async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
@@ -314,6 +666,18 @@ async function clickSubmit(page: AnyPage): Promise<boolean> {
       await locator.click();
       return true;
     }
+  }
+  return false;
+}
+
+async function readBodyText(page: AnyPage): Promise<string> {
+  return page.locator("body").first().innerText().catch(() => "");
+}
+
+async function hasVisibleCaptchaChallenge(page: AnyPage): Promise<boolean> {
+  for (const selector of ACTIVE_CAPTCHA_SELECTORS) {
+    const locator = page.locator(selector).first();
+    if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) return true;
   }
   return false;
 }

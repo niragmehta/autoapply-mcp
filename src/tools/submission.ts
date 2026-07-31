@@ -10,11 +10,12 @@ import {
   saveApplication,
 } from "../db/repositories/applications.js";
 import { appendEvent } from "../db/repositories/events.js";
-import { getJob } from "../db/repositories/jobs.js";
-import { runApplicationForm } from "../submission/browser.js";
+import { getEvaluation, getJob } from "../db/repositories/jobs.js";import { runApplicationForm } from "../submission/browser.js";
 import { checkSubmissionAllowed, startOfDayIso } from "../submission/guards.js";
 import { computePacketHash, renderPacketPreview, type SubmissionPacket } from "../submission/packet.js";
 import { AppError } from "../util/errors.js";
+import { personalResolverFor } from "../submission/personalResolver.js";
+import { narrativeResolverFor } from "../submission/narrativeResolver.js";
 import { newId, nowIso } from "../util/hash.js";
 import { handler, ok, okText } from "./helpers.js";
 
@@ -158,6 +159,10 @@ export function registerSubmissionTools(server: McpServer): void {
         headless: mode === "assisted" ? false : args.headless ?? true,
         artifactsDir: workspace.paths.artifacts,
         policy: workspace.campaign.submission,
+        candidateCountry: workspace.profile.identity.location.country,
+        answerBank: workspace.profile.answers,
+        personalResolver: personalResolverFor(workspace.profile),
+        narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
         keepOpenMs: mode === "assisted" ? (args.keepOpenSeconds ?? 240) * 1000 : 0,
       });
 
