@@ -22,7 +22,7 @@ import {
   type BatchItem,
 } from "../db/repositories/batches.js";
 import { appendEvent } from "../db/repositories/events.js";
-import { getJob, listQueue } from "../db/repositories/jobs.js";
+import { getEvaluation, getJob, listQueue } from "../db/repositories/jobs.js";
 import { prepareApplicationFor } from "../drafting/prepare.js";
 import { autoFillableFields } from "../drafting/personal.js";
 import { runApplicationForm } from "../submission/browser.js";
@@ -31,6 +31,8 @@ import { computePacketHash, type SubmissionPacket } from "../submission/packet.j
 import { AppError, toErrorMessage } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
 import { logger } from "../util/logger.js";
+import { personalResolverFor } from "../submission/personalResolver.js";
+import { narrativeResolverFor } from "../submission/narrativeResolver.js";
 import { handler, ok } from "./helpers.js";
 
 /**
@@ -437,6 +439,10 @@ export function registerBatchTools(server: McpServer): void {
             headless: mode === "assisted" ? false : args.headless ?? true,
             artifactsDir: workspace.paths.artifacts,
             policy,
+            candidateCountry: workspace.profile.identity.location.country,
+            answerBank: workspace.profile.answers,
+            personalResolver: personalResolverFor(workspace.profile),
+        narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
           });
 
           if (run.status === "submitted") {
