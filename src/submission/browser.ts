@@ -250,7 +250,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     }
 
     const pageText = await readBodyText(page);
-    if (detectCaptcha(pageText)) {
+    // A passive reCAPTCHA v3 badge only leaves "protected by reCAPTCHA" in the
+    // page text and needs no human action, so it must not abort a fill-only
+    // (assisted) run. Anything actually interactive still aborts, and a
+    // self-submitting run stays strict.
+    const interactiveChallenge = await hasVisibleCaptchaChallenge(page);
+    if (interactiveChallenge || (options.submit && detectCaptcha(pageText))) {
       const shot = await capture(page, options.artifactsDir, packet.applicationId, "captcha");
       return {
         status: "aborted",

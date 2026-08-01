@@ -275,7 +275,37 @@ function answerOne(
     return blocked(question, "essay", "free-text response must be written and approved by a human");
   }
 
+  const soleConsent = soleConsentOption(question);
+  if (soleConsent) {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: soleConsent,
+      source: "approved-answer",
+      citation: "profile.answers.acknowledgement (sole offered option)",
+      requiresHuman: false,
+      category: "acknowledgement",
+      guidance: "",
+    };
+  }
+
   return blocked(question, category, "no verified profile value or pre-approved answer matches this question");
+}
+
+const SOLE_CONSENT_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+
+/**
+ * A required choice offering exactly one consent option carries no decision:
+ * the sole option is the only submittable value. Returns it so drafting does
+ * not block on a field a person could only ever answer one way.
+ */
+function soleConsentOption(question: FormQuestion): string | undefined {
+  if (!question.required) return undefined;
+  const options = question.options ?? [];
+  if (options.length !== 1) return undefined;
+  const only = options[0] ?? "";
+  const normalized = only.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return SOLE_CONSENT_OPTION.test(normalized) ? only : undefined;
 }
 
 /** Questions still missing an answer that the form requires. */

@@ -243,3 +243,37 @@ describe("unresolvedRequired", () => {
     expect(unresolvedRequired(questions, answers)).toEqual(["Desired salary"]);
   });
 });
+
+describe("sole consent option", () => {
+  it("auto-selects a required choice offering only an acknowledgement", () => {
+    const q = question("Point of Data Transfer", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["I Acknowledge"],
+    });
+    const { answers } = draftAnswers([q], profile, campaign);
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.answer).toBe("I Acknowledge");
+    expect(unresolvedRequired([q], answers)).toEqual([]);
+  });
+
+  it("still blocks a single option that is a real choice, not a consent", () => {
+    const q = question("Which office would you join?", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["Toronto"],
+    });
+    const { answers } = draftAnswers([q], profile, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("does not auto-select a lone consent option on an optional question", () => {
+    const q = question("Optional consent", {
+      required: false,
+      type: "multi_value_single_select",
+      options: ["I agree"],
+    });
+    const { answers } = draftAnswers([q], profile, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+});
