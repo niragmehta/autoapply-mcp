@@ -91,6 +91,8 @@ export type BrowserRunOptions = {
   answerBank?: readonly ApprovedAnswerEntry[];
   /** Resolves stored personal and demographic answers for live field labels. */
   personalResolver?: PersonalResolver;
+  /** Resolves employment-history fields from the candidate's stored positions. */
+  experienceResolver?: PersonalResolver;
   narrativeResolver?: NarrativeResolver;
   timeoutMs?: number;
   /**
@@ -306,6 +308,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         options.answerBank ?? [],
         options.personalResolver,
         options.narrativeResolver,
+        options.experienceResolver,
       ),
     ]);
     const filled: Array<{ label: string; source: string }> = [];
@@ -334,8 +337,18 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     }
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
+    const inertIndexes = await inertControlIndexes(
+      page,
+      plan.unmatchedRequired.map((entry) => entry.selectorIndex),
+    );
     const unmatchedRequired = [
-      ...plan.unmatchedRequired.map((field) => field.label),
+      ...plan.unmatchedRequired
+        // Some required controls switch themselves off in response to another
+        // answer: ticking "Current role" disables the end-date selects. A
+        // disabled control submits nothing, so it cannot be what is missing,
+        // and filling it would contradict the answer that disabled it.
+        .filter((entry) => !inertIndexes.has(entry.selectorIndex))
+        .map((field) => field.label),
       ...failedRequired,
     ].filter((label, index, labels) => labels.indexOf(label) === index);
 
@@ -447,8 +460,38 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
   }
 }
 
-function aborted(reason: string, finalUrl: string): BrowserRunResult {
-  return {
+/**
+ * Controls the page has switched off since it was scanned. Forms disable
+ * dependent fields once another answer makes them meaningless - ticking
+ * "Current role" disables the end-date selects - and the scan runs before any
+ * answer is entered, so this can only be read after filling.
+ */
+async function inertControlIndexes(page: AnyPage, indexes: readonly number[]): Promise<Set<number>> {
+  if (indexes.length === 0) return new Set();
+  // Written as a plain string because it runs in the page, not in Node, and the
+  // server is not built against the DOM library.
+  const script = `((wanted) => {
+    const out = [];
+    for (const index of wanted) {
+      const el = document.querySelector('[data-autoapply-idx="' + index + '"]');
+      if (!el) continue;
+      const style = window.getComputedStyle(el);
+      const hidden = style.display === 'none' || style.visibility === 'hidden';
+      if (el.disabled || el.readOnly || el.getAttribute('aria-disabled') === 'true' || hidden) out.push(index);
+    }
+    return out;
+  })(${JSON.stringify(indexes)})`;
+  try {
+    const inert = (await page.evaluate(script)) as number[];
+    return new Set(inert);
+  } catch {
+    // A page that will not answer this question is not evidence that anything
+    // is disabled, so report nothing and let the required check stand.
+    return new Set();
+  }
+}
+
+function aborted(reason: string, finalUrl: string): BrowserRunResult {  return {
     status: "aborted",
     reason,
     filledFields: [],

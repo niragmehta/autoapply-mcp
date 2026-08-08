@@ -140,6 +140,29 @@ const DATE_COMPONENT_QUESTION = /\b(?:start|end|from|to)\s+date\s+(?:month|year|
 const DURATION_ANSWER = /\b(?:weeks?|months?|days?)\b.*\b(?:notice|offer|acceptance|start)\b|\bnotice period\b/;
 
 /**
+ * Which end of a period a date component belongs to, or null when the label is
+ * not a date component at all.
+ */
+function datePeriodEnd(label: string): "start" | "end" | null {
+  if (!DATE_COMPONENT_QUESTION.test(label)) return null;
+  if (/\b(?:start|from)\b/.test(label)) return "start";
+  if (/\b(?:end|to)\b/.test(label)) return "end";
+  return null;
+}
+
+/**
+ * "Start date month" and "End date month" differ by one word and sit next to
+ * each other, so similarity let the start month fill the end month - which on a
+ * past position states that the job began and ended in the same month. The two
+ * ends of a period are never interchangeable.
+ */
+function namesDifferentPeriodEnd(fieldLabel: string, answerLabel: string): boolean {
+  const field = datePeriodEnd(fieldLabel);
+  const answer = datePeriodEnd(answerLabel);
+  return field !== null && answer !== null && field !== answer;
+}
+
+/**
  * A form with one "Name" box wants the whole name. Left to plain similarity a
  * fragment such as "First Name" scores just as highly and silently submits half
  * a name, so fragments are ruled out for those fields entirely.
@@ -195,6 +218,9 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // A notice period ("Approximately four weeks from offer acceptance") is about
   // a start date too, and won both selects on word overlap alone.
   if (DATE_COMPONENT_QUESTION.test(fieldLabel) && DURATION_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
+  if (namesDifferentPeriodEnd(fieldLabel, answerLabel)) {
     return true;
   }
   if (
@@ -282,6 +308,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
   if (source.length > 0) return source;
   const degree = degreeCandidates(field, value);
   if (degree.length > 0) return degree;
+  const month = monthCandidates(value);
+  if (month.length > 0) return month;
   const productUsage = productUsageCandidates(field, value);
   if (productUsage.length > 0) return productUsage;
   const relocation = relocationCandidates(field, value);
@@ -291,6 +319,36 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
 }
 
 const SOURCE_QUESTION = /how did you (?:hear|find)|how were you referred|where did you (?:hear|learn)|referral source/;
+
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+] as const;
+
+/**
+ * Employment-history blocks render the month as a closed list, and boards do
+ * not agree on how to write it: "February", "Feb", "02" and "2" all occur. The
+ * profile states a month, so offer every spelling of that same month rather
+ * than leaving a required select empty. Nothing here changes which month is
+ * being claimed.
+ */
+function monthCandidates(value: string): string[] {
+  const index = MONTH_NAMES.indexOf(normalizeLabel(value) as (typeof MONTH_NAMES)[number]);
+  const name = MONTH_NAMES[index];
+  if (!name) return [];
+  const padded = String(index + 1).padStart(2, "0");
+  return [value, name.slice(0, 3), padded, String(index + 1)];
+}
 
 const DEGREE_QUESTION = /\b(degree|level of education|education level|highest (?:level of )?education)\b/;
 
@@ -386,11 +444,25 @@ function veteranCandidates(value: string): string[] {
  * as "I am willing to relocate to this job's location." Offer the phrase so an
  * approved yes/no answer still selects the truthful option.
  */
+/**
+ * Relocation questions are rarely a yes/no list. Lyft offers three sentences,
+ * none of which is "Yes", so a stored decision reached none of them.
+ *
+ * The affirmative candidate carries "am" deliberately: "willing to relocate" is
+ * a substring of "I am **not** willing to relocate before starting employment.",
+ * so the looser phrase could select the exact opposite of the stored answer.
+ * "am willing to relocate" cannot match the negated sentence.
+ *
+ * Nothing here widens a stored answer into a claim about where the candidate
+ * already lives - an option such as "I already reside within commutable
+ * distance" is a statement of fact the profile has not made.
+ */
 function relocationCandidates(field: FieldDescriptor, value: string): string[] {
   const label = normalizeLabel(field.label);
-  if (!label.includes("relocate") && !label.includes("relocation")) return [];
-  if (/^(yes|true|1)$/i.test(value.trim())) return ["willing to relocate"];
-  if (/^(no|false|0)$/i.test(value.trim())) return ["not willing to relocate"];
+  // "relocating" does not contain "relocate", so match the shared stem.
+  if (!label.includes("relocat")) return [];
+  if (/^(yes|true|1)$/i.test(value.trim())) return ["am willing to relocate", "open to relocating"];
+  if (/^(no|false|0)$/i.test(value.trim())) return ["not willing to relocate", "not open to relocating"];
   return [];
 }
 
@@ -603,9 +675,10 @@ export function fallbackAnswersForFields(
   bank: readonly ApprovedAnswerEntry[],
   resolvePersonalAnswer?: PersonalResolver,
   resolveNarrativeAnswer?: NarrativeResolver,
+  resolveExperienceAnswer?: PersonalResolver,
 ): DraftAnswer[] {
   const eligible = bank.filter((entry) => entry.allowAutoFill && entry.answer.trim().length > 0);
-  if (eligible.length === 0 && !resolvePersonalAnswer && !resolveNarrativeAnswer) return [];
+  if (eligible.length === 0 && !resolvePersonalAnswer && !resolveNarrativeAnswer && !resolveExperienceAnswer) return [];
 
   const alreadyAnswered = new Set(answers.map((entry) => entry.questionKey));
   const matched = matchFields(fields, answers);
@@ -623,6 +696,31 @@ export function fallbackAnswersForFields(
         pickOptionIndex([match.field.optionLabel ?? ""], optionSearchCandidates(match.field, match.answer)) >= 0;
       if (names) continue;
     }
+    // Employment history first: these labels are exact, and they name the
+    // position being left rather than the one being applied for, so no broader
+    // bank pattern should be able to win them.
+    const experience = resolveExperienceAnswer?.(match.field.label);
+    if (experience && experience.authorized && experience.answer.trim().length > 0) {
+      // Start month and start year cite the same profile value, so the citation
+      // alone would let one control spend the other's answer.
+      const usedKey = `${experience.citation}#${match.field.selectorIndex}`;
+      if (!used.has(usedKey)) {
+        used.add(usedKey);
+        derived.push({
+          questionKey: experience.citation,
+          label: match.field.label,
+          answer: experience.answer,
+          source: "profile",
+          citation: experience.citation,
+          requiresHuman: false,
+          required: match.field.required ?? true,
+          category: experience.category,
+          guidance: "",
+        });
+      }
+      continue;
+    }
+
     const entry = bestBankEntry(match.field, eligible);
     if (entry) {
       // The derived answer carries the live field label so it binds to this
