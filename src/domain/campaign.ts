@@ -74,6 +74,13 @@ export const SubmissionPolicySchema = z.object({
   ]),
   allowedCompanies: z.array(nonEmpty).default([]),
   dailyLimit: z.number().int().positive().default(25),
+  /**
+   * Hard ceiling on how many applications may be prepared or submitted in a
+   * single batch. Keeps a run reviewable by a human and avoids tripping ATS
+   * rate limiting, which rejects rapid consecutive submissions. Applies even
+   * when a caller passes a larger explicit limit.
+   */
+  maxBatchSize: z.number().int().positive().default(3),
   minDelaySeconds: z.number().int().min(0).default(45),
   /** Question categories that always require a human decision. */
   blockedQuestionCategories: z.array(nonEmpty).default([

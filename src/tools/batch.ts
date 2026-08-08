@@ -99,14 +99,15 @@ export function registerBatchTools(server: McpServer): void {
     {
       title: "Prepare many applications at once",
       description:
-        "Selects queued jobs matching a filter and prepares an application packet for each, using the same drafting and validation as the single-job path. Creates local drafts and a batch manifest; nothing is sent. Applications whose questions still need a human decision are marked needs_human and excluded from batch approval.",
+        "Selects queued jobs matching a filter and prepares an application packet for each, using the same drafting and validation as the single-job path. Creates local drafts and a batch manifest; nothing is sent. Applications whose questions still need a human decision are marked needs_human and excluded from batch approval. The campaign's submission.maxBatchSize is a hard ceiling, so a larger limit is silently reduced to it.",
       inputSchema: FilterShape,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     handler(async (args: FilterArgs) => {
       const workspace = getWorkspace();
       const tiers = args.tiers ?? ["A", "B"];
-      const limit = args.limit ?? 50;
+      const maxBatchSize = workspace.campaign.submission.maxBatchSize;
+      const limit = Math.min(args.limit ?? maxBatchSize, maxBatchSize);
 
       const queue = listQueue(workspace.db, {
         minScore: args.minScore ?? 0,
@@ -362,7 +363,7 @@ export function registerBatchTools(server: McpServer): void {
     {
       title: "Submit an approved batch",
       description:
-        "Submits every approved application in the batch, re-running all per-application guards for each one and honouring the daily limit and pacing delay. Stops cleanly when the daily limit is reached so the rest can continue on the next run.",
+        "Submits every approved application in the batch, re-running all per-application guards for each one and honouring the daily limit and pacing delay. Stops cleanly when the daily limit is reached so the rest can continue on the next run. The campaign's submission.maxBatchSize also caps how many are submitted per run.",
       inputSchema: {
         batchId: z.string().min(1),
         mode: z.enum(["manual", "assisted", "auto"]).default("manual"),
@@ -381,7 +382,7 @@ export function registerBatchTools(server: McpServer): void {
 
       const mode = args.mode ?? "manual";
       const policy = workspace.campaign.submission;
-      const cap = args.maxSubmissions ?? policy.dailyLimit;
+      const cap = Math.min(args.maxSubmissions ?? policy.maxBatchSize, policy.maxBatchSize, policy.dailyLimit);
       const ready = listBatchItems(workspace.db, batch.id, "ready");
 
       setBatchStatus(workspace.db, batch.id, "submitting");
