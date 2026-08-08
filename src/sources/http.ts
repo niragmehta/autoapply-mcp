@@ -54,6 +54,8 @@ export type FetchJsonOptions = {
   minIntervalMs?: number;
   maxBytes?: number;
   accept?: string;
+  /** JSON request body. Sends POST when present; GET otherwise. */
+  body?: unknown;
 };
 
 /** Fetches JSON with throttling, retries and hard limits. */
@@ -73,14 +75,16 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, {
-        method: "GET",
+        method: options.body === undefined ? "GET" : "POST",
         redirect: "follow",
         signal: controller.signal,
         headers: {
           accept: options.accept ?? "application/json",
           "user-agent": userAgent(),
           "accept-language": "en-US,en;q=0.9",
+          ...(options.body === undefined ? {} : { "content-type": "application/json" }),
         },
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       });
 
       if (response.status === 404) {
