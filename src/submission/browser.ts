@@ -46,6 +46,9 @@ type AnyPage = {
   waitForLoadState: (state: string, options?: unknown) => Promise<void>;
   title: () => Promise<string>;
   keyboard: { press: (key: string) => Promise<void> };
+  // Optional so the test doubles do not have to model the event emitter.
+  on?: (event: string, handler: (payload: never) => void) => void;
+  off?: (event: string, handler: (payload: never) => void) => void;
 };
 type AnyLocator = {
   first: () => AnyLocator;
@@ -58,6 +61,7 @@ type AnyLocator = {
   check: (options?: unknown) => Promise<void>;
   click: (options?: unknown) => Promise<void>;
   isVisible: () => Promise<boolean>;
+  isEnabled?: () => Promise<boolean>;
   innerText: () => Promise<string>;
   getAttribute: (name: string) => Promise<string | null>;
   allInnerTexts: () => Promise<string[]>;
@@ -464,8 +468,25 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       };
     }
 
+    // A submit that leaves us on the page is ambiguous: the request may have
+    // been rejected by the board, or never sent at all. Recording what the
+    // network actually did is the difference between a diagnosable failure and
+    // a shrug, and it is the only way to see a server-side refusal that the
+    // page never renders.
+    const failedCalls: string[] = [];
+    const onResponse = (response: { status: () => number; url: () => string }) => {
+      const status = response.status();
+      if (status < 400) return;
+      const url = response.url();
+      if (!/appl|submit|graphql|candidate/i.test(url)) return;
+      failedCalls.push(`${status} ${url.split("?")[0]}`);
+    };
+    page.on?.("response", onResponse as (payload: never) => void);
+
+    const submitState = await describeSubmitControl(page);
     const clicked = await clickSubmit(page);
     if (!clicked) {
+      page.off?.("response", onResponse as (payload: never) => void);
       return {
         status: "aborted",
         reason: "no submit control found on the page",
@@ -481,6 +502,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
     await page.waitForTimeout(1500);
+    page.off?.("response", onResponse as (payload: never) => void);
     const postSubmitText = await readBodyText(page);
     const captchaDetected = detectCaptcha(postSubmitText) || (await hasVisibleCaptchaChallenge(page));
     if (captchaDetected) {
@@ -506,9 +528,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
       const pageErrors = await readValidationErrors(page);
       const detail = pageErrors.length ? ` page reported: ${pageErrors.join(" | ")}` : "";
+      const network = failedCalls.length ? ` submit request failed: ${failedCalls.join("; ")}` : "";
+      const control = submitState ? ` ${submitState}` : "";
       return {
         status: "aborted",
-        reason: `submit control clicked but no submission confirmation was detected; verify this application manually.${detail}`,
+        reason: `submit control clicked but no submission confirmation was detected; verify this application manually.${control}${detail}${network}`,
         filledFields: filled,
         unmatchedRequired: [],
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -793,6 +817,27 @@ async function clickSubmit(page: AnyPage): Promise<boolean> {
     }
   }
   return false;
+}
+
+/**
+ * Ashby greys its submit button by setting `aria-disabled`, which Playwright
+ * still considers clickable, so the click lands on a control that ignores it:
+ * no navigation, no error, no request. Recording the button's own state turns
+ * that silent nothing into a reportable cause.
+ */
+async function describeSubmitControl(page: AnyPage): Promise<string> {
+  for (const selector of SUBMIT_SELECTORS) {
+    const locator = page.locator(selector).first();
+    if ((await locator.count()) === 0) continue;
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    const ariaDisabled = await locator.getAttribute("aria-disabled").catch(() => null);
+    const enabled = (await locator.isEnabled?.().catch(() => true)) ?? true;
+    if (!enabled || ariaDisabled === "true") {
+      return `submit control was disabled when clicked (aria-disabled=${ariaDisabled ?? "none"}, enabled=${enabled})`;
+    }
+    return "";
+  }
+  return "";
 }
 
 async function readBodyText(page: AnyPage): Promise<string> {
