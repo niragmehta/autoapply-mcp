@@ -82,7 +82,7 @@ export async function prepareApplicationFor(
   const application: Application = {
     id: existing?.id ?? newId("app"),
     jobId: job.id,
-    status: drafted.blockedQuestions.length > 0 || !resumeCheck.ok ? "needs_human" : "awaiting_approval",
+    status: drafted.blockingQuestions.length > 0 || !resumeCheck.ok ? "needs_human" : "awaiting_approval",
     resumeId: resume.id,
     resumePath: resume.path,
     packetHash: "",

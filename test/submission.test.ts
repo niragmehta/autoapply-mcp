@@ -93,14 +93,31 @@ describe("checkSubmissionAllowed", () => {
     expect(result.code).toBe("packet_changed");
   });
 
-  it("refuses when a human-required answer is still empty", () => {
+  it("refuses when a required human answer is still empty", () => {
     const result = checkSubmissionAllowed({
       ...baseInput,
       application: application({
-        answers: [answer({ questionKey: "auth", label: "Work authorization", answer: "", requiresHuman: true })],
+        answers: [
+          answer({ questionKey: "auth", label: "Work authorization", answer: "", requiresHuman: true, required: true }),
+        ],
       }),
     });
     expect(result.code).toBe("unresolved_questions");
+  });
+
+  it("allows an empty optional question the candidate chose not to answer", () => {
+    // Lyft's optional pronouns list offers no decline option, so the standing
+    // "prefer not to say" has nowhere to go. A blank optional field asserts
+    // nothing and cannot stop the form submitting, so it must not block.
+    const result = checkSubmissionAllowed({
+      ...baseInput,
+      application: application({
+        answers: [
+          answer({ questionKey: "pronouns", label: "Pronouns", answer: "", requiresHuman: true, required: false }),
+        ],
+      }),
+    });
+    expect(result.code).toBe("ok");
   });
 
   it("refuses a mode stronger than the campaign allows", () => {

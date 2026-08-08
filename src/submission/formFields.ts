@@ -110,6 +110,9 @@ const SELF_ID_QUESTION = /\b(disabilit|chronic condition|gender identity|racial|
 const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic|hispanic|latino|veteran|military|sexual orientation|transgender|pronoun|self identif|decline|prefer not)/;
 const AGE_QUESTION = /\b(years of age|age of \d|old enough|legal working age|18 or older|18 years or older)\b/;
 const EXPERIENCE_ANSWER = /\byears of (?:relevant |professional |industry |software |engineering )?experience\b/;
+const PERMISSION_QUESTION = /^(?:may|can|do) we\b|\bhave (?:our|your) permission\b|\bmay we contact\b/;
+const DATE_COMPONENT_QUESTION = /\b(?:start|end|from|to)\s+date\s+(?:month|year|day)\b|^(?:start|end)\s+(?:month|year)\b/;
+const DURATION_ANSWER = /\b(?:weeks?|months?|days?)\b.*\b(?:notice|offer|acceptance|start)\b|\bnotice period\b/;
 
 /**
  * A form with one "Name" box wants the whole name. Left to plain similarity a
@@ -151,6 +154,19 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (AGE_QUESTION.test(fieldLabel) && EXPERIENCE_ANSWER.test(answerLabel)) {
+    return true;
+  }
+  // "May we contact your current employer?" is a yes/no permission question,
+  // but it shares "current employer" with the stored employer name, so the
+  // matcher tried to answer it with "Microsoft". A permission question can only
+  // take a yes/no answer; anything else is a category error, not a near miss.
+  if (PERMISSION_QUESTION.test(fieldLabel) && !BOOLEAN_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
+  // Employment-history blocks ask for "Start date month" and "End date month".
+  // A notice period ("Approximately four weeks from offer acceptance") is about
+  // a start date too, and won both selects on word overlap alone.
+  if (DATE_COMPONENT_QUESTION.test(fieldLabel) && DURATION_ANSWER.test(answer.answer.trim())) {
     return true;
   }
   if (
@@ -371,6 +387,29 @@ export function optionTextMatches(optionText: string, value: string): boolean {
   return locality.length > 1 && option.startsWith(locality);
 }
 
+const BARE_POLARITY = /^(?:yes|no|true|false)$/;
+const POSITIVE_LEAD = /^(?:yes|true|agree|agreed|accept|confirm|confirmed)$/;
+const NEGATIVE_LEAD = /^(?:no|not|never|false|decline|disagree)$/;
+
+/**
+ * A bare "No" must not select an option that opens with "Yes". Datadog offers
+ * "Yes, no restriction.", which contains "no" as a whole word, so a stored "No"
+ * matched it and would have reported unrestricted work authorization to an
+ * employer - the exact opposite of the stored answer. Whole-word containment is
+ * not enough here: when the candidate is nothing but a polarity word, the
+ * option's own leading polarity decides.
+ */
+function optionPolarityConflicts(optionText: string, candidate: string): boolean {
+  const expected = normalizeOptionText(candidate);
+  if (!BARE_POLARITY.test(expected)) return false;
+  const lead = normalizeOptionText(optionText).split(" ")[0] ?? "";
+  const candidatePositive = POSITIVE_LEAD.test(expected);
+  const optionPositive = POSITIVE_LEAD.test(lead);
+  const optionNegative = NEGATIVE_LEAD.test(lead);
+  if (!optionPositive && !optionNegative) return false;
+  return candidatePositive ? optionNegative : optionPositive;
+}
+
 /**
  * True when an option states the opposite of the candidate it otherwise
  * contains, e.g. "I am not willing to relocate" for "willing to relocate".
@@ -413,12 +452,7 @@ export function pickOptionIndex(
     const expected = normalizeOptionText(candidate);
     const exact = optionTexts.findIndex((text) => normalizeOptionText(text) === expected);
     if (exact >= 0) return exact;
-    const partial = optionTexts.findIndex(
-      (text) =>
-        optionTextMatches(text, candidate) &&
-        !optionNegatesCandidate(text, candidate) &&
-        !optionContradictsDecline(text, candidate),
-    );
+    const partial = leastQualifiedMatch(optionTexts, candidate);
     if (partial >= 0) return partial;
   }
   if (optionTexts.length === 1 && SOLE_OPT_IN_OPTION.test(normalizeOptionText(optionTexts[0] ?? ""))) {
@@ -441,8 +475,33 @@ export function pickOptionIndex(
   return -1;
 }
 
-const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
-const AFFIRMATIVE_CANDIDATE = /^(?:yes|true|agreed?|i agree|acknowledged?|i acknowledge|accept|i accept|consent|i consent)\b/;
+/**
+ * A bare "Yes" partially matches every option that opens with "Yes", so taking
+ * the first one in document order is luck rather than logic. Datadog offers
+ * "Yes, no restriction.", "Yes, but I will need sponsorship in the future." and
+ * "No, I need sponsorship now."; a differently ordered board would have claimed
+ * the candidate needs sponsorship. Prefer the least elaborated match, because a
+ * stored answer of "Yes" means plain yes, not "yes, but".
+ */
+function leastQualifiedMatch(optionTexts: readonly string[], candidate: string): number {
+  let best = -1;
+  let bestLength = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < optionTexts.length; index += 1) {
+    const text = optionTexts[index] ?? "";
+    if (!optionTextMatches(text, candidate)) continue;
+    if (optionNegatesCandidate(text, candidate)) continue;
+    if (optionPolarityConflicts(text, candidate)) continue;
+    if (optionContradictsDecline(text, candidate)) continue;
+    const length = normalizeOptionText(text).length;
+    if (length < bestLength) {
+      best = index;
+      bestLength = length;
+    }
+  }
+  return best;
+}
+
+const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;const AFFIRMATIVE_CANDIDATE = /^(?:yes|true|agreed?|i agree|acknowledged?|i acknowledge|accept|i accept|consent|i consent)\b/;
 const NEGATIVE_CANDIDATE = /^(?:no|false|i do not|i don t|not |never|disagree|i disagree|decline|i decline)\b/;
 
 function normalizeOptionText(input: string): string {
@@ -504,6 +563,7 @@ function bankEntryAsAnswer(entry: ApprovedAnswerEntry): DraftAnswer {
     source: "approved-answer",
     citation: `profile.answers.${entry.key}`,
     requiresHuman: false,
+    required: true,
     category: "general",
     guidance: "",
   };
@@ -558,6 +618,7 @@ export function fallbackAnswersForFields(
         source: "approved-answer",
         citation: `profile.answers.${entry.key}`,
         requiresHuman: false,
+        required: match.field.required ?? true,
         category: "general",
         guidance: "",
       });
@@ -576,6 +637,7 @@ export function fallbackAnswersForFields(
         source: "profile",
         citation: personal.citation,
         requiresHuman: false,
+        required: match.field.required ?? true,
         category: personal.category,
         guidance: "",
       });
@@ -595,6 +657,7 @@ export function fallbackAnswersForFields(
       source: "profile",
       citation: narrative.citation,
       requiresHuman: false,
+      required: match.field.required ?? true,
       category: "narrative",
       guidance: "",
     });
@@ -674,6 +737,7 @@ export function augmentAnswersForBrowser(
       source: "profile",
       citation: "identity.location.country",
       requiresHuman: false,
+      required: true,
       category: "contact",
       guidance: "",
     });
@@ -690,6 +754,7 @@ export function augmentAnswersForBrowser(
       source: "profile",
       citation: "candidate approval 2026-07-31; every demographic response is decline to self-identify",
       requiresHuman: false,
+      required: true,
       category: "demographic",
       guidance: "",
     });

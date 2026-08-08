@@ -90,7 +90,12 @@ function resolveApprovedValue(
   return { value: match.value, unmatchedChoice: hadOptions && !match.matchedOption };
 }
 
-function blocked(question: FormQuestion, category: string, reason: string, guidance = ""): DraftAnswer {
+function blocked(
+  question: FormQuestion,
+  category: string,
+  reason: string,
+  guidance = "",
+): Omit<DraftAnswer, "required"> {
   return {
     questionKey: question.key,
     label: question.label,
@@ -112,11 +117,25 @@ export function draftAnswers(
   profile: Profile,
   campaign: Campaign,
   context?: NarrativeContext,
-): { answers: DraftAnswer[]; blockedQuestions: string[] } {
+): { answers: DraftAnswer[]; blockedQuestions: string[]; blockingQuestions: string[] } {
   const blockedCategories = campaign.submission.blockedQuestionCategories;
-  const answers = questions.map((question) => answerOne(question, profile, blockedCategories, context));
+  const answers = questions.map((question) => ({
+    ...answerOne(question, profile, blockedCategories, context),
+    // Stamped in one place: answerOne returns from eleven branches and any one
+    // of them forgetting this flag would silently make an optional field block
+    // submission again.
+    required: question.required,
+  }));
+  const requiredLabels = new Set(questions.filter((question) => question.required).map((question) => question.label));
   const blockedQuestions = answers.filter((answer) => answer.requiresHuman).map((answer) => answer.label);
-  return { answers, blockedQuestions };
+  // An optional question cannot stop the form being submitted, and a blank
+  // optional field asserts nothing, so it is reported but does not gate
+  // approval. Lyft's optional pronouns list offers no decline option, so the
+  // standing "prefer not to say" has nowhere to go - leaving it empty is the
+  // decline. Blocking the whole application over it buried three real
+  // applications behind a field the employer marked as skippable.
+  const blockingQuestions = blockedQuestions.filter((label) => requiredLabels.has(label));
+  return { answers, blockedQuestions, blockingQuestions };
 }
 
 function answerOne(
@@ -124,7 +143,7 @@ function answerOne(
   profile: Profile,
   blockedCategories: readonly string[],
   context?: NarrativeContext,
-): DraftAnswer {
+): Omit<DraftAnswer, "required"> {
   const category = classifyQuestion(question.label);
 
   // File uploads are satisfied by attaching the resume, not by a typed answer.

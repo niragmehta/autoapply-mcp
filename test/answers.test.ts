@@ -43,6 +43,32 @@ describe("classifyQuestion", () => {
   });
 });
 
+describe("optional questions do not gate approval", () => {
+  const pronouns = question("Please share your gender pronouns.", {
+    required: false,
+    type: "multi_value_multi_select",
+    options: ["She / Her", "He / Him", "They / Them", "Other"],
+  });
+  const clearance = question("Do you hold an active security clearance?", { required: true });
+
+  it("reports an unanswerable optional question without blocking", () => {
+    const { blockedQuestions, blockingQuestions } = draftAnswers([pronouns], profile, campaign);
+    expect(blockedQuestions).toContain("Please share your gender pronouns.");
+    expect(blockingQuestions).toHaveLength(0);
+  });
+
+  it("still blocks when the unanswerable question is required", () => {
+    const { blockingQuestions } = draftAnswers([clearance], profile, campaign);
+    expect(blockingQuestions).toContain("Do you hold an active security clearance?");
+  });
+
+  it("blocks on the required question only when both are present", () => {
+    const { blockedQuestions, blockingQuestions } = draftAnswers([pronouns, clearance], profile, campaign);
+    expect(blockedQuestions).toHaveLength(2);
+    expect(blockingQuestions).toEqual(["Do you hold an active security clearance?"]);
+  });
+});
+
 describe("draftAnswers", () => {
   it("fills contact fields from the verified profile", () => {
     const { answers } = draftAnswers([question("First Name"), question("Email")], profile, campaign);

@@ -1102,8 +1102,65 @@ describe("degree option candidates", () => {
   });
 });
 
-describe("product usage options", () => {
-  const usageField = field("We're always curious - have you used Tailscale before?*", { required: true });
+describe("permission and date-component questions", () => {
+  it("refuses to answer a contact-permission question with an employer name", () => {
+    const matches = matchFields(
+      [field("May we contact your current employer?*", { required: true })],
+      [answer("Current company", "Microsoft")],
+    );
+    expect(matches[0]?.answer ?? undefined).toBeUndefined();
+  });
+
+  it("still answers a contact-permission question with yes or no", () => {
+    const matches = matchFields(
+      [field("May we contact your current employer?*", { required: true })],
+      [answer("May we contact your current employer", "No")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("No");
+  });
+
+  it("refuses to put a notice period into an employment-history date select", () => {
+    const matches = matchFields(
+      [field("Start date month*", { required: true })],
+      [answer("Start date", "Approximately four weeks from offer acceptance")],
+    );
+    expect(matches[0]?.answer ?? undefined).toBeUndefined();
+  });
+
+  it("still answers a plain start date question with a notice period", () => {
+    const matches = matchFields(
+      [field("Start date")],
+      [answer("Start date", "Approximately four weeks from offer acceptance")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("Approximately four weeks from offer acceptance");
+  });
+});
+
+describe("qualified affirmative options", () => {  const options = [
+    "Yes, no restriction.",
+    "Yes, but I will need sponsorship in the future.",
+    "No, I need sponsorship now.",
+  ];
+
+  it("reads a bare Yes as the unqualified option", () => {
+    expect(pickOptionIndex(options, ["Yes"])).toBe(0);
+  });
+
+  it("does not depend on the order the board lists the options in", () => {
+    const reordered = [options[1] as string, options[0] as string, options[2] as string];
+    expect(pickOptionIndex(reordered, ["Yes"])).toBe(1);
+  });
+
+  it("still honours a candidate that names the qualification", () => {
+    expect(pickOptionIndex(options, ["Yes, but I will need sponsorship in the future."])).toBe(1);
+  });
+
+  it("reads a bare No as the negative option", () => {
+    expect(pickOptionIndex(options, ["No"])).toBe(2);
+  });
+});
+
+describe("product usage options", () => {  const usageField = field("We're always curious - have you used Tailscale before?*", { required: true });
   const options = [
     "Yes, on my personal devices.",
     "Yes, at work.",
