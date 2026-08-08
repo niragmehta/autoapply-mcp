@@ -7,6 +7,8 @@
  * stored answer work across all of them without guessing.
  */
 
+import { pickNumericBandIndex } from "./numericBands.js";
+
 function normalize(value: string): string {
   return value
     .toLowerCase()
@@ -58,6 +60,11 @@ export function selectBestOption(preferences: readonly string[], options?: reado
     );
     if (reverse) return { value: reverse.raw, matchedOption: true };
   }
+
+  // Options were published and none matched by text: a numeric band may still
+  // contain the stated figure.
+  const band = pickNumericBandIndex(options, candidates);
+  if (band >= 0) return { value: options[band]!, matchedOption: true };
 
   // Options were published and none matched: submitting an unlisted value
   // would fail, so this is handed back rather than guessed.

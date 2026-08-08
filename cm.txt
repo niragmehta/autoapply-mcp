@@ -1,0 +1,12 @@
+fix: match a stated figure to the numeric band that contains it
+
+Figma renders years of experience as "0 - 2 years" / "3 - 4 years" /
+"5 - 10 years" / "10+ years". A stored "5+ years" contains none of them and
+is contained by none of them, so an accurate answer matched no option at all
+and blocked a required field on an otherwise complete application.
+
+A figure is now placed in the band that contains it, in both the drafting and
+the form-fill matchers. A band starting above the stated figure is never
+selected, so this can under-state experience but never over-state it. Band
+matching runs only after every textual match has failed and only when every
+option parses as a range.
