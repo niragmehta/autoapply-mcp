@@ -32,6 +32,7 @@ import { AppError, toErrorMessage } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
 import { logger } from "../util/logger.js";
 import { personalResolverFor } from "../submission/personalResolver.js";
+import { experienceResolverFor } from "../submission/experienceResolver.js";
 import { narrativeResolverFor } from "../submission/narrativeResolver.js";
 import { handler, ok } from "./helpers.js";
 
@@ -443,6 +444,7 @@ export function registerBatchTools(server: McpServer): void {
             candidateCountry: workspace.profile.identity.location.country,
             answerBank: workspace.profile.answers,
             personalResolver: personalResolverFor(workspace.profile),
+            experienceResolver: experienceResolverFor(workspace.profile),
         narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
           });
 

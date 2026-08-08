@@ -316,7 +316,7 @@ describe("optionSearchCandidates", () => {
       field("Do you currently live or are you willing to relocate to the job’s location?*", { role: "combobox" }),
       answer("Open to relocation", "Yes"),
     );
-    expect(candidates).toContain("willing to relocate");
+    expect(candidates).toContain("am willing to relocate");
     expect(
       pickOptionIndex(
         [
