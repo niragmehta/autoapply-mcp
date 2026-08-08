@@ -5,9 +5,12 @@ coverage/
 
 # Personal campaign data: profile, resumes, database, artifacts.
 # Never commit these - they contain PII and application history.
-config/
-data/
-artifacts/
+# Anchored to the repository root: unanchored, "config/" also matched
+# src/config/, which silently kept seven imported source files out of the
+# repository and left a fresh clone unable to build.
+/config/
+/data/
+/artifacts/
 *.sqlite
 *.sqlite-journal
 *.db
