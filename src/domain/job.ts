@@ -97,6 +97,12 @@ export const DraftAnswerSchema = z.object({
   source: AnswerSourceSchema,
   citation: z.string().default(""),
   requiresHuman: z.boolean().default(false),
+  /**
+   * Whether the employer marked the field required. A blank optional field
+   * asserts nothing and cannot stop the form submitting, so it is reported but
+   * never blocks; a blank required one always does.
+   */
+  required: z.boolean().default(true),
   category: z.string().default("general"),
   /** Advice shown alongside a question that a person must decide. */
   guidance: z.string().default(""),

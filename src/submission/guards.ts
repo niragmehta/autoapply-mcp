@@ -62,7 +62,7 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
   }
 
   const unresolved = application.answers.filter(
-    (answer) => answer.requiresHuman && answer.answer.trim().length === 0,
+    (answer) => answer.requiresHuman && answer.required && answer.answer.trim().length === 0,
   );
   if (unresolved.length > 0) {
     return deny("unresolved_questions", `${unresolved.length} question(s) still need a human answer: ${unresolved
