@@ -185,3 +185,42 @@ describe("computeManifestHash", () => {
     expect(computeManifestHash([])).toBe(computeManifestHash([]));
   });
 });
+
+describe("education resolution", () => {
+  const graduate = ProfileSchema.parse({
+    ...makeProfile(),
+    education: [
+      { institution: "Older College", credential: "Diploma", field: "General", end: "2016-05" },
+      { institution: "Simon Fraser University", credential: "Bachelor of Science (BSc)", field: "Computer Science", end: "2020-12" },
+    ],
+  });
+
+  it("answers school, degree, field and graduation year from the most recent entry", () => {
+    expect(resolvePersonal("What is the most recent school you attended?", graduate)?.answer).toBe(
+      "Simon Fraser University",
+    );
+    expect(resolvePersonal("What is the most recent degree you obtained?", graduate)?.answer).toBe(
+      "Bachelor of Science (BSc)",
+    );
+    expect(resolvePersonal("Field of study", graduate)?.answer).toBe("Computer Science");
+    expect(resolvePersonal("Graduation year", graduate)?.answer).toBe("2020");
+  });
+
+  it("treats education as pre-authorized resume fact, not a sensitive disclosure", () => {
+    expect(resolvePersonal("University", graduate)?.authorized).toBe(true);
+  });
+
+  it("stays silent when no education is recorded", () => {
+    expect(resolvePersonal("What is the most recent school you attended?", makeProfile())).toBeNull();
+  });
+
+  it("does not let a school question claim a disability question", () => {
+    // "major life activities" contains "major"; the disability resolver must
+    // still own the label. It declines here only because nothing is stored.
+    const disability = resolvePersonal(
+      "Do you have a disability that substantially limits one or more major life activities?",
+      graduate,
+    );
+    expect(disability?.category ?? null).not.toBe("education");
+  });
+});

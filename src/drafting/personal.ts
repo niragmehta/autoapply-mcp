@@ -28,6 +28,32 @@ function formatAddress(personal: Personal): string {
   return [street, city, region, postalCode, country].filter((part) => part.length > 0).join(", ");
 }
 
+/**
+ * The most recently completed qualification, which is what boards mean by "most
+ * recent school" or "highest degree".
+ */
+function latestEducation(profile: Profile) {
+  const entries = profile.education.filter((entry) => entry.institution.trim().length > 0);
+  if (entries.length === 0) return null;
+  return entries.reduce((best, entry) => (entry.end > best.end ? entry : best));
+}
+
+/**
+ * Education is a resume fact, not a sensitive disclosure, so it carries the
+ * same standing authorization as employment history. Nothing sourced these
+ * before: `profile.education` was validated and stored but never read, so every
+ * "What is the most recent school you attended?" blocked its application and
+ * required School boxes were simply left empty.
+ */
+function education(part: "institution" | "credential" | "field" | "end"): Resolver["resolve"] {
+  return (_personal, profile) => {
+    const entry = latestEducation(profile);
+    if (!entry) return "";
+    const value = part === "end" ? (entry.end.split("-")[0] ?? "") : entry[part];
+    return { value, autoFill: true };
+  };
+}
+
 const RESOLVERS: readonly Resolver[] = [
   {
     pattern: /\b(date of birth|birth ?date|d\.?o\.?b\.?)\b/i,
@@ -115,6 +141,33 @@ const RESOLVERS: readonly Resolver[] = [
     category: "general",
     resolve: (personal) => personal.previousEmployment,
     citation: "personal.previousEmployment",
+  },
+  // Education. These sit last so a more specific question - a disability
+  // question mentioning "major life activities", or a school-district employer
+  // - is claimed by the resolver above that actually means it.
+  {
+    pattern: /\b(school|university|college|alma mater|institution attended)\b/i,
+    category: "education",
+    resolve: education("institution"),
+    citation: "education[0].institution",
+  },
+  {
+    pattern: /\b(degree|qualification obtained|level of education|education level)\b/i,
+    category: "education",
+    resolve: education("credential"),
+    citation: "education[0].credential",
+  },
+  {
+    pattern: /\b(field of study|area of study|course of study|discipline|major)\b/i,
+    category: "education",
+    resolve: education("field"),
+    citation: "education[0].field",
+  },
+  {
+    pattern: /\b(graduation (?:year|date)|year of graduation|graduated)\b/i,
+    category: "education",
+    resolve: education("end"),
+    citation: "education[0].end",
   },
 ];
 
