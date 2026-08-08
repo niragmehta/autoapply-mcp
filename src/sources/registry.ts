@@ -8,7 +8,7 @@ import { greenhouseAdapter } from "./greenhouse.js";
 import { leverAdapter } from "./lever.js";
 import { workdayAdapter } from "./workday.js";
 import { probeJson } from "./http.js";
-import type { DiscoveryIssue, SourceAdapter } from "./types.js";
+import type { BoardVerification, DiscoveryIssue, SourceAdapter } from "./types.js";
 
 const ADAPTERS: Record<AtsKind, SourceAdapter> = {
   greenhouse: greenhouseAdapter,
@@ -62,6 +62,32 @@ export async function discoverJobs(companies: readonly Company[]): Promise<Disco
   }
 
   return { jobs, issues, boardsQueried: active.length };
+}
+
+/**
+ * Confirms a board slug serves real postings.
+ *
+ * Board slugs increasingly come from outside this server — a web search, a
+ * careers-page URL, a human's guess — and a wrong one is not reliably an error:
+ * some ATS hosts answer 200 with a generic page carrying no postings. So a slug
+ * is only trusted once postings have actually been seen. This costs one request
+ * and no third-party credits, which is why verification lives here rather than
+ * wherever the candidate came from.
+ */
+export async function verifyBoard(company: Company): Promise<BoardVerification> {
+  const adapter = adapterFor(company.ats);
+  try {
+    if (adapter.verifyBoard) return await adapter.verifyBoard(company);
+    const jobs = await adapter.listJobs(company, nowIso());
+    return {
+      ok: jobs.length > 0,
+      postings: jobs.length,
+      sampleTitles: jobs.slice(0, 3).map((job) => job.title),
+      detail: jobs.length > 0 ? "board returned postings" : "board responded but published no postings",
+    };
+  } catch (error) {
+    return { ok: false, postings: 0, sampleTitles: [], detail: toErrorMessage(error) };
+  }
 }
 
 export type BoardCandidate = {

@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getWorkspace } from "../config/load.js";
+import { getWorkspace, reloadWorkspace } from "../config/load.js";
+import { upsertCompany } from "../config/companies.js";
 import { appendEvent } from "../db/repositories/events.js";
 import { countJobs, listQueue, rejectionBreakdown, tierBreakdown, upsertJobs, getJob, getEvaluation } from "../db/repositories/jobs.js";
 import { countSubmittedSince, listApplications } from "../db/repositories/applications.js";
 import { evaluateAndStore } from "../pipeline.js";
-import { discoverJobs, resolveBoards } from "../sources/registry.js";
+import { discoverJobs, resolveBoards, verifyBoard } from "../sources/registry.js";
+import { CompanySchema } from "../domain/campaign.js";
 import { startOfDayIso } from "../submission/guards.js";
 import { prepareUntrusted, wrapUntrusted } from "../text/untrusted.js";
 import { AppError } from "../util/errors.js";
@@ -65,7 +67,7 @@ export function registerDiscoveryTools(server: McpServer): void {
     {
       title: "Find a company's ATS board",
       description:
-        "Probes Greenhouse, Lever and Ashby for a company's public board slug. Board tokens are not published centrally, so guesses must be verified before being added to companies.json.",
+        "Probes Greenhouse, Lever and Ashby for a company's public board slug. Board tokens are not published centrally, so guesses must be verified before being added to companies.json. Workday is not probed: its tenant, datacenter and site slug cannot be guessed, so find that URL on the employer's careers page and record it with add_company_board.",
       inputSchema: {
         companyName: z.string().min(1).describe("Company name, for example 'Anthropic'."),
         extraSlugs: z.array(z.string()).optional().describe("Additional slug candidates to probe."),
@@ -79,8 +81,90 @@ export function registerDiscoveryTools(server: McpServer): void {
         matches,
         hint:
           matches.length === 0
-            ? "No public board found. The company may use Workday, SmartRecruiters or a custom system, which this server does not support."
-            : "Add the chosen match to companies.json as { name, ats, board }.",
+            ? "No Greenhouse, Lever or Ashby board found. The company may use Workday or a custom system: find its careers URL and record it with add_company_board, which verifies the slug before saving."
+            : "Save the chosen match with add_company_board, which confirms it serves postings before writing it to companies.json.",
+      });
+    }),
+  );
+
+  server.registerTool(
+    "add_company_board",
+    {
+      title: "Verify and save a company's board",
+      description:
+        "Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.",
+      inputSchema: {
+        name: z.string().min(1).describe("Company name as it should appear in the queue."),
+        ats: z.enum(["greenhouse", "lever", "ashby", "workday"]),
+        board: z
+          .string()
+          .min(1)
+          .describe('Board slug. For Workday this is the "tenant/datacenter/site" triple, e.g. nvidia/wd5/NVIDIAExternalCareerSite.'),
+        tier: z.enum(["A", "B", "C"]).optional(),
+        tags: z.array(z.string()).optional(),
+        query: z.string().optional().describe("Server-side search filter, for boards that support one. Strongly recommended for large Workday tenants."),
+        region: z.enum(["global", "eu"]).optional(),
+        save: z.boolean().optional().describe("Set false to verify without writing to companies.json."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    handler(async (args: {
+      name: string;
+      ats: "greenhouse" | "lever" | "ashby" | "workday";
+      board: string;
+      tier?: "A" | "B" | "C";
+      tags?: string[];
+      query?: string;
+      region?: "global" | "eu";
+      save?: boolean;
+    }) => {
+      const workspace = getWorkspace();
+      const candidate = CompanySchema.parse({
+        name: args.name,
+        ats: args.ats,
+        board: args.board,
+        ...(args.tier ? { tier: args.tier } : {}),
+        ...(args.tags ? { tags: args.tags } : {}),
+        ...(args.query ? { query: args.query } : {}),
+        ...(args.region ? { region: args.region } : {}),
+      });
+
+      const verification = await verifyBoard(candidate);
+      if (!verification.ok) {
+        return ok({
+          saved: false,
+          verified: false,
+          company: candidate.name,
+          board: candidate.board,
+          reason: verification.detail,
+          hint: "Open the employer's own careers page and copy the board slug out of the URL. A slug that cannot be verified is not recorded.",
+        });
+      }
+
+      if (args.save === false) {
+        return ok({ saved: false, verified: true, company: candidate.name, board: candidate.board, ...verification });
+      }
+
+      const result = upsertCompany(workspace.paths.companies, candidate);
+      appendEvent(workspace.db, "board.added", "campaign", {
+        company: candidate.name,
+        ats: candidate.ats,
+        board: candidate.board,
+        action: result.action,
+      });
+      // Reload so the new board is live for the next discover_jobs without a restart.
+      reloadWorkspace();
+
+      return ok({
+        saved: true,
+        verified: true,
+        action: result.action,
+        company: candidate.name,
+        ats: candidate.ats,
+        board: candidate.board,
+        postings: verification.postings,
+        sampleTitles: verification.sampleTitles,
+        totalBoards: result.total,
       });
     }),
   );
