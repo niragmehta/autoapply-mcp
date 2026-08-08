@@ -1102,9 +1102,33 @@ describe("degree option candidates", () => {
   });
 });
 
+describe("product usage options", () => {
+  const usageField = field("We're always curious - have you used Tailscale before?*", { required: true });
+  const options = [
+    "Yes, on my personal devices.",
+    "Yes, at work.",
+    "Yes, both personally and at work.",
+    "I haven't used it, but I'm excited to learn more!",
+  ];
+
+  it("reaches the negative option when the list offers no plain No", () => {
+    const candidates = optionSearchCandidates(usageField, answer("Have you used our product", "No"));
+    expect(pickOptionIndex(options, candidates)).toBe(3);
+  });
+
+  it("does not widen a yes into a claim about how the product was used", () => {
+    const candidates = optionSearchCandidates(usageField, answer("Have you used our product", "Yes"));
+    expect(candidates).toEqual(["Yes"]);
+  });
+
+  it("leaves unrelated questions alone", () => {
+    const candidates = optionSearchCandidates(field("Are you legally authorized to work?"), answer("Work auth", "No"));
+    expect(candidates).toEqual(["No"]);
+  });
+});
+
 describe("sole consent option", () => {
   const options = ["I agree to these expectations"];
-
   it("consents when nothing else can be selected", () => {
     // Block's 700-character interview-expectations block mentions "previous
     // employers", which pulled in a stored employer answer of "Microsoft".

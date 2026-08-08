@@ -238,6 +238,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
   if (source.length > 0) return source;
   const degree = degreeCandidates(field, value);
   if (degree.length > 0) return degree;
+  const productUsage = productUsageCandidates(field, value);
+  if (productUsage.length > 0) return productUsage;
   const relocation = relocationCandidates(field, value);
   if (relocation.length > 0) return [value, ...relocation];
   const locality = value.split(",")[0]?.trim() ?? "";
@@ -247,6 +249,22 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
 const SOURCE_QUESTION = /how did you (?:hear|find)|how were you referred|where did you (?:hear|learn)|referral source/;
 
 const DEGREE_QUESTION = /\b(degree|level of education|education level|highest (?:level of )?education)\b/;
+
+const PRODUCT_USAGE_QUESTION = /\bhave you (?:ever )?used\b|\bare you a (?:user|customer) of\b|\bdo you use\b/;
+
+/**
+ * "Have you used our product?" is rarely a yes/no list. Tailscale offers three
+ * flavours of yes and "I haven't used it, but I'm excited to learn more!", so a
+ * stored "No" matched nothing and blocked a required field. Offer phrasings of
+ * the same negative answer so the honest option is reachable. Only the negative
+ * is expanded: a stored "Yes" is never widened into a claim about where or how
+ * the product was used.
+ */
+function productUsageCandidates(field: FieldDescriptor, value: string): string[] {
+  if (!PRODUCT_USAGE_QUESTION.test(normalizeLabel(field.label))) return [];
+  if (!/^(?:no|not yet|never)\b/i.test(value.trim())) return [];
+  return [value, "I have not used it", "I haven't used it", "Have not used", "Not yet", "No"];
+}
 
 /**
  * Boards render the degree field as a closed list in the platform's own

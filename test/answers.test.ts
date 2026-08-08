@@ -244,6 +244,62 @@ describe("unresolvedRequired", () => {
   });
 });
 
+describe("authorized narratives on essay questions", () => {
+  const narrativeProfile = makeProfile({
+    narratives: [
+      {
+        key: "why-company",
+        label: "Why this company",
+        patterns: ["why do you want to work"],
+        template: "I want to work at {company} on {title}.",
+        allowAutoFill: true,
+        minTopics: 0,
+      },
+    ],
+  });
+  const context = {
+    company: "Discord",
+    title: "Staff Software Engineer",
+    topics: ["platform"],
+    trackId: "software-platform",
+  };
+
+  it("answers an essay question from the candidate's authorized narrative", () => {
+    // "essay" is a blocked category, and that gate ran before the narrative
+    // check, so the exact question narratives exist for was always blocked -
+    // while the same template filled a field labelled "Cover Letter".
+    const q = question("Why do you want to work at Discord?", { required: true, type: "textarea" });
+    const { answers } = draftAnswers([q], narrativeProfile, campaign, context);
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.answer).toContain("Discord");
+    expect(answers[0]?.citation).toBe("profile.narratives.why-company");
+  });
+
+  it("still blocks an essay when the narrative is not authorized", () => {
+    const unauthorized = makeProfile({
+      narratives: [
+        {
+          key: "why-company",
+          label: "Why this company",
+          patterns: ["why do you want to work"],
+          template: "I want to work at {company}.",
+          allowAutoFill: false,
+          minTopics: 0,
+        },
+      ],
+    });
+    const q = question("Why do you want to work at Discord?", { required: true, type: "textarea" });
+    const { answers } = draftAnswers([q], unauthorized, campaign, context);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("still blocks an essay no narrative matches", () => {
+    const q = question("Describe your proudest achievement.", { required: true, type: "textarea" });
+    const { answers } = draftAnswers([q], narrativeProfile, campaign, context);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+});
+
 describe("sole consent option", () => {
   it("auto-selects a required choice offering only an acknowledgement", () => {
     const q = question("Point of Data Transfer", {
