@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplicationSchema, EvaluationSchema, JobSchema } from "../src/domain/job.js";
-import { CampaignSchema, CompanySchema } from "../src/domain/campaign.js";
+import { CampaignSchema, CompanySchema, SubmissionPolicySchema } from "../src/domain/campaign.js";
 import { ProfileSchema } from "../src/domain/profile.js";
 import { adapterFor, allAdapters, discoverJobs, resolveBoards } from "../src/sources/registry.js";
 import { isSameAllowedSite } from "../src/submission/allowlist.js";
@@ -156,5 +156,26 @@ describe("utilities", () => {
     expect(parseDateSafe("not-a-date")).toBeNull();
     expect(parseDateSafe("2026-01-01T00:00:00Z")).toBeInstanceOf(Date);
     expect(daysBetween(new Date("2026-01-01"), new Date("2026-01-11"))).toBe(10);
+  });
+});
+
+describe("submission.maxBatchSize", () => {
+  it("defaults to 3 so a batch stays reviewable", () => {
+    expect(SubmissionPolicySchema.parse({}).maxBatchSize).toBe(3);
+    expect(makeCampaign().submission.maxBatchSize).toBe(3);
+  });
+
+  it("acts as a hard ceiling over a larger requested limit", () => {
+    const { maxBatchSize } = SubmissionPolicySchema.parse({});
+    expect(Math.min(120, maxBatchSize)).toBe(3);
+    expect(Math.min(2, maxBatchSize)).toBe(2);
+  });
+
+  it("is configurable upward when a campaign asks for it", () => {
+    expect(SubmissionPolicySchema.parse({ maxBatchSize: 10 }).maxBatchSize).toBe(10);
+  });
+
+  it("rejects a non-positive cap", () => {
+    expect(() => SubmissionPolicySchema.parse({ maxBatchSize: 0 })).toThrow();
   });
 });
