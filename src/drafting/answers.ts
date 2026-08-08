@@ -212,6 +212,26 @@ function answerOne(
   }
 
   if (isBlockedCategory(category, blockedCategories)) {
+    // An authorised narrative is not invented text: it is the candidate's own
+    // wording, marked allowAutoFill, rendered from this specific posting. The
+    // category gate ran before the narrative check below, so "Why do you want
+    // to work at X?" - the exact question narratives exist for - was always
+    // blocked, while the same template filled a field labelled "Cover Letter"
+    // because that classifies as contact. Consult the narrative first and fall
+    // through to a human decision when there isn't an authorised one.
+    const narrative = context ? resolveNarrative(question.label, profile, context) : null;
+    if (narrative?.authorized) {
+      return {
+        questionKey: question.key,
+        label: question.label,
+        answer: narrative.answer,
+        source: "approved-answer",
+        citation: narrative.citation,
+        requiresHuman: false,
+        category: "narrative",
+        guidance: "",
+      };
+    }
     // A stored entry for a blocked category still supplies a suggestion and
     // guidance, so the person deciding is not starting from a blank field.
     return blocked(
