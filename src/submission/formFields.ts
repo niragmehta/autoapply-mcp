@@ -27,6 +27,12 @@ export type FieldDescriptor = {
    * question the whole group asks, so one approved answer selects one option.
    */
   optionLabel?: string;
+  /**
+   * Shared by every box of one multi-select question. Ticking any one of them
+   * answers the question, so the group is judged together rather than each box
+   * counting as its own unmet requirement.
+   */
+  groupKey?: string;
 };
 
 export type FieldMatch = {

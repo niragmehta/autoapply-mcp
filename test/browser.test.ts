@@ -41,7 +41,62 @@ describe("COLLECT_FIELDS", () => {
 
     expect(fields).toHaveLength(1);
   });
+
+  it("reads the question and its required flag from Ashby's newer fieldset container", () => {
+    // Ashby ships two container conventions. When only the older class was
+    // matched, this field fell back to its placeholder for a label and looked
+    // optional, so the run reported nothing missing and then failed validation.
+    const entry = ashbyFieldset("What brought you to this job posting", { required: true });
+    const input = element({ type: "text", name: "", id: "", rect: { width: 200, height: 30 }, entry });
+    input.getAttribute = (key: string) => (key === "role" ? "combobox" : key === "placeholder" ? "Start typing..." : null);
+
+    const [field] = collect([input], {}) as unknown as Array<{ label: string; required: boolean }>;
+
+    expect(field!.label).toBe("What brought you to this job posting");
+    expect(field!.required).toBe(true);
+  });
+
+  it("gives every box of one multi-select question the same group key", () => {
+    // A required "select all that apply" is answered by ticking any one box.
+    // Without a shared key each untouched box reads as its own unmet
+    // requirement, so a fully answered question still blocks submission.
+    const entry = ashbyFieldset("Why are you interested in working at Plaid?", { required: true, checkboxes: 3 });
+    const boxes = ["mission", "products", "culture"].map((id) =>
+      element({ type: "checkbox", name: id, id, rect: { width: 16, height: 16 }, entry }),
+    );
+
+    const fields = collect(boxes, { mission: "Mission", products: "Products", culture: "Culture" }) as unknown as Array<{
+      groupKey?: string;
+      required: boolean;
+    }>;
+
+    expect(fields.map((field) => field.groupKey)).toEqual(Array(3).fill("Why are you interested in working at Plaid?"));
+    expect(fields.every((field) => field.required)).toBe(true);
+  });
+
+  it("leaves a lone checkbox ungrouped, so it stands on its own", () => {
+    const entry = ashbyFieldset("I agree to the terms", { required: true, checkboxes: 1 });
+    const box = element({ type: "checkbox", name: "agree", id: "agree", rect: { width: 16, height: 16 }, entry });
+
+    const [field] = collect([box], { agree: "I agree" }) as unknown as Array<{ groupKey?: string }>;
+
+    expect(field!.groupKey).toBeUndefined();
+  });
 });
+
+/** Models Ashby's newer `<fieldset class="..._fieldEntry_...">` question wrapper. */
+function ashbyFieldset(title: string, options: { required?: boolean; checkboxes?: number }): Record<string, unknown> {
+  const className = `_heading_f7cvd_52 ${options.required ? "_required_f7cvd_91 " : ""}_label_1e3gg_42 ashby-application-form-question-title`;
+  const titleNode = { innerText: title, className };
+  return {
+    tagName: "FIELDSET",
+    className: "_container_wz442_28 _fieldEntry_1e3gg_28",
+    querySelector: (selector: string) =>
+      selector.includes("ashby-application-form-question-title") ? titleNode : null,
+    querySelectorAll: (selector: string) =>
+      selector.includes("checkbox") ? new Array(options.checkboxes ?? 0).fill({}) : [],
+  };
+}
 
 type FakeElementSpec = {
   tag?: string;
@@ -50,6 +105,7 @@ type FakeElementSpec = {
   id: string;
   automationId?: string;
   rect: { width: number; height: number };
+  entry?: Record<string, unknown>;
 };
 
 function element(spec: FakeElementSpec): Record<string, unknown> {
@@ -65,7 +121,10 @@ function element(spec: FakeElementSpec): Record<string, unknown> {
     setAttribute: (key: string, value: string) => {
       attributes[key] = value;
     },
-    closest: () => null,
+    // Only the newer fieldset wrapper is modelled, so a test that still matched
+    // the older class selector would fail rather than quietly pass.
+    closest: (selector: string) =>
+      spec.entry && (selector.includes("_fieldEntry_") || selector === "fieldset") ? spec.entry : null,
   };
 }
 
