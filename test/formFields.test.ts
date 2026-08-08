@@ -214,6 +214,35 @@ describe("detectSubmissionConfirmation", () => {
   it("does not treat the application form or a button click as confirmation", () => {
     expect(detectSubmissionConfirmation("Apply for this job\nSubmit application")).toBe(false);
   });
+
+  it("accepts an ATS confirmation URL when the employer uses its own wording", () => {
+    // Pinterest writes "Good news: your application is in!", which no marker
+    // list anticipated, but Greenhouse still routed to its confirmation page.
+    expect(
+      detectSubmissionConfirmation(
+        "Good news: your application is in!",
+        "https://job-boards.greenhouse.io/embed/job_app/confirmation?for=pinterest&token=7305880",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not accept the form URL as confirmation", () => {
+    expect(
+      detectSubmissionConfirmation(
+        "Apply for this job",
+        "https://job-boards.greenhouse.io/embed/job_app?for=pinterest&token=7305880",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not accept a posting that merely mentions confirmation", () => {
+    expect(
+      detectSubmissionConfirmation(
+        "You will receive a confirmation email.",
+        "https://job-boards.greenhouse.io/acme/jobs/12345",
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("augmentAnswersForBrowser demographic consent", () => {
@@ -336,6 +365,29 @@ describe("optionSearchCandidates", () => {
       answer("VeteranStatus", "I am not a protected veteran", { category: "demographic" }),
     );
     expect(pickOptionIndex(["I am a veteran", "Active Duty"], candidates)).toBe(-1);
+  });
+
+  it("never answers a disability question when the candidate declined to say", () => {
+    // "no" sits inside "do not", so a naive containment check turns a refusal
+    // to disclose into a claim about a protected characteristic.
+    const options = ["Yes", "No", "I prefer to self-describe", "I don't wish to answer"];
+    expect(pickOptionIndex(options, ["I do not wish to answer"])).toBe(3);
+    expect(pickOptionIndex(["Yes", "No"], ["I do not wish to answer"])).toBe(-1);
+
+    const candidates = optionSearchCandidates(
+      field(
+        "Do you have a disability or chronic condition that substantially limits 1 or more of your major life activities?",
+        { role: "combobox" },
+      ),
+      answer("DisabilityStatus", "I do not wish to answer", { category: "demographic" }),
+    );
+    expect(pickOptionIndex(options, candidates)).toBe(3);
+    expect(pickOptionIndex(["Yes", "No"], candidates)).toBe(-1);
+  });
+
+  it("still matches a short option that appears as a whole word", () => {
+    expect(pickOptionIndex(["Yes", "No"], ["No"])).toBe(1);
+    expect(pickOptionIndex(["Yes", "No, I have not"], ["No"])).toBe(1);
   });
 });
 
@@ -914,6 +966,166 @@ describe("residence questions versus work authorisation", () => {
       ],
     );
     expect(match.answer?.answer).toBe("Yes");
+  });
+});
+
+describe("self-identification questions", () => {
+  const disabilityField = field(
+    "Do you have a disability or chronic condition (physical, visual, auditory, cognitive, mental, emotional, other) that substantially limits 1 or more of your major life activities, including mobility, communication (seeing, hearing, speaking), and learning?",
+    { required: true },
+  );
+
+  it("never answers a disability question with an unrelated answer", () => {
+    // "major life activities" overlaps a stored degree major, which put
+    // "Computer Science" into a disability field on a live Greenhouse form.
+    const [match] = matchFields([disabilityField], [answer("Major/Field of Study", "Computer Science")]);
+    expect(match.answer).toBeNull();
+  });
+
+  it("uses the demographic answer for a disability question", () => {
+    const [match] = matchFields(
+      [disabilityField],
+      [
+        answer("Major/Field of Study", "Computer Science"),
+        answer("Disability Status", "I do not wish to answer", { category: "demographic" }),
+      ],
+    );
+    expect(match.answer?.answer).toBe("I do not wish to answer");
+  });
+
+  it("does not let a school answer take a gender or veteran question", () => {
+    const genderField = field("How would you describe your gender identity?", { required: true });
+    const veteranField = field("Are you a veteran, active member or reservist of the US Armed Forces?", {
+      required: true,
+    });
+    const school = [answer("Last University Attended", "University of British Columbia")];
+    expect(matchFields([genderField], school)[0].answer).toBeNull();
+    expect(matchFields([veteranField], school)[0].answer).toBeNull();
+  });
+});
+
+describe("self-identification questions", () => {
+  const disabilityField = field(
+    "Do you have a disability or chronic condition (physical, visual, auditory, cognitive, mental, emotional, other) that substantially limits 1 or more of your major life activities, including mobility, communication (seeing, hearing, speaking), and learning?",
+    { required: true },
+  );
+
+  it("never lets a bank answer hijack a self-identification question", () => {
+    // A bank pattern of "major" matches "major life activities", which put a
+    // degree subject into a live disability field.
+    const bank = [
+      {
+        key: "discipline",
+        label: "Discipline",
+        patterns: ["discipline", "field of study", "major"],
+        answer: "Computer Science",
+        allowAutoFill: true,
+      },
+    ];
+    expect(fallbackAnswersForFields([disabilityField], [], bank)).toHaveLength(0);
+  });
+
+  it("still supplies a demographic bank answer for the same question", () => {
+    const bank = [
+      {
+        key: "disability-self-id",
+        label: "Disability self-identification",
+        patterns: ["disability or chronic condition"],
+        answer: "I don't wish to answer",
+        allowAutoFill: true,
+      },
+    ];
+    const extra = fallbackAnswersForFields([disabilityField], [], bank);
+    expect(extra).toHaveLength(1);
+    expect(extra[0]?.answer).toBe("I don't wish to answer");
+  });
+});
+
+describe("age questions", () => {
+  const ageField = field("At the time of application, are you 18+ years of age?", { required: true });
+
+  it("never answers an age question from a years-of-experience answer", () => {
+    // Only the word "years" is shared, but it was enough for the experience
+    // threshold answer to declare an experienced engineer a minor on a live
+    // Greenhouse form.
+    const [match] = matchFields(
+      [ageField],
+      [answer("Do you have 6+ years of experience", "No")],
+    );
+    expect(match.answer).toBeNull();
+  });
+
+  it("uses a real age answer when one exists", () => {
+    const [match] = matchFields(
+      [ageField],
+      [
+        answer("Do you have 6+ years of experience", "No"),
+        answer("Are you 18 years of age or older", "Yes"),
+      ],
+    );
+    expect(match.answer?.answer).toBe("Yes");
+  });
+
+  it("still answers a genuine experience-threshold question", () => {
+    const [match] = matchFields(
+      [field("Do you have 6+ years of professional experience?", { required: true })],
+      [answer("Do you have 6+ years of experience", "No")],
+    );
+    expect(match.answer?.answer).toBe("No");
+  });
+});
+
+describe("degree option candidates", () => {
+  const degreeField = field("Degree", { type: "select" });
+
+  it("offers the platform's wording for a credential stated as awarded", () => {
+    // Greenhouse lists "Bachelor's Degree"; the profile says "Bachelor of
+    // Science (BSc)". Neither contains the other, so the field stayed empty.
+    const candidates = optionSearchCandidates(degreeField, answer("Degree", "Bachelor of Science (BSc)"));
+    expect(candidates[0]).toBe("Bachelor of Science (BSc)");
+    expect(candidates).toContain("Bachelor's Degree");
+  });
+
+  it("never widens to a level above the one actually held", () => {
+    const candidates = optionSearchCandidates(degreeField, answer("Degree", "Bachelor of Science (BSc)"));
+    expect(candidates.some((entry) => /master|doctor|ph\.?d/i.test(entry))).toBe(false);
+  });
+
+  it("maps a master's credential to the master's option", () => {
+    const candidates = optionSearchCandidates(degreeField, answer("Degree", "Master of Science (MSc)"));
+    expect(candidates).toContain("Master's Degree");
+  });
+
+  it("leaves unrelated fields alone", () => {
+    const candidates = optionSearchCandidates(field("School"), answer("School", "Simon Fraser University"));
+    expect(candidates).toEqual(["Simon Fraser University"]);
+  });
+});
+
+describe("sole consent option", () => {
+  const options = ["I agree to these expectations"];
+
+  it("consents when nothing else can be selected", () => {
+    // Block's 700-character interview-expectations block mentions "previous
+    // employers", which pulled in a stored employer answer of "Microsoft".
+    // That is not an affirmative, but consent is the only available action.
+    expect(pickOptionIndex(options, ["Microsoft"])).toBe(0);
+  });
+
+  it("still consents for a plainly affirmative answer", () => {
+    expect(pickOptionIndex(options, ["Yes"])).toBe(0);
+  });
+
+  it("does not override an explicit decline", () => {
+    expect(pickOptionIndex(options, ["I do not wish to answer"])).toBe(-1);
+  });
+
+  it("does not override an explicit no", () => {
+    expect(pickOptionIndex(options, ["No"])).toBe(-1);
+  });
+
+  it("does not invent consent when the sole option is not a consent phrase", () => {
+    expect(pickOptionIndex(["Microsoft"], ["Yes"])).toBe(-1);
   });
 });
 

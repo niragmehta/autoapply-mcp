@@ -73,8 +73,31 @@ function semanticSimilarity(field: FieldDescriptor, answer: DraftAnswer): number
   ) {
     return 0.7;
   }
+  // Self-identification questions are asked in long statutory prose while the
+  // stored answer is a two-word label such as "Disability Status", so token
+  // overlap alone never clears the confidence floor. Pair them on the
+  // characteristic each one is about instead.
+  const characteristic = SELF_ID_CHARACTERISTICS.find(
+    (test) => test.field.test(fieldLabel) && test.answer.test(answerLabel),
+  );
+  if (characteristic) return 0.8;
+  // An age question and a stored age answer share almost no wording ("at the
+  // time of application, are you 18+ years of age" vs "are you 18 years of age
+  // or older"), and the surrounding boilerplate drags token overlap under the
+  // floor. Pair them explicitly so the correct answer is reachable.
+  if (AGE_QUESTION.test(fieldLabel) && AGE_QUESTION.test(answerLabel)) return 0.8;
   return 0;
 }
+
+/** Pairs a self-identification question with an answer about the same characteristic. */
+const SELF_ID_CHARACTERISTICS: ReadonlyArray<{ field: RegExp; answer: RegExp }> = [
+  { field: /\b(disabilit\w*|chronic condition)\b/, answer: /\b(disabilit\w*|chronic condition)\b/ },
+  { field: /\bgender\b|\bpronoun/, answer: /\bgender\b|\bpronoun/ },
+  { field: /\b(racial|race|ethnic\w*|hispanic|latino)\b/, answer: /\b(racial|race|ethnic\w*|hispanic|latino)\b/ },
+  { field: /\b(veteran|military|armed forces)\b/, answer: /\b(veteran|military|armed forces)\b/ },
+  { field: /\b(sexual orientation|lgbtq)\b/, answer: /\b(sexual orientation|lgbtq)\b/ },
+  { field: /\btransgender\b/, answer: /\btransgender\b/ },
+];
 
 const MIN_CONFIDENCE = 0.6;
 
@@ -83,6 +106,10 @@ const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|s
 const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge)\b/i;
 const RESIDENCE_QUESTION = /\b(located|located in|reside|residing|live|living|based)\b/;
 const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
+const SELF_ID_QUESTION = /\b(disabilit|chronic condition|gender identity|racial|race ethnicity|ethnic background|veteran|protected veteran|sexual orientation|transgender|pronoun)/;
+const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic|hispanic|latino|veteran|military|sexual orientation|transgender|pronoun|self identif|decline|prefer not)/;
+const AGE_QUESTION = /\b(years of age|age of \d|old enough|legal working age|18 or older|18 years or older)\b/;
+const EXPERIENCE_ANSWER = /\byears of (?:relevant |professional |industry |software |engineering )?experience\b/;
 
 /**
  * A form with one "Name" box wants the whole name. Left to plain similarity a
@@ -101,11 +128,29 @@ const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to wo
  * whether the question itself asks about authorisation: "are you authorized to
  * work in the location where this role is based" mentions location but is an
  * authorisation question, and must still receive the authorisation answer.
+ *
+ * Self-identification questions are held to the same rule for a blunter
+ * reason. The EEOC disability wording asks about "1 or more of your major life
+ * activities", and plain word overlap matched that against a stored degree
+ * major, putting "Computer Science" into a disability field. Only an answer
+ * that is itself about the protected characteristic may answer one.
+ *
+ * "At the time of application, are you 18+ years of age?" and "Do you have 6+
+ * years of experience?" share only the word "years", but that was enough for
+ * the experience answer to win the age question and declare an experienced
+ * engineer a minor. An answer about length of experience can never answer a
+ * question about age.
  */
 function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   const fieldLabel = normalizeLabel(field.label);
   const answerLabel = normalizeLabel(answer.label);
   if (BARE_NAME_FIELD.test(fieldLabel) && PARTIAL_NAME_ANSWER.test(answerLabel)) {
+    return true;
+  }
+  if (SELF_ID_QUESTION.test(fieldLabel) && !SELF_ID_ANSWER.test(answerLabel)) {
+    return true;
+  }
+  if (AGE_QUESTION.test(fieldLabel) && EXPERIENCE_ANSWER.test(answerLabel)) {
     return true;
   }
   if (
@@ -191,6 +236,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
   if (veteran.length > 0) return veteran;
   const source = sourceCandidates(field, value);
   if (source.length > 0) return source;
+  const degree = degreeCandidates(field, value);
+  if (degree.length > 0) return degree;
   const relocation = relocationCandidates(field, value);
   if (relocation.length > 0) return [value, ...relocation];
   const locality = value.split(",")[0]?.trim() ?? "";
@@ -198,6 +245,50 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
 }
 
 const SOURCE_QUESTION = /how did you (?:hear|find)|how were you referred|where did you (?:hear|learn)|referral source/;
+
+const DEGREE_QUESTION = /\b(degree|level of education|education level|highest (?:level of )?education)\b/;
+
+/**
+ * Boards render the degree field as a closed list in the platform's own
+ * vocabulary ("Bachelor's Degree"), while a profile states the credential as
+ * awarded ("Bachelor of Science (BSc)"). Neither string contains the other, so
+ * an accurate answer found no option at all. Walk from the exact credential to
+ * the platform's wording for the same level, most specific first, so nothing
+ * broader than the degree actually held is ever selected.
+ */
+function degreeCandidates(field: FieldDescriptor, value: string): string[] {
+  if (!DEGREE_QUESTION.test(normalizeLabel(field.label))) return [];
+  const normalized = normalizeOptionText(value);
+  const level = DEGREE_LEVELS.find((entry) => entry.test.test(normalized));
+  return level ? [value, ...level.candidates] : [];
+}
+
+const DEGREE_LEVELS: ReadonlyArray<{ test: RegExp; candidates: readonly string[] }> = [
+  {
+    test: /\b(phd|ph d|doctor of philosophy|doctorate|doctoral)\b/,
+    candidates: ["Doctor of Philosophy (Ph.D.)", "Doctorate", "Ph.D.", "PhD"],
+  },
+  {
+    test: /\bm b a\b|\bmba\b|master of business administration/,
+    candidates: ["Master of Business Administration (M.B.A.)", "MBA", "Master's Degree"],
+  },
+  {
+    test: /\b(masters?|m sc|msc|m s|m eng|meng|master of)\b/,
+    candidates: ["Master's Degree", "Masters Degree", "Master's", "Master"],
+  },
+  {
+    test: /\b(bachelors?|b sc|bsc|b s|b eng|beng|b a|ba|bachelor of)\b/,
+    candidates: ["Bachelor's Degree", "Bachelors Degree", "Bachelor's", "Bachelor"],
+  },
+  {
+    test: /\b(associates?|a a|a s)\b/,
+    candidates: ["Associate's Degree", "Associates Degree", "Associate's"],
+  },
+  {
+    test: /\bhigh school|secondary school|ged\b/,
+    candidates: ["High School", "High School Diploma", "GED"],
+  },
+];
 
 /**
  * "How did you hear about us?" is a closed list that differs on every board, and
@@ -247,9 +338,15 @@ export function optionTextMatches(optionText: string, value: string): boolean {
   const expected = normalizeOptionText(value);
   if (option.length === 0 || expected.length === 0) return false;
   if (option === expected) return true;
-  // Short values like "no" would otherwise match inside unrelated words.
+  // A short token must appear as a whole word, in whichever direction the
+  // containment runs. Without this an option of "No" matches the answer "I do
+  // not wish to answer", because "no" sits inside "not" - turning a decline
+  // into a substantive answer about a protected characteristic.
   if (expected.length <= 3) {
     return option.split(" ").includes(expected);
+  }
+  if (option.length <= 3) {
+    return expected.split(" ").includes(option);
   }
   if (option.includes(expected) || expected.includes(option)) return true;
   const locality = normalizeOptionText(value.split(",")[0] ?? "");
@@ -271,6 +368,24 @@ function optionNegatesCandidate(optionText: string, candidate: string): boolean 
   return normalizeOptionText(optionText).includes(`not ${expected}`);
 }
 
+/**
+ * True when the candidate declines to answer but the option states something
+ * substantive. Declining is a refusal to disclose, so it may only ever select
+ * an option that is itself a decline; anything else would put words in the
+ * candidate's mouth about a protected characteristic.
+ */
+function optionContradictsDecline(optionText: string, candidate: string): boolean {
+  if (!isDeclinePhrase(candidate)) return false;
+  return !isDeclinePhrase(optionText);
+}
+
+function isDeclinePhrase(text: string): boolean {
+  const normalized = normalizeOptionText(text);
+  if (normalized.length === 0) return false;
+  if (DECLINE_ANSWER_PATTERN.test(text.trim())) return true;
+  return DECLINE_OPTION_CANDIDATES.some((decline) => normalized.includes(normalizeOptionText(decline)));
+}
+
 /** Index of the option best matching any candidate, or -1 when none match. */
 export function pickOptionIndex(
   optionTexts: readonly string[],
@@ -281,7 +396,10 @@ export function pickOptionIndex(
     const exact = optionTexts.findIndex((text) => normalizeOptionText(text) === expected);
     if (exact >= 0) return exact;
     const partial = optionTexts.findIndex(
-      (text) => optionTextMatches(text, candidate) && !optionNegatesCandidate(text, candidate),
+      (text) =>
+        optionTextMatches(text, candidate) &&
+        !optionNegatesCandidate(text, candidate) &&
+        !optionContradictsDecline(text, candidate),
     );
     if (partial >= 0) return partial;
   }
@@ -289,15 +407,41 @@ export function pickOptionIndex(
     if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
       return 0;
     }
+    // A required choice offering exactly one consent option carries no
+    // decision - there is nothing else to select, so the only alternatives are
+    // consent or an unsubmittable form. Block's interview-expectations block
+    // runs to 700 characters and mentions "previous employers", which pulled in
+    // a stored current-employer answer of "Microsoft"; that is not an
+    // affirmative, but consenting is still the only available action. An
+    // explicit refusal or decline is honoured rather than overridden.
+    const refused = candidates.some((candidate) => {
+      const normalized = normalizeOptionText(candidate);
+      return NEGATIVE_CANDIDATE.test(normalized) || isDeclinePhrase(normalized);
+    });
+    if (!refused) return 0;
   }
   return -1;
 }
 
 const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
 const AFFIRMATIVE_CANDIDATE = /^(?:yes|true|agreed?|i agree|acknowledged?|i acknowledge|accept|i accept|consent|i consent)\b/;
+const NEGATIVE_CANDIDATE = /^(?:no|false|i do not|i don t|not |never|disagree|i disagree|decline|i decline)\b/;
 
 function normalizeOptionText(input: string): string {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return expandContractions(input.toLowerCase()).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Boards write the same decline both ways - "I don't wish to answer" and "I do
+ * not wish to answer". Stripping punctuation alone leaves "don t" and "do not",
+ * which never compare equal, so expand contractions before normalizing.
+ */
+function expandContractions(input: string): string {
+  return input
+    .replace(/\bcan['\u2019]t\b/g, "cannot")
+    .replace(/\bwon['\u2019]t\b/g, "will not")
+    .replace(/\bshan['\u2019]t\b/g, "shall not")
+    .replace(/n['\u2019]t\b/g, " not");
 }
 
 /** A pre-approved answer from the profile answer bank. */
@@ -333,7 +477,20 @@ export type NarrativeResolver = (label: string) => {
  *
  * Longest pattern wins, mirroring drafting, so a specific entry is never
  * pre-empted by a generic one.
- */
+ *//** Views a bank entry as a draft answer so shared compatibility rules apply. */
+function bankEntryAsAnswer(entry: ApprovedAnswerEntry): DraftAnswer {
+  return {
+    questionKey: entry.key,
+    label: entry.label,
+    answer: entry.answer,
+    source: "approved-answer",
+    citation: `profile.answers.${entry.key}`,
+    requiresHuman: false,
+    category: "general",
+    guidance: "",
+  };
+}
+
 export function fallbackAnswersForFields(
   fields: readonly FieldDescriptor[],
   answers: readonly DraftAnswer[],
@@ -362,6 +519,12 @@ export function fallbackAnswersForFields(
     }
     const entry = bestBankEntry(match.field, eligible);
     if (entry) {
+      // The derived answer carries the live field label so it binds to this
+      // field, which also means the compatibility rules can no longer see where
+      // the answer came from. Check the entry's own label first: a bank pattern
+      // as broad as "major" otherwise matches "major life activities" and
+      // answers a disability question with a degree subject.
+      if (isIncompatible(match.field, bankEntryAsAnswer(entry))) continue;
       // Radio options arrive one field per option, so a bank answer may only be
       // spent once across them. Standalone controls are independent, and forms
       // do repeat them - two acknowledgement boxes, or "LinkedIn" alongside
@@ -542,12 +705,43 @@ const SUBMISSION_CONFIRMATION_MARKERS = [
   "we received your application",
   "we've received your application",
   "we have received your application",
+  "your application is in",
+  "your application has been received",
+  "we've got your application",
+  "we have your application",
 ];
 
-/** Requires positive ATS confirmation copy before a run is recorded as submitted. */
-export function detectSubmissionConfirmation(pageText: string): boolean {
+/**
+ * ATS platforms route to a dedicated confirmation URL only after a submission
+ * is accepted, so the path is a stronger signal than employer copy. Pinterest
+ * writes "Good news: your application is in!" and Greenhouse still landed on
+ * /job_app/confirmation, which no marker list would have covered in advance.
+ * The check is anchored to a whole path segment so a posting that merely
+ * mentions the word cannot pass.
+ */
+const CONFIRMATION_URL_PATTERN =
+  /(?:^|[/?&#])(?:confirmation|confirmed|application[_-]?(?:submitted|complete|received)|thank[_-]?you|success)(?:$|[/?&#])/i;
+
+/** True when the ATS itself routed to a post-submission confirmation page. */
+export function isConfirmationUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return CONFIRMATION_URL_PATTERN.test(`${parsed.pathname}${parsed.search}${parsed.hash}`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Requires positive evidence before a run is recorded as submitted: either the
+ * employer's own confirmation copy, or the ATS routing to its confirmation
+ * page. Absence of both is still reported honestly as unverified.
+ */
+export function detectSubmissionConfirmation(pageText: string, finalUrl = ""): boolean {
   const haystack = pageText.toLowerCase();
-  return SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker));
+  if (SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker))) return true;
+  return isConfirmationUrl(finalUrl);
 }
 
 const CORE_APPLICATION_FIELD = /\b(e-?mail|resume|resum|cv|first name|last name|full name|your name)\b/;
