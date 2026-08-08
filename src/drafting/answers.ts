@@ -219,6 +219,27 @@ function answerOne(
     // be selected - blocking the whole application over an optional field the
     // candidate has already chosen not to answer helps nobody.
     const skipOptional = resolved.unmatchedChoice && !question.required;
+    // A stored "I acknowledge" does not textually match Roblox's option, which
+    // is a full sentence naming the notice. The approved-answer branch returns
+    // before the sole-consent rule below could apply, so a matched but
+    // unselectable consent blocked the whole application over a field offering
+    // exactly one submittable value. Check it here as well.
+    const consentFallback =
+      resolved.unmatchedChoice && isConsentingAnswer(approvedEarly.answer)
+        ? soleConsentOption(question)
+        : undefined;
+    if (consentFallback) {
+      return {
+        questionKey: question.key,
+        label: question.label,
+        answer: consentFallback,
+        source: "approved-answer",
+        citation: `profile.answers.${approvedEarly.key} (sole offered option)`,
+        requiresHuman: false,
+        category: "acknowledgement",
+        guidance: "",
+      };
+    }
     return {
       questionKey: question.key,
       label: question.label,
@@ -272,6 +293,27 @@ function answerOne(
   }
 
   if (isBlockedCategory(category, blockedCategories)) {
+    // A required choice offering exactly one consent option carries no decision
+    // whatever its category: "Please review and acknowledge our Privacy Notice"
+    // classifies as a legal attestation and so was blocked before the
+    // sole-consent rule further down could ever be reached. Sensitive
+    // categories are excluded, because a lone "I agree" on a demographic or
+    // work-authorization question is a disclosure, not a formality.
+    const consentOnly = SELF_EVIDENT_CONSENT_CATEGORIES.has(category)
+      ? soleConsentOption(question)
+      : undefined;
+    if (consentOnly) {
+      return {
+        questionKey: question.key,
+        label: question.label,
+        answer: consentOnly,
+        source: "approved-answer",
+        citation: "profile.answers.acknowledgement (sole offered option)",
+        requiresHuman: false,
+        category: "acknowledgement",
+        guidance: "",
+      };
+    }
     // An authorised narrative is not invented text: it is the candidate's own
     // wording, marked allowAutoFill, rendered from this specific posting. The
     // category gate ran before the narrative check below, so "Why do you want
@@ -373,6 +415,26 @@ function answerOne(
 }
 
 const SOLE_CONSENT_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+
+/**
+ * Categories where a lone consent option is a formality rather than a
+ * disclosure. Demographics, veteran status, disability and work authorization
+ * are deliberately absent: there, agreeing states a fact about the candidate.
+ */
+const SELF_EVIDENT_CONSENT_CATEGORIES = new Set(["legal-attestation", "general", "reference"]);
+
+/**
+ * Whether a stored answer is itself an agreement. A sole consent option is only
+ * taken on the candidate's behalf when his own stored answer already agrees:
+ * a decline must never be converted into consent just because the form offers
+ * nothing else.
+ */
+function isConsentingAnswer(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return /^(?:yes|true|(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand|understood))\b/.test(
+    normalized,
+  );
+}
 
 /**
  * A required choice offering exactly one consent option carries no decision:
