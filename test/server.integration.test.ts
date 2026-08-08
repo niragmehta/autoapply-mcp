@@ -112,6 +112,9 @@ const greenhouseDetail = {
       required: true,
       fields: [{ name: "sponsorship", type: "multi_value_single_select", values: [{ value: 0, label: "No" }, { value: 1, label: "Yes" }] }],
     },
+    // Optional and unanswerable from the profile. It must be reported but must
+    // never hold the application open.
+    { label: "(Optional) Personal Preferences", required: false, fields: [{ name: "preferences", type: "input_text" }] },
   ],
   compliance: [],
   pay_input_ranges: [],
@@ -250,6 +253,9 @@ describe("MCP server", () => {
       ).text,
     );
     expect(updated.status).toBe("awaiting_approval");
+    // The optional question is still unanswered; it is reported, not blocking.
+    expect(updated.outstandingQuestions).toEqual([]);
+    expect(updated.optionalUnanswered).toContain("(Optional) Personal Preferences");
     const packetHash = String(updated.packetHash);
 
     // A stale hash must not be accepted as approval.

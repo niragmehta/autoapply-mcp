@@ -140,7 +140,17 @@ export function registerDraftingTools(server: McpServer): void {
       };
       updated.packetHash = computePacketHash(buildPacket(updated, job));
 
-      const stillMissing = answers.filter((answer) => answer.requiresHuman && answer.answer.trim().length === 0);
+      // A blank optional question asserts nothing and cannot stop the form
+      // submitting, so it is reported but never holds the application. prepare
+      // already worked this way; this path did not, which left applications
+      // pinned at needs_human over fields like "(Optional) Personal
+      // Preferences" that nobody ever intends to fill.
+      const stillMissing = answers.filter(
+        (answer) => answer.requiresHuman && answer.required && answer.answer.trim().length === 0,
+      );
+      const optionalUnanswered = answers.filter(
+        (answer) => answer.requiresHuman && !answer.required && answer.answer.trim().length === 0,
+      );
       if (stillMissing.length > 0) updated.status = "needs_human";
 
       saveApplication(workspace.db, updated);
@@ -154,6 +164,7 @@ export function registerDraftingTools(server: McpServer): void {
         status: updated.status,
         packetHash: updated.packetHash,
         outstandingQuestions: stillMissing.map((answer) => answer.label),
+        optionalUnanswered: optionalUnanswered.map((answer) => answer.label),
         note: "Approval is bound to packetHash; approve the value shown here.",
       });
     }),
