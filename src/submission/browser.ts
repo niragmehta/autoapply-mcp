@@ -415,7 +415,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     }
 
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
-    if (!detectSubmissionConfirmation(postSubmitText)) {
+    if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
       return {
         status: "aborted",
         reason: "submit control clicked but no submission confirmation was detected; verify this application manually",
