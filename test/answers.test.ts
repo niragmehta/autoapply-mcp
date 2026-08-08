@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { draftAnswers, unresolvedRequired, type FormQuestion } from "../src/drafting/answers.js";
-import { classifyQuestion } from "../src/drafting/blockedQuestions.js";
+import { classifyQuestion, questionCore } from "../src/drafting/blockedQuestions.js";
 import { greenhouseQuestionsToForm } from "../src/drafting/questions.js";
 import { ProfileSchema } from "../src/domain/profile.js";
 import { makeCampaign, makeProfile } from "./factories.js";
@@ -393,5 +393,36 @@ describe("optional choice questions with no matching option", () => {
   it("still stops on a required one rather than sending an unlisted value", () => {
     const draft = draftAnswers([pronounQuestion(true)], stored, campaign);
     expect(draft.blockingQuestions).toContain("Pronouns");
+  });
+});
+
+describe("conditional question clauses", () => {
+  it("asks the question, not its precondition", () => {
+    expect(questionCore("If located in the US, in what city and state do you reside?")).toBe(
+      "in what city and state do you reside?",
+    );
+    expect(
+      questionCore("If this role offers the option to work from a remote location, do you plan to work remotely?"),
+    ).toBe("do you plan to work remotely?");
+  });
+
+  it("leaves a label alone when the clause is the whole label", () => {
+    expect(questionCore("If applicable")).toBe("If applicable");
+    expect(questionCore("If yes, why?")).toBe("If yes, why?");
+  });
+
+  it("leaves an ordinary question untouched", () => {
+    const label = "What is your current or previous job title?";
+    expect(questionCore(label)).toBe(label);
+  });
+
+  it("does not answer a city question with a yes/no residence answer", () => {
+    const { answers } = draftAnswers(
+      [question("If located in the US, in what city and state do you reside?")],
+      profile,
+      campaign,
+    );
+    expect(answers[0]?.answer.trim().toLowerCase()).not.toBe("no");
+    expect(answers[0]?.answer.trim().toLowerCase()).not.toBe("yes");
   });
 });

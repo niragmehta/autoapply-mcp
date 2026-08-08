@@ -40,6 +40,26 @@ export function normalizeQuestionLabel(label: string): string {
     .trim();
 }
 
+/**
+ * Strips a leading conditional clause so matching sees the question rather than
+ * its precondition.
+ *
+ * "If located in the US, in what city and state do you reside?" asks for a city.
+ * Matched whole, the "located in the US" clause won a stored yes/no answer and
+ * wrote "No" into a city box. The clause qualifies when the answer applies; it
+ * is never the thing being asked.
+ *
+ * The clause is dropped only when what follows is still a question, so labels
+ * like "If applicable" or a bare "If yes" - where the remainder carries no
+ * question at all - keep their original text.
+ */
+export function questionCore(label: string): string {
+  const match = /^\s*(?:if|when|should)\b[^,?]{0,120},\s*(.+)$/is.exec(label);
+  const remainder = match?.[1]?.trim() ?? "";
+  if (remainder.length < 8) return label;
+  return remainder;
+}
+
 export function classifyQuestion(label: string): string {
   const raw = label.trim();
   if (raw.length === 0) return "general";
