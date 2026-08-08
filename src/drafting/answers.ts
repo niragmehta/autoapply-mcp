@@ -1,7 +1,7 @@
 import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
-import { classifyQuestion, isBlockedCategory, looksLikeEssay } from "./blockedQuestions.js";
+import { classifyQuestion, isBlockedCategory, looksLikeEssay, questionCore } from "./blockedQuestions.js";
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
@@ -151,6 +151,15 @@ function answerOne(
   context?: NarrativeContext,
 ): Omit<DraftAnswer, "required"> {
   const category = classifyQuestion(question.label);
+  // A leading "If ..." clause states a precondition, not the question. Matching
+  // against the whole label let the condition win: Stripe's "If located in the
+  // US, in what city and state do you reside?" took the yes/no answer to "are
+  // you located in the US" and asked for a city got "No", and "If this role
+  // offers the option to work from a remote location, do you plan to work
+  // remotely?" matched the word "location" and got a home address. Resolution
+  // runs against the actual interrogative; classification still sees the whole
+  // label, since a condition can carry the sensitive part of a question.
+  const asked = { ...question, label: questionCore(question.label) };
 
   // File uploads are satisfied by attaching the resume, not by a typed answer.
   if (question.type === "input_file") {
@@ -200,9 +209,9 @@ function answerOne(
   // A pre-approved answer is an explicit prior decision, so it can satisfy an
   // otherwise blocked category. Checked before the block so the candidate's own
   // stored choice is honoured.
-  const approvedEarly = matchApprovedAnswer(profile, question.label);
+  const approvedEarly = matchApprovedAnswer(profile, asked.label);
   if (approvedEarly && canAutoFill(approvedEarly)) {
-    const resolved = resolveApprovedValue(approvedEarly, question);
+    const resolved = resolveApprovedValue(approvedEarly, asked);
     // An optional choice question offering none of the stored preferences needs
     // no decision: leaving it blank is the honest outcome, and for a decline
     // preference it is exactly the intended one. Figma's Pronouns list offers
@@ -231,7 +240,7 @@ function answerOne(
   // Employment history: factual resume data, already used at fill time but
   // never consulted during drafting, so "What is your current or previous job
   // title?" blocked applications that the server could answer from the profile.
-  const experience = resolveExperience(question.label, profile);
+  const experience = resolveExperience(asked.label, profile);
   if (experience) {
     return {
       questionKey: question.key,
@@ -248,7 +257,7 @@ function answerOne(
   // Personal and demographic fields: usable only where the candidate opted that
   // specific field in. Otherwise the stored value is offered as a suggestion
   // and the question still stops for a decision.
-  const personal = resolvePersonal(question.label, profile);
+  const personal = resolvePersonal(asked.label, profile);
   if (personal) {
     return {
       questionKey: question.key,
