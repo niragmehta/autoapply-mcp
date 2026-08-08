@@ -1,4 +1,5 @@
 import type { DraftAnswer } from "../domain/job.js";
+import { pickNumericBandIndex } from "../drafting/numericBands.js";
 
 /**
  * Field matching for web forms, kept free of browser APIs so it can be tested
@@ -578,8 +579,9 @@ export function pickOptionIndex(
     const partial = leastQualifiedMatch(optionTexts, candidate);
     if (partial >= 0) return partial;
   }
-  if (optionTexts.length === 1 && SOLE_OPT_IN_OPTION.test(normalizeOptionText(optionTexts[0] ?? ""))) {
-    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
+  const band = pickNumericBandIndex(optionTexts, candidates);
+  if (band >= 0) return band;
+  if (optionTexts.length === 1 && SOLE_OPT_IN_OPTION.test(normalizeOptionText(optionTexts[0] ?? ""))) {    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
       return 0;
     }
     // A required choice offering exactly one consent option carries no
