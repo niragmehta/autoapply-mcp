@@ -446,6 +446,8 @@ export function registerBatchTools(server: McpServer): void {
             personalResolver: personalResolverFor(workspace.profile),
             experienceResolver: experienceResolverFor(workspace.profile),
         narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
+            accountEmail: workspace.profile.identity.email,
+            allowAccountCreation: mode === "assisted",
           });
 
           if (run.status === "submitted") {

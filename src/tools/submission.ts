@@ -165,6 +165,10 @@ export function registerSubmissionTools(server: McpServer): void {
         personalResolver: personalResolverFor(workspace.profile),
         experienceResolver: experienceResolverFor(workspace.profile),
         narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
+        accountEmail: workspace.profile.identity.email,
+        // Registering on an employer's tenant is a bigger step than filling a
+        // public form, so it is only done when a person is watching the window.
+        allowAccountCreation: mode === "assisted",
         keepOpenMs: mode === "assisted" ? (args.keepOpenSeconds ?? 240) * 1000 : 0,
       });
 
