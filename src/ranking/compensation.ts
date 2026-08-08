@@ -16,10 +16,20 @@ const MAX_PLAUSIBLE_ANNUAL = 5_000_000;
 
 const SALARY_CONTEXT = /(salary|compensation|pay range|base pay|base salary|annual|per year|\/yr|total comp|on target earnings|ote)/i;
 
+/**
+ * Matches a pay range with the currency written either before the amount
+ * ("$220,000 - $280,000") or after it ("224,000 USD - 356,500 USD"). The
+ * suffix form is what large US pay-transparency filers publish, and without it
+ * the separator never lines up, so such a range parses as no range at all.
+ */
+const CURRENCY_PREFIX = String.raw`(?:us\$|c\$|cad|usd|cdn|\$)`;
+const CURRENCY_SUFFIX = String.raw`(?:usd|cad|cdn|us\$|c\$)`;
+const AMOUNT = String.raw`\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?`;
+
 const RANGE_PATTERN = new RegExp(
-  String.raw`(?<c1>us\$|c\$|cad|usd|cdn|\$)?\s*(?<a>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?)` +
+  String.raw`(?<c1>${CURRENCY_PREFIX})?\s*(?<a>${AMOUNT})(?:\s*(?<s1>${CURRENCY_SUFFIX})\b)?` +
     String.raw`\s*(?:-|–|—|\bto\b|\bthrough\b)\s*` +
-    String.raw`(?<c2>us\$|c\$|cad|usd|cdn|\$)?\s*(?<b>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?)`,
+    String.raw`(?<c2>${CURRENCY_PREFIX})?\s*(?<b>${AMOUNT})(?:\s*(?<s2>${CURRENCY_SUFFIX})\b)?`,
   "gi",
 );
 
@@ -70,7 +80,7 @@ export function parseCompensationFromText(text: string, fallbackCurrency = "USD"
 
     const start = Math.max(0, (match.index ?? 0) - 120);
     const window = text.slice(start, (match.index ?? 0) + match[0].length + 120);
-    const currency = detectCurrency([groups.c1, groups.c2], window, fallbackCurrency);
+    const currency = detectCurrency([groups.c1, groups.c2, groups.s1, groups.s2], window, fallbackCurrency);
     const period = inferPeriod(low, high, window);
 
     // Small numbers are only credible as pay when the text says so explicitly;
@@ -80,7 +90,7 @@ export function parseCompensationFromText(text: string, fallbackCurrency = "USD"
     const annualHigh = annualize(high, period);
     if (annualHigh < MIN_PLAUSIBLE_ANNUAL || annualHigh > MAX_PLAUSIBLE_ANNUAL) continue;
 
-    const hasCurrencyMark = Boolean(groups.c1 ?? groups.c2);
+    const hasCurrencyMark = Boolean(groups.c1 ?? groups.c2 ?? groups.s1 ?? groups.s2);
     const contextScore = (SALARY_CONTEXT.test(window) ? 2 : 0) + (hasCurrencyMark ? 1 : 0);
     if (contextScore === 0) continue;
 

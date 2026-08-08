@@ -6,6 +6,7 @@ import { logger } from "../util/logger.js";
 import { ashbyAdapter } from "./ashby.js";
 import { greenhouseAdapter } from "./greenhouse.js";
 import { leverAdapter } from "./lever.js";
+import { workdayAdapter } from "./workday.js";
 import { probeJson } from "./http.js";
 import type { DiscoveryIssue, SourceAdapter } from "./types.js";
 
@@ -13,6 +14,7 @@ const ADAPTERS: Record<AtsKind, SourceAdapter> = {
   greenhouse: greenhouseAdapter,
   lever: leverAdapter,
   ashby: ashbyAdapter,
+  workday: workdayAdapter,
 };
 
 export function adapterFor(kind: AtsKind): SourceAdapter {

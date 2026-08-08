@@ -36,7 +36,7 @@ describe("domain schemas", () => {
   it("rejects malformed configuration", () => {
     expect(ProfileSchema.safeParse({ version: 1 }).success).toBe(false);
     expect(CampaignSchema.safeParse({ version: 1, name: "x" }).success).toBe(false);
-    expect(CompanySchema.safeParse({ name: "A", ats: "workday", board: "a" }).success).toBe(false);
+    expect(CompanySchema.safeParse({ name: "A", ats: "taleo", board: "a" }).success).toBe(false);
   });
 
   it("requires at least one resume variant", () => {
@@ -75,11 +75,12 @@ describe("source registry", () => {
     expect(adapterFor("greenhouse").kind).toBe("greenhouse");
     expect(adapterFor("lever").kind).toBe("lever");
     expect(adapterFor("ashby").kind).toBe("ashby");
-    expect(allAdapters()).toHaveLength(3);
+    expect(adapterFor("workday").kind).toBe("workday");
+    expect(allAdapters()).toHaveLength(4);
   });
 
   it("throws for an unknown ATS", () => {
-    expect(() => adapterFor("workday" as never)).toThrow(/no adapter registered/);
+    expect(() => adapterFor("taleo" as never)).toThrow(/no adapter registered/);
   });
 
   it("builds board and list urls", () => {

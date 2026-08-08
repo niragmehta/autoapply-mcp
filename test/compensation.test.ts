@@ -13,8 +13,24 @@ describe("parseCompensationFromText", () => {
     expect(range?.period).toBe("year");
   });
 
-  it("parses K-suffixed ranges", () => {
-    const range = parseCompensationFromText("Compensation: $180K to $240K annually");
+  it("parses a currency written after the amount", () => {
+    // How large US pay-transparency filers publish on Workday. With only a
+    // prefix pattern the trailing "USD" sits between the low amount and the
+    // dash, so the range fails to match entirely rather than matching wrongly.
+    const range = parseCompensationFromText("Your base salary range is 224,000 USD - 356,500 USD for Level 5.");
+    expect(range?.min).toBe(224000);
+    expect(range?.max).toBe(356500);
+    expect(range?.currency).toBe("USD");
+    expect(range?.period).toBe("year");
+  });
+
+  it("reads a Canadian suffix currency rather than defaulting to USD", () => {
+    const range = parseCompensationFromText("The annual salary range is 190,000 CAD - 240,000 CAD.");
+    expect(range?.max).toBe(240000);
+    expect(range?.currency).toBe("CAD");
+  });
+
+  it("parses K-suffixed ranges", () => {    const range = parseCompensationFromText("Compensation: $180K to $240K annually");
     expect(range?.min).toBe(180000);
     expect(range?.max).toBe(240000);
   });

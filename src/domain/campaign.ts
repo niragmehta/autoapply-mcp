@@ -150,19 +150,32 @@ export type ScoringWeights = z.infer<typeof ScoringWeightsSchema>;
 export type CompensationPolicy = z.infer<typeof CompensationPolicySchema>;
 export type SubmissionPolicy = z.infer<typeof SubmissionPolicySchema>;
 
-export const AtsKindSchema = z.enum(["greenhouse", "lever", "ashby"]);
+export const AtsKindSchema = z.enum(["greenhouse", "lever", "ashby", "workday"]);
 export type AtsKind = z.infer<typeof AtsKindSchema>;
 
 export const CompanySchema = z.object({
   name: nonEmpty,
   ats: AtsKindSchema,
-  /** Board token / site slug used by the ATS public API. */
+  /**
+   * Board token / site slug used by the ATS public API.
+   * Workday has no single token, so it carries the `tenant/datacenter/site`
+   * triple read off the employer's career-site URL, e.g.
+   * `nvidia/wd5/NVIDIAExternalCareerSite`.
+   */
   board: nonEmpty,
   tier: z.enum(["A", "B", "C"]).default("B"),
   tags: z.array(nonEmpty).default([]),
   active: z.boolean().default(true),
   /** Lever and Ashby have EU-hosted instances. */
   region: z.enum(["global", "eu"]).default("global"),
+  /**
+   * Server-side search filter, for boards that support one. Large Workday
+   * tenants publish thousands of unrelated postings (NVIDIA alone lists 2,000),
+   * and each posting costs a second request to read its description, so
+   * narrowing at the source is both cheaper and more polite than filtering
+   * after the fact. Ignored by boards with no search endpoint.
+   */
+  query: z.string().default(""),
 });
 export type Company = z.infer<typeof CompanySchema>;
 
