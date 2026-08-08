@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { greenhouseAdapter } from "../src/sources/greenhouse.js";
+import { greenhouseAdapter , hostedApplyUrl } from "../src/sources/greenhouse.js";
 import { leverAdapter } from "../src/sources/lever.js";
 import { ashbyAdapter } from "../src/sources/ashby.js";
 import { fetchJson } from "../src/sources/http.js";
@@ -171,5 +171,33 @@ describe("fetchJson", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(fetchJson<{ ok: boolean }>("https://example.com/jobs", { retries: 1 })).resolves.toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("hostedApplyUrl", () => {
+  it("keeps a Greenhouse-hosted posting url unchanged", () => {
+    const url = "https://job-boards.greenhouse.io/sigmacomputing/jobs/7774460003";
+    expect(hostedApplyUrl("sigmacomputing", "7774460003", url)).toBe(url);
+  });
+
+  it("rewrites a company careers-site url to the hosted application form", () => {
+    expect(hostedApplyUrl("roblox", "8092905", "https://careers.roblox.com/jobs/8092905?gh_jid=8092905")).toBe(
+      "https://job-boards.greenhouse.io/embed/job_app?for=roblox&token=8092905",
+    );
+    expect(hostedApplyUrl("pinterest", "7305880", "https://www.pinterestcareers.com/jobs/?gh_jid=7305880")).toBe(
+      "https://job-boards.greenhouse.io/embed/job_app?for=pinterest&token=7305880",
+    );
+  });
+
+  it("falls back to the original url when the posting id is unknown", () => {
+    expect(hostedApplyUrl("block", "", "http://block.xyz/careers/jobs/5281196008")).toBe(
+      "http://block.xyz/careers/jobs/5281196008",
+    );
+  });
+
+  it("rewrites rather than trusting an unparseable url", () => {
+    expect(hostedApplyUrl("asana", "8084470", "not-a-url")).toBe(
+      "https://job-boards.greenhouse.io/embed/job_app?for=asana&token=8084470",
+    );
   });
 });

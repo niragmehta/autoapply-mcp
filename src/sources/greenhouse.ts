@@ -53,6 +53,28 @@ function structuredPay(job: GreenhouseJob): CompensationRange | null {
   };
 }
 
+/**
+ * Many employers point their Greenhouse board at their own careers site, so
+ * `absolute_url` lands on a marketing page rather than a form — and on a host
+ * outside the submission allowlist. Greenhouse still hosts the real
+ * application at its embed endpoint, so prefer that whenever the posting id is
+ * known. Falls back to the board's own URL when it is already a Greenhouse one.
+ */
+export function hostedApplyUrl(board: string, externalId: string, absoluteUrl: string): string {
+  if (!externalId) return absoluteUrl;
+  if (isGreenhouseApplicationUrl(absoluteUrl)) return absoluteUrl;
+  return `https://job-boards.greenhouse.io/embed/job_app?for=${encodeURIComponent(board)}&token=${encodeURIComponent(externalId)}`;
+}
+
+function isGreenhouseApplicationUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === "boards.greenhouse.io" || host === "job-boards.greenhouse.io";
+  } catch {
+    return false;
+  }
+}
+
 export const greenhouseAdapter: SourceAdapter = {
   kind: "greenhouse",
 
@@ -75,7 +97,7 @@ export const greenhouseAdapter: SourceAdapter = {
           title: asString(job.title),
           locations: collectLocations(job),
           url: asString(job.absolute_url),
-          applyUrl: asString(job.absolute_url),
+          applyUrl: hostedApplyUrl(company.board, String(job.id ?? ""), asString(job.absolute_url)),
           descriptionHtml: asString(job.content),
           postedAt: asString(job.first_published) || asString(job.updated_at) || null,
           structuredCompensation: structuredPay(job),

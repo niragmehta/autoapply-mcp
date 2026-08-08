@@ -49,6 +49,8 @@ export function upsertJobs(db: Db, jobs: readonly Job[]): UpsertResult {
       location_class = excluded.location_class,
       country = excluded.country,
       workplace_type = excluded.workplace_type,
+      url = excluded.url,
+      apply_url = excluded.apply_url,
       description_text = excluded.description_text,
       description_hash = excluded.description_hash,
       compensation_json = excluded.compensation_json,
