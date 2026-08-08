@@ -43,8 +43,25 @@ describe("resolveExperience", () => {
     expect(resolveExperience("Current role", profile)?.answer).toBe("Yes");
   });
 
-  it("gives the end date once a position has one", () => {
-    const past = makeProfile({
+  // 1Password's "Current job title?" was submitted as "Yes": it contains
+  // "current" and "job", so the is-this-your-current-role boolean claimed a
+  // free-text field. A question that names the attribute it wants is never the
+  // boolean, whatever else it contains.
+  it("does not answer an attribute question with the current-role yes/no", () => {
+    expect(resolveExperience("Current job title?", profile)?.answer).toBe("Software Engineer II - Security");
+    expect(resolveExperience("Current title", profile)?.answer).toBe("Software Engineer II - Security");
+    expect(resolveExperience("Current employer", profile)?.answer).toBe("Acme");
+    expect(resolveExperience("Current company name", profile)?.answer).toBe("Acme");
+  });
+
+  it("still recognises the genuinely boolean phrasings", () => {
+    expect(resolveExperience("Current role", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("I currently work here", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("Is this your current position?", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("Do you currently work here?", profile)?.answer).toBe("Yes");
+  });
+
+  it("gives the end date once a position has one", () => {    const past = makeProfile({
       experience: [{ company: "Phemi", title: "Intern", start: "2018-05", end: "2018-08", highlights: [] }],
     });
     expect(past.experience.length).toBe(1);

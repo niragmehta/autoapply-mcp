@@ -11,6 +11,7 @@ import {
   detectCaptcha,
   detectSubmissionConfirmation,
   fallbackAnswersForFields,
+  isAffirmativeAnswer,
   looksLikeApplicationForm,
   optionSearchCandidates,
   orderFieldsForBrowser,
@@ -242,6 +243,7 @@ export const COLLECT_FIELDS = `(() => {
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
     const ashbyLabel = ashbyTitle(el);
+    const questionTitle = ashbyLabel ? ashbyLabel.innerText.trim().slice(0, 200) : '';
     if (!label && !name && !el.id && role !== 'combobox') return;
     const index = out.length;
     el.setAttribute('data-autoapply-idx', String(index));
@@ -249,6 +251,7 @@ export const COLLECT_FIELDS = `(() => {
       selectorIndex: index,
       label,
       optionLabel: group ? optionLabel : undefined,
+      questionLabel: questionTitle && questionTitle !== label ? questionTitle : undefined,
       groupKey: checkboxGroupKey(el),
       type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
       name,
@@ -501,9 +504,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
+      const pageErrors = await readValidationErrors(page);
+      const detail = pageErrors.length ? ` page reported: ${pageErrors.join(" | ")}` : "";
       return {
         status: "aborted",
-        reason: "submit control clicked but no submission confirmation was detected; verify this application manually",
+        reason: `submit control clicked but no submission confirmation was detected; verify this application manually.${detail}`,
         filledFields: filled,
         unmatchedRequired: [],
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -595,8 +600,8 @@ async function fillControl(
     return;
   }
   if (field.type === "checkbox" || field.type === "radio") {
-    const affirmative = /^(yes|true|1|on|i agree|agree)$/i.test(value.trim());
-    const negative = /^(no|false|0|off)$/i.test(value.trim());
+    const affirmative = isAffirmativeAnswer(value);
+    const negative = /^(no|false|0|off|decline)\b/i.test(value.trim());
     const ashbyChoice = affirmative ? "Yes" : negative ? "No" : null;
     const button = ashbyChoice
       ? locator.locator(
@@ -794,8 +799,54 @@ async function readBodyText(page: AnyPage): Promise<string> {
   return page.locator("body").first().innerText().catch(() => "");
 }
 
-async function hasVisibleCaptchaChallenge(page: AnyPage): Promise<boolean> {
-  for (const selector of ACTIVE_CAPTCHA_SELECTORS) {
+/**
+ * When a submit click leaves us on the same page, the board almost always says
+ * why somewhere on it. Without this the run reports "no confirmation detected",
+ * which is true but useless - it cannot distinguish a rejected field from a
+ * silent network failure. Read the page's own complaint instead of guessing.
+ */
+const READ_VALIDATION_ERRORS = `() => {
+  const seen = new Set();
+  const out = [];
+  const push = (raw) => {
+    const text = (raw || "").replace(/\\s+/g, " ").trim();
+    if (!text || text.length > 240) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(text);
+  };
+  const visible = (el) => {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return false;
+    const style = window.getComputedStyle(el);
+    return style.visibility !== "hidden" && style.display !== "none";
+  };
+  for (const el of Array.from(document.querySelectorAll('[role="alert"], [aria-live="assertive"], [aria-live="polite"]'))) {
+    if (visible(el)) push(el.textContent);
+  }
+  for (const el of Array.from(document.querySelectorAll('[class*="error" i], [class*="invalid" i]'))) {
+    if (el.querySelector('[class*="error" i], [class*="invalid" i]')) continue;
+    if (visible(el)) push(el.textContent);
+  }
+  for (const el of Array.from(document.querySelectorAll('[aria-invalid="true"]'))) {
+    if (!visible(el)) continue;
+    const entry = el.closest('.ashby-application-form-field-entry, fieldset[class*="_fieldEntry_"], .field-entry, label');
+    push(entry ? entry.textContent : el.getAttribute("name"));
+  }
+  return out.slice(0, 8);
+}`;
+
+async function readValidationErrors(page: AnyPage): Promise<string[]> {
+  try {
+    const errors = (await page.evaluate(READ_VALIDATION_ERRORS)) as unknown;
+    return Array.isArray(errors) ? errors.filter((entry): entry is string => typeof entry === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+async function hasVisibleCaptchaChallenge(page: AnyPage): Promise<boolean> {  for (const selector of ACTIVE_CAPTCHA_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) return true;
   }

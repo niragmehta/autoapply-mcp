@@ -82,6 +82,19 @@ describe("COLLECT_FIELDS", () => {
 
     expect(field!.groupKey).toBeUndefined();
   });
+
+  it("carries the question a lone acknowledgement box sits under", () => {
+    // The box itself reads only "I understand", which matches no stored answer.
+    // The question above it is the only text saying what is being agreed to.
+    const question = "I understand that offers of employment are conditional on satisfactory completion of a background check.";
+    const entry = ashbyFieldset(question, { required: true, checkboxes: 1 });
+    const box = element({ type: "checkbox", name: "bg", id: "bg", rect: { width: 16, height: 16 }, entry });
+
+    const [field] = collect([box], { bg: "I understand" }) as unknown as Array<{ label: string; questionLabel?: string }>;
+
+    expect(field!.label).toBe("I understand");
+    expect(field!.questionLabel).toBe(question);
+  });
 });
 
 /** Models Ashby's newer `<fieldset class="..._fieldEntry_...">` question wrapper. */
