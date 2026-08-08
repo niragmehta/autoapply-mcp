@@ -21,6 +21,8 @@ import {
   type NarrativeResolver,
 } from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
+import { redactSecrets } from "./credentials.js";
+import { enterWorkdayApplication, isWorkdayUrl } from "./workdayFlow.js";
 import type { SubmissionPacket } from "./packet.js";
 
 /**
@@ -95,6 +97,14 @@ export type BrowserRunOptions = {
   experienceResolver?: PersonalResolver;
   narrativeResolver?: NarrativeResolver;
   timeoutMs?: number;
+  /** Email for boards that require an account, defaulting to the profile's own. */
+  accountEmail?: string;
+  /**
+   * Permits registering a new account on an employer's tenant. Off by default:
+   * creating a credentialed account in the candidate's name is a larger step
+   * than filling a public form and should be a deliberate choice.
+   */
+  allowAccountCreation?: boolean;
   /**
    * Milliseconds to leave a filled form open for a person to review and submit
    * themselves. Only used when `submit` is false.
@@ -123,9 +133,28 @@ export type BrowserRunResult = {
 /** Runs in the page: tags every form control and returns its descriptor. */
 export const COLLECT_FIELDS = `(() => {
   const controls = Array.from(document.querySelectorAll('input, textarea, select'));
+  // Some boards plant a decoy input to catch bots that fill every field. Workday
+  // ships one on its account pages: 1px tall, name="website", labelled "This
+  // input is for robots only, do not enter if you're human." It is display:block
+  // and visibility:visible, so it passes an ordinary visibility test, and its
+  // name would happily match a stored portfolio or personal-site answer.
+  const honeypot = (el) => {
+    if (el.getAttribute('data-automation-id') === 'beecatcher') return true;
+    const described = el.id ? document.querySelector('label[for="' + CSS.escape(el.id) + '"]') : null;
+    const text = ((described && described.innerText) || el.getAttribute('aria-label') || '').toLowerCase();
+    if (text.includes('for robots only') || text.includes("do not enter if you're human")) return true;
+    // Size is only a safe signal for free-text controls. File inputs and the
+    // native select behind a custom dropdown are legitimately zero-sized, and
+    // rejecting those would break resume upload and working dropdown fills.
+    const textLike = el.tagName.toLowerCase() === 'textarea' || ['text', 'email', 'tel', 'url', 'search'].includes(el.type);
+    if (!textLike) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width < 2 || rect.height < 2;
+  };
   const visible = (el) => {
     const style = window.getComputedStyle(el);
     const ashbyBoolean = el.type === 'checkbox' && el.closest('.ashby-application-form-field-entry');
+    if (honeypot(el)) return false;
     return ashbyBoolean || (style.display !== 'none' && style.visibility !== 'hidden' && el.type !== 'hidden');
   };
   const labelFor = (el) => {
@@ -270,6 +299,23 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         confirmationText: "",
         captchaDetected: true,
       };
+    }
+
+    // Workday hides the form behind an advert, a modal and a sign-in wall, so it
+    // needs a walk-in step before there is anything to fill.
+    if (isWorkdayUrl(page.url())) {
+      const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
+        allowAccountCreation: options.allowAccountCreation ?? false,
+      });
+      if (entry.reached !== "form") {
+        const shot = await capture(page, options.artifactsDir, packet.applicationId, "workday-entry");
+        return {
+          ...aborted(redactSecrets(entry.detail), page.url()),
+          screenshotPath: shot,
+        };
+      }
+      logger.info("workday application entered", { detail: entry.detail, createdAccount: entry.createdAccount });
+      await page.waitForTimeout(1500);
     }
 
     await attachResume(page, packet.resumePath);
