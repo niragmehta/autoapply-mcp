@@ -358,6 +358,63 @@ describe("sole consent option", () => {
     const { answers } = draftAnswers([q], profile, campaign);
     expect(answers[0]?.requiresHuman).toBe(true);
   });
+  it("takes the sole consent option even when an approved answer matched first", () => {
+    // Roblox words the only option as a full sentence naming the notice, so a
+    // stored "Yes" matches the question but not the option text. The approved
+    // answer branch used to return before the sole-consent rule was reached,
+    // blocking an application over a field with one submittable value.
+    const q = question("Please review and acknowledge Roblox's Job Applicant Privacy Notice", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["I acknowledge that I have read and understood Roblox's Job Applicant Privacy Notice."],
+    });
+    const { answers } = draftAnswers([q], profile, campaign);
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.answer).toBe(
+      "I acknowledge that I have read and understood Roblox's Job Applicant Privacy Notice.",
+    );
+    expect(unresolvedRequired([q], answers)).toEqual([]);
+  });
+
+  it("takes the sole consent option when a stored yes matched the question", () => {
+    // The live profile stores "Yes" against an acknowledgement pattern. That
+    // matches the question but not Roblox's sentence-long option, so the
+    // approved-answer branch has to apply the sole-consent rule itself.
+    const consenting = {
+      ...profile,
+      answers: [
+        ...profile.answers,
+        {
+          key: "acknowledgement",
+          label: "I acknowledge and agree",
+          patterns: ["privacy notice", "i acknowledge"],
+          answer: "Yes",
+          alternatives: [],
+          allowAutoFill: true,
+        },
+      ],
+    };
+    const q = question("Please review and acknowledge Roblox's Job Applicant Privacy Notice", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["I acknowledge that I have read and understood Roblox's Job Applicant Privacy Notice."],
+    });
+    const { answers } = draftAnswers([q], consenting, campaign);
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(unresolvedRequired([q], answers)).toEqual([]);
+  });
+
+  it("never converts a declining stored answer into consent", () => {
+    // Demographic questions carry a stored decline. A form offering only
+    // "I agree" must not turn that decline into an agreement.
+    const q = question("Gender", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["I agree to be identified"],
+    });
+    const { answers } = draftAnswers([q], profile, campaign);
+    expect(answers[0]?.answer).not.toBe("I agree to be identified");
+  });
 });
 describe("optional choice questions with no matching option", () => {
   const stored = ProfileSchema.parse({

@@ -1,11 +1,16 @@
-fix: name the emailed verification code instead of an unexplained failure
+fix: take a lone consent option whatever the question's category
 
-Greenhouse increasingly emails a one-time code and refuses the submission
-until it is typed back in. Stripe, Tailscale and Discord all stopped here.
-The run reported "submit control clicked but no submission confirmation was
-detected", which reads like a broken fill and hid the one fact that decides
-what to do next: the form is complete and correct, and only someone with
-mailbox access can finish it.
+Roblox requires "Please review and acknowledge Roblox's Job Applicant
+Privacy Notice" and offers exactly one option: a full sentence naming the
+notice. Two applications blocked on it.
 
-The gate is now detected and quoted in the employer's own wording, with the
-instruction to re-run in assisted mode. Nothing is recorded as submitted.
+Two separate paths reached that field before the existing sole-consent rule
+could apply. The label classifies as a legal attestation, so the category
+gate returned first; and where a stored acknowledgement matched the question,
+the approved-answer branch returned first because "Yes" is not the option
+text. Both now apply the rule.
+
+Consent is still never manufactured: sensitive categories are excluded, since
+a lone "I agree" on a demographic or work-authorization question states a
+fact rather than a formality, and a declining stored answer is never turned
+into an agreement.
