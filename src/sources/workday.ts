@@ -4,7 +4,7 @@ import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { fetchJson } from "./http.js";
 import { asString, asStringArray, normalizeJob } from "./normalize.js";
-import type { SourceAdapter } from "./types.js";
+import type { BoardVerification, SourceAdapter } from "./types.js";
 
 /**
  * Workday "CXS" public career-site API.
@@ -206,6 +206,41 @@ export const workdayAdapter: SourceAdapter = {
     }
 
     return jobs;
+  },
+
+  /**
+   * Verifies with a single list request instead of the full two-phase crawl.
+   *
+   * A wrong Workday site slug does not 404. The host answers 200 with a generic
+   * page, so the only trustworthy signal is the presence of a `jobPostings`
+   * array — checking the status code alone accepts boards that do not exist.
+   */
+  async verifyBoard(company: Company): Promise<BoardVerification> {
+    const board = parseBoard(company.board);
+    const payload = await fetchJson<{ jobPostings?: unknown; total?: unknown }>(`${apiBase(board)}/jobs`, {
+      body: { appliedFacets: {}, limit: 5, offset: 0, searchText: company.query },
+      retries: 0,
+    });
+
+    if (!Array.isArray(payload.jobPostings)) {
+      return {
+        ok: false,
+        postings: 0,
+        sampleTitles: [],
+        detail: "responded without a jobPostings array, which means the site slug is wrong",
+      };
+    }
+
+    const titles = (payload.jobPostings as WorkdayListEntry[])
+      .map((entry) => asString(entry.title))
+      .filter((title) => title.length > 0);
+
+    return {
+      ok: titles.length > 0,
+      postings: typeof payload.total === "number" ? payload.total : titles.length,
+      sampleTitles: titles.slice(0, 3),
+      detail: titles.length > 0 ? "board returned postings" : "board exists but matched no postings for this query",
+    };
   },
 
   /**

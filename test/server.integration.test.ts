@@ -173,6 +173,7 @@ describe("MCP server", () => {
     const names = tools.map((tool) => tool.name).sort();
     expect(names).toEqual(
       [
+        "add_company_board",
         "approve_application",
         "approve_batch",
         "audit_log",
