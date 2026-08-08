@@ -110,9 +110,15 @@ describe("preference lists in draftAnswers", () => {
     expect(answers[0]?.answer).toBe("Company careers page");
   });
 
-  it("hands back a dropdown that offers none of the preferences", () => {
+  it("hands back a required dropdown that offers none of the preferences", () => {
     const { answers } = draftAnswers(
-      [question("How did you hear about us?", { type: "multi_value_single_select", options: ["Indeed", "Glassdoor"] })],
+      [
+        question("How did you hear about us?", {
+          required: true,
+          type: "multi_value_single_select",
+          options: ["Indeed", "Glassdoor"],
+        }),
+      ],
       profile,
       campaign,
     );
