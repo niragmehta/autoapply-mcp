@@ -111,6 +111,31 @@ const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic
 const AGE_QUESTION = /\b(years of age|age of \d|old enough|legal working age|18 or older|18 years or older)\b/;
 const EXPERIENCE_ANSWER = /\byears of (?:relevant |professional |industry |software |engineering )?experience\b/;
 const PERMISSION_QUESTION = /^(?:may|can|do) we\b|\bhave (?:our|your) permission\b|\bmay we contact\b/;
+const SPECIFIC_LINK_SERVICES = ["linkedin", "github", "twitter", "dribbble", "behance"] as const;
+const GENERIC_LINK_FIELDS = ["portfolio", "website", "blog", "personal site"] as const;
+
+/**
+ * Link fields sit together and differ by one word, so "LinkedIn Profile" scored
+ * highly against "Portfolio URL" and "Other website" on the shared token "url"
+ * and put a LinkedIn address into both. Naming a specific account is a claim
+ * about which account it is, so an answer naming one service may not fill a
+ * field asking for a different service or for a general personal site. A
+ * generic answer such as "Website" is not a claim about any one account and is
+ * left free to fill a portfolio field.
+ */
+function namesDifferentLinkService(fieldLabel: string, answerLabel: string): boolean {
+  // "LinkedIn" normalizes to "linked in", so compare de-spaced forms or the
+  // guard never sees the service name it exists to protect.
+  const field = fieldLabel.replace(/\s+/g, "");
+  const answer = answerLabel.replace(/\s+/g, "");
+  const answerService = SPECIFIC_LINK_SERVICES.filter((service) => answer.includes(service));
+  if (answerService.length === 0) return false;
+  const fieldNames = [...SPECIFIC_LINK_SERVICES, ...GENERIC_LINK_FIELDS].filter((name) =>
+    field.includes(name.replace(/\s+/g, "")),
+  );
+  if (fieldNames.length === 0) return false;
+  return !fieldNames.some((name) => answerService.some((service) => service === name));
+}
 const DATE_COMPONENT_QUESTION = /\b(?:start|end|from|to)\s+date\s+(?:month|year|day)\b|^(?:start|end)\s+(?:month|year)\b/;
 const DURATION_ANSWER = /\b(?:weeks?|months?|days?)\b.*\b(?:notice|offer|acceptance|start)\b|\bnotice period\b/;
 
@@ -161,6 +186,9 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // matcher tried to answer it with "Microsoft". A permission question can only
   // take a yes/no answer; anything else is a category error, not a near miss.
   if (PERMISSION_QUESTION.test(fieldLabel) && !BOOLEAN_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
+  if (namesDifferentLinkService(fieldLabel, answerLabel)) {
     return true;
   }
   // Employment-history blocks ask for "Start date month" and "End date month".
@@ -608,7 +636,16 @@ export function fallbackAnswersForFields(
       // do repeat them - two acknowledgement boxes, or "LinkedIn" alongside
       // "LinkedIn Profile" - so there the same answer may serve each field.
       const usedKey = match.field.optionLabel ? entry.key : `${entry.key}#${match.field.selectorIndex}`;
-      if (used.has(usedKey) || alreadyAnswered.has(entry.key)) continue;
+      // For a standalone control this loop is only reached when the field is
+      // still empty, so the packet already holding this key is not a reason to
+      // leave it that way. Ashby's baseline field set labels the entry
+      // "LinkedIn Profile" while the live page asks for "LinkedIn URL"; the
+      // packet answer bound to nothing, and treating the key as spent left a
+      // required field blank and aborted the submission. Option groups keep the
+      // stricter rule, where spending a bank answer twice can contradict the
+      // packet.
+      const spent = match.field.optionLabel ? used.has(usedKey) || alreadyAnswered.has(entry.key) : used.has(usedKey);
+      if (spent) continue;
       used.add(usedKey);
       derived.push({
         questionKey: entry.key,

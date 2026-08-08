@@ -543,6 +543,26 @@ describe("fallbackAnswersForFields", () => {
     expect(fallbackAnswersForFields(fields, packet, bank)).toEqual([]);
   });
 
+  it("fills a live field when the packet holds that key under a label the page never uses", () => {
+    // Ashby's baseline field set calls it "LinkedIn Profile"; the live page asks
+    // for "LinkedIn URL". The packet answer binds to nothing, so treating the
+    // key as spent left a required field blank and aborted the submission.
+    const linkedInBank = [
+      {
+        key: "linkedin",
+        label: "LinkedIn",
+        patterns: ["linkedin url", "linkedin profile", "linkedin"],
+        answer: "https://www.linkedin.com/in/example/",
+        allowAutoFill: true,
+      },
+    ];
+    const packet = [{ ...answer("LinkedIn Profile", "https://www.linkedin.com/in/example/"), questionKey: "linkedin" }];
+    const extra = fallbackAnswersForFields([field("LinkedIn URL", { required: true })], packet, linkedInBank);
+    expect(extra).toHaveLength(1);
+    expect(extra[0]?.label).toBe("LinkedIn URL");
+    expect(extra[0]?.answer).toBe("https://www.linkedin.com/in/example/");
+  });
+
   it("never supplies an entry that is not cleared for auto-fill", () => {
     const extra = fallbackAnswersForFields([field("Describe a time you shipped something")], [], bank);
     expect(extra).toEqual([]);
@@ -1099,6 +1119,37 @@ describe("degree option candidates", () => {
   it("leaves unrelated fields alone", () => {
     const candidates = optionSearchCandidates(field("School"), answer("School", "Simon Fraser University"));
     expect(candidates).toEqual(["Simon Fraser University"]);
+  });
+});
+
+describe("link fields", () => {
+  it("does not put a LinkedIn address into a portfolio field", () => {
+    const matches = matchFields(
+      [field("Portfolio URL")],
+      [answer("LinkedIn Profile", "https://www.linkedin.com/in/example/")],
+    );
+    expect(matches[0]?.answer ?? undefined).toBeUndefined();
+  });
+
+  it("does not put a LinkedIn address into an other-website field", () => {
+    const matches = matchFields(
+      [field("Other website")],
+      [answer("LinkedIn Profile", "https://www.linkedin.com/in/example/")],
+    );
+    expect(matches[0]?.answer ?? undefined).toBeUndefined();
+  });
+
+  it("still fills the field naming the same service", () => {
+    const matches = matchFields(
+      [field("LinkedIn Profile", { required: true })],
+      [answer("LinkedIn Profile", "https://www.linkedin.com/in/example/")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("https://www.linkedin.com/in/example/");
+  });
+
+  it("leaves unnamed link fields alone", () => {
+    const matches = matchFields([field("GitHub URL")], [answer("GitHub", "https://github.com/example")]);
+    expect(matches[0]?.answer?.answer).toBe("https://github.com/example");
   });
 });
 
