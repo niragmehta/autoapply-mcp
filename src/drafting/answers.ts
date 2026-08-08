@@ -5,6 +5,7 @@ import { classifyQuestion, isBlockedCategory, looksLikeEssay } from "./blockedQu
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
+import { resolveExperience } from "./experience.js";
 
 /**
  * Answer policy engine.
@@ -75,19 +76,24 @@ function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boo
 
 /**
  * Resolves a stored answer against the choices a question actually offers.
- * Falls back to the plain answer when the entry declares no alternatives.
+ * Falls back to the plain answer when the question is free text.
  */
 function resolveApprovedValue(
   entry: { answer: string; alternatives: string[] },
   question: FormQuestion,
 ): { value: string; unmatchedChoice: boolean } {
-  if (entry.alternatives.length === 0) {
+  const hadOptions = (question.options?.length ?? 0) > 0;
+  // Declaring no alternatives used to skip option matching entirely, so a
+  // stored value was handed to a closed dropdown that might not list it - the
+  // form would reject it, or worse, the fill would land on a near neighbour.
+  // Whether the answer needs matching is a property of the question, not of how
+  // many fallbacks happen to be stored.
+  if (!hadOptions) {
     return { value: entry.answer, unmatchedChoice: false };
   }
   const preferences = [entry.answer, ...entry.alternatives].filter((value) => value.trim().length > 0);
   const match = selectBestOption(preferences, question.options);
-  const hadOptions = (question.options?.length ?? 0) > 0;
-  return { value: match.value, unmatchedChoice: hadOptions && !match.matchedOption };
+  return { value: match.value, unmatchedChoice: !match.matchedOption };
 }
 
 function blocked(
@@ -197,19 +203,45 @@ function answerOne(
   const approvedEarly = matchApprovedAnswer(profile, question.label);
   if (approvedEarly && canAutoFill(approvedEarly)) {
     const resolved = resolveApprovedValue(approvedEarly, question);
+    // An optional choice question offering none of the stored preferences needs
+    // no decision: leaving it blank is the honest outcome, and for a decline
+    // preference it is exactly the intended one. Figma's Pronouns list offers
+    // only she/he/they/self-describe, so a stored "I prefer not to say" cannot
+    // be selected - blocking the whole application over an optional field the
+    // candidate has already chosen not to answer helps nobody.
+    const skipOptional = resolved.unmatchedChoice && !question.required;
     return {
       questionKey: question.key,
       label: question.label,
-      answer: resolved.value,
+      answer: skipOptional ? "" : resolved.value,
       source: "approved-answer",
       citation: `profile.answers.${approvedEarly.key}`,
-      // A choice question offering none of the stored preferences is handed
-      // back: submitting a value the form does not list would fail.
-      requiresHuman: resolved.unmatchedChoice,
+      // A required choice question offering none of the stored preferences is
+      // handed back: submitting a value the form does not list would fail.
+      requiresHuman: resolved.unmatchedChoice && question.required,
       category,
       guidance: resolved.unmatchedChoice
-        ? `None of the stored preferences match the offered options: ${(question.options ?? []).join(" | ")}`
+        ? `None of the stored preferences match the offered options: ${(question.options ?? []).join(" | ")}${
+            skipOptional ? ". Optional, so it is left blank." : ""
+          }`
         : "",
+    };
+  }
+
+  // Employment history: factual resume data, already used at fill time but
+  // never consulted during drafting, so "What is your current or previous job
+  // title?" blocked applications that the server could answer from the profile.
+  const experience = resolveExperience(question.label, profile);
+  if (experience) {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: experience.answer,
+      source: "profile",
+      citation: experience.citation,
+      requiresHuman: !experience.authorized,
+      category: experience.category,
+      guidance: "",
     };
   }
 

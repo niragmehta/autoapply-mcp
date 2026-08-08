@@ -359,3 +359,39 @@ describe("sole consent option", () => {
     expect(answers[0]?.requiresHuman).toBe(true);
   });
 });
+describe("optional choice questions with no matching option", () => {
+  const stored = ProfileSchema.parse({
+    ...makeProfile(),
+    answers: [
+      {
+        key: "pronouns",
+        label: "Pronouns",
+        answer: "I prefer not to say",
+        patterns: ["pronoun"],
+        allowAutoFill: true,
+        alternatives: [],
+      },
+    ],
+  });
+
+  function pronounQuestion(required: boolean) {
+    return question("Pronouns", {
+      required,
+      type: "multi_value_single_select",
+      options: ["she/her/hers", "he/him/his", "they/them/theirs", "self-describe"],
+    });
+  }
+
+  it("leaves an optional one blank instead of blocking the application", () => {
+    const draft = draftAnswers([pronounQuestion(false)], stored, campaign);
+    expect(draft.blockingQuestions).toHaveLength(0);
+    const answer = draft.answers.find((entry) => entry.label === "Pronouns");
+    expect(answer?.answer).toBe("");
+    expect(answer?.requiresHuman).toBe(false);
+  });
+
+  it("still stops on a required one rather than sending an unlisted value", () => {
+    const draft = draftAnswers([pronounQuestion(true)], stored, campaign);
+    expect(draft.blockingQuestions).toContain("Pronouns");
+  });
+});
