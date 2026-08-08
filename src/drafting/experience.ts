@@ -99,15 +99,62 @@ function component(part: "start" | "end", unit: "month" | "year"): (label: strin
   return (label: string) => date.test(label) && new RegExp(`\\b${unit}\\b`).test(label) && /\bdate\b|\b(month|year)\b/.test(label);
 }
 
+/**
+ * "Current role" on a checkbox means "I still work here", but "Current job
+ * title" is a text box asking for the title itself. Both contain "current" and
+ * a role noun, so a purely keyword test hands a Yes/No answer to a free-text
+ * field - 1Password's "Current job title?" was submitted as "Yes". A boolean
+ * question either reads as one ("Is this...", "Do you currently...", anything
+ * with "here") or is one of the bare checkbox labels, and it never names the
+ * attribute it is supposedly asking for.
+ */
+const NAMES_AN_ATTRIBUTE =
+  /\b(title|name|company|employer|organisation|organization|salary|compensation|date|month|year|level|team|manager|location|description|duration|responsibilities)\b/;
+
+function currentRoleBoolean(label: string): boolean {
+  if (exact("current role", "current position", "current job", "currently work here", "i currently work here")(label)) {
+    return true;
+  }
+  if (!/\bcurrent(ly)?\b/.test(label) || !/\b(role|position|job|employer|here)\b/.test(label)) return false;
+  if (NAMES_AN_ATTRIBUTE.test(label)) return false;
+  return /\bhere\b/.test(label) || /^(is|are|do|does|have|has)\b/.test(label);
+}
+
 const RESOLVERS: readonly Resolver[] = [
   {
-    test: exact("company", "company name", "employer", "employer name", "organization", "organisation"),
+    test: exact(
+      "company",
+      "company name",
+      "employer",
+      "employer name",
+      "organization",
+      "organisation",
+      "current company",
+      "current employer",
+      "current company name",
+      "current employer name",
+      "most recent company",
+      "most recent employer",
+    ),
     category: "employment-history",
     citation: "experience[0].company",
     resolve: (entry) => entry.company,
   },
   {
-    test: exact("title", "job title", "position", "role", "position title", "your title"),
+    test: exact(
+      "title",
+      "job title",
+      "position",
+      "role",
+      "position title",
+      "your title",
+      "current title",
+      "current job title",
+      "current position title",
+      "current role title",
+      "most recent title",
+      "most recent job title",
+    ),
     category: "employment-history",
     citation: "experience[0].title",
     resolve: (entry) => entry.title,
@@ -139,7 +186,7 @@ const RESOLVERS: readonly Resolver[] = [
     resolve: (entry) => (isCurrent(entry) ? "" : (splitPeriod(entry.end)?.year ?? "")),
   },
   {
-    test: (label) => /\bcurrent(ly)?\b/.test(label) && /\b(role|position|job|employer|here)\b/.test(label),
+    test: (label) => currentRoleBoolean(label),
     category: "employment-history",
     citation: "experience[0].end",
     resolve: (entry) => (isCurrent(entry) ? "Yes" : "No"),

@@ -33,6 +33,12 @@ export type FieldDescriptor = {
    * counting as its own unmet requirement.
    */
   groupKey?: string;
+  /**
+   * The question a control sits under, when the control's own label is only a
+   * choice. A lone acknowledgement box is labelled "I understand", so without
+   * the question above it there is no way to tell what is being agreed to.
+   */
+  questionLabel?: string;
 };
 
 export type FieldMatch = {
@@ -107,9 +113,20 @@ const SELF_ID_CHARACTERISTICS: ReadonlyArray<{ field: RegExp; answer: RegExp }> 
 
 const MIN_CONFIDENCE = 0.6;
 
-const BARE_NAME_FIELD = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;
-const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
-const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge)\b/i;
+const BARE_NAME_FIELD = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
+const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge|i understand|understand|understood|i confirm|confirm|i accept|accept)\b/i;
+
+/**
+ * Boards word the same consent a dozen ways, and the box itself is often
+ * labelled with nothing but the phrase it wants back. Matching and ticking read
+ * this one list so a control can never be judged answerable and then left clear.
+ */
+const AFFIRMATIVE_ANSWER =
+  /^(yes|true|1|on|agree|i agree|consent|i consent|acknowledge|i acknowledge|understand|i understand|understood|confirm|i confirm|accept|i accept|acknowledge\/confirm)\b/i;
+
+export function isAffirmativeAnswer(value: string): boolean {
+  return AFFIRMATIVE_ANSWER.test(value.trim());
+}
 const RESIDENCE_QUESTION = /\b(located|located in|reside|residing|live|living|based)\b/;
 const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
 const SELF_ID_QUESTION = /\b(disabilit|chronic condition|gender identity|racial|race ethnicity|ethnic background|veteran|protected veteran|sexual orientation|transgender|pronoun)/;
@@ -814,7 +831,11 @@ function bestBankEntry(
   // Ashby labels a consent radio group after the field above it, so the real
   // question is only readable from the options themselves.
   const optionText = field.optionLabel ? normalizeLabel(field.optionLabel) : "";
-  const candidates = [haystack, optionText].filter((value) => value.length > 0);
+  // The question a control sits under is the most precise description of what
+  // it asks. A background-check box reads only "I understand" on its own, which
+  // matches no stored pattern and leaves a required box clear.
+  const questionText = field.questionLabel ? normalizeLabel(field.questionLabel) : "";
+  const candidates = [haystack, optionText, questionText].filter((value) => value.length > 0);
   if (candidates.length === 0) return undefined;
   // "GitHub" normalizes to "git hub", so a stored pattern of "github" would
   // never match. Compare de-spaced forms too, scoring on the original length.
