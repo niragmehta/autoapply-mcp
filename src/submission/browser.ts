@@ -151,9 +151,20 @@ export const COLLECT_FIELDS = `(() => {
     const rect = el.getBoundingClientRect();
     return rect.width < 2 || rect.height < 2;
   };
+  // Ashby ships two field-container conventions. Older forms mark the wrapper
+  // with a stable class; newer ones use a <fieldset> whose only stable hook is a
+  // hashed "_fieldEntry_" class. Matching just the old one silently cost every
+  // newer question its label and its required flag, so the run reported nothing
+  // missing and then failed validation at submit.
+  const ashbyEntry = (el) =>
+    el.closest('.ashby-application-form-field-entry') || el.closest('fieldset[class*="_fieldEntry_"]');
+  const ashbyTitle = (el) => {
+    const entry = ashbyEntry(el);
+    return entry ? entry.querySelector('.ashby-application-form-question-title') : null;
+  };
   const visible = (el) => {
     const style = window.getComputedStyle(el);
-    const ashbyBoolean = el.type === 'checkbox' && el.closest('.ashby-application-form-field-entry');
+    const ashbyBoolean = el.type === 'checkbox' && ashbyEntry(el);
     if (honeypot(el)) return false;
     return ashbyBoolean || (style.display !== 'none' && style.visibility !== 'hidden' && el.type !== 'hidden');
   };
@@ -163,8 +174,7 @@ export const COLLECT_FIELDS = `(() => {
       if (explicit && explicit.innerText.trim()) return explicit.innerText.trim();
     }
     const wrapper = el.closest('label');
-    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
-    const ashbyLabel = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
+    const ashbyLabel = ashbyTitle(el);
     if (ashbyLabel && ashbyLabel.innerText.trim()) return ashbyLabel.innerText.trim();
     if (wrapper && wrapper.innerText.trim()) return wrapper.innerText.trim();
     const aria = el.getAttribute('aria-label');
@@ -205,12 +215,23 @@ export const COLLECT_FIELDS = `(() => {
         if (title && title.innerText.trim()) return title.innerText.trim();
       }
     }
-    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
-    const ashbyTitle = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
-    if (ashbyTitle && ashbyTitle.innerText.trim()) return ashbyTitle.innerText.trim();
+    const entryTitle = ashbyTitle(el);
+    if (entryTitle && entryTitle.innerText.trim()) return entryTitle.innerText.trim();
     const radiogroup = el.closest('[role="radiogroup"]');
     const aria = radiogroup && radiogroup.getAttribute('aria-label');
     return aria ? aria.trim() : '';
+  };
+  // A required multi-select question is satisfied by ticking any one of its
+  // boxes, so the options have to be reported as one group. Without this each
+  // unticked box counts as its own unmet requirement and a fully answered
+  // question still reads as blocking.
+  const checkboxGroupKey = (el) => {
+    if (el.type !== 'checkbox') return undefined;
+    const entry = ashbyEntry(el);
+    if (!entry) return undefined;
+    if (entry.querySelectorAll('input[type="checkbox"]').length < 2) return undefined;
+    const title = groupLabel(el).slice(0, 200);
+    return title || undefined;
   };
   const out = [];
   controls.filter(visible).forEach((el) => {
@@ -220,8 +241,7 @@ export const COLLECT_FIELDS = `(() => {
     const label = group || optionLabel;
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
-    const ashbyEntry = el.closest('.ashby-application-form-field-entry');
-    const ashbyLabel = ashbyEntry && ashbyEntry.querySelector('.ashby-application-form-question-title');
+    const ashbyLabel = ashbyTitle(el);
     if (!label && !name && !el.id && role !== 'combobox') return;
     const index = out.length;
     el.setAttribute('data-autoapply-idx', String(index));
@@ -229,6 +249,7 @@ export const COLLECT_FIELDS = `(() => {
       selectorIndex: index,
       label,
       optionLabel: group ? optionLabel : undefined,
+      groupKey: checkboxGroupKey(el),
       type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
       name,
       required:
@@ -360,6 +381,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const filled: Array<{ label: string; source: string }> = [];
     const failedRequired: string[] = [];
     const choiceLog: ChoiceSelection[] = [];
+    const answeredGroups = new Set<string>();
 
     for (const match of orderFieldsForBrowser(plan.toFill)) {
       const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
@@ -368,6 +390,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       try {
         await fillControl(page, locator, match.field, value, candidates, choiceLog);
         filled.push({ label: match.field.label, source: match.answer!.source });
+        if (match.field.groupKey) answeredGroups.add(match.field.groupKey);
       } catch (error) {
         logger.warn("field fill failed", { label: match.field.label, error: String(error) });
         if (match.field.required) failedRequired.push(match.field.label);
@@ -394,6 +417,9 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         // disabled control submits nothing, so it cannot be what is missing,
         // and filling it would contradict the answer that disabled it.
         .filter((entry) => !inertIndexes.has(entry.selectorIndex))
+        // One tick answers a whole multi-select question; the boxes left clear
+        // are choices declined, not requirements left unmet.
+        .filter((entry) => !(entry.groupKey && answeredGroups.has(entry.groupKey)))
         .map((field) => field.label),
       ...failedRequired,
     ].filter((label, index, labels) => labels.indexOf(label) === index);
