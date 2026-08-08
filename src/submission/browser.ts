@@ -526,6 +526,20 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
+      const verification = detectVerificationCodeGate(postSubmitText);
+      if (verification) {
+        return {
+          status: "aborted",
+          reason: `${verification} Every field is filled; re-run in assisted mode and enter the code by hand.`,
+          filledFields: filled,
+          unmatchedRequired: [],
+          unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+          screenshotPath: confirmationShot,
+          finalUrl: page.url(),
+          confirmationText: "",
+          captchaDetected: false,
+        };
+      }
       const pageErrors = await readValidationErrors(page);
       const detail = pageErrors.length ? ` page reported: ${pageErrors.join(" | ")}` : "";
       const network = failedCalls.length ? ` submit request failed: ${failedCalls.join("; ")}` : "";
@@ -882,8 +896,30 @@ const READ_VALIDATION_ERRORS = `() => {
   return out.slice(0, 8);
 }`;
 
-async function readValidationErrors(page: AnyPage): Promise<string[]> {
-  try {
+/**
+ * Greenhouse increasingly emails a one-time code and refuses the submission
+ * until it is typed back in. That is not a failed submission and not an
+ * anti-bot challenge in the CAPTCHA sense: the form is complete and correct,
+ * and only a human with mailbox access can finish it. Reporting it as "no
+ * confirmation detected" hid the one fact that decides what to do next, so it
+ * is now named. Returns the employer's own wording where it can be quoted.
+ */
+export function detectVerificationCodeGate(text: string): string | undefined {
+  const flat = text.replace(/\s+/g, " ");
+  const patterns = [
+    /a verification code was sent to .{1,120}?\.(?=\s|$)/i,
+    /enter the \d+[- ]character code to confirm you'?re a human\.?/i,
+    /we (?:have )?sent a (?:one[- ]time |verification |security )?code to .{1,120}?\.(?=\s|$)/i,
+    /check your email for a (?:verification|security|one[- ]time) code/i,
+  ];
+  for (const pattern of patterns) {
+    const hit = pattern.exec(flat);
+    if (hit) return hit[0].trim();
+  }
+  return undefined;
+}
+
+async function readValidationErrors(page: AnyPage): Promise<string[]> {  try {
     const errors = (await page.evaluate(READ_VALIDATION_ERRORS)) as unknown;
     return Array.isArray(errors) ? errors.filter((entry): entry is string => typeof entry === "string") : [];
   } catch {
