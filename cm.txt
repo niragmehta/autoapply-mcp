@@ -1,16 +1,12 @@
-fix: tell a deliberate blank apart from a field nothing could fill
+fix: write N/A rather than a blank into a not-applicable follow-up
 
-The drafting fix resolved Okta's "If yes, please describe" follow-ups, but
-the submit guard still aborted the application: a resolved blank and an
-unresolved one are the same empty string, so a finished form looked
-incomplete.
+Okta marks "If yes, please describe" required and refuses to submit while
+it is empty, even though the question above it was answered No. A blank is
+logically complete but fails the employer's own validation, so the form
+came back with a red "This field is required" on an application that had
+nothing left to say.
 
-Marks the answer instead of inferring it. notApplicable says blank is the
-complete answer, and both guards - unresolvedRequired and the live fill
-plan - honour it. A required field that is blank for no stated reason
-still aborts, so the guard keeps its purpose.
-
-Optional in the schema so undefined reads as false; stored packets drafted
-before this change load unchanged.
+"N/A" states only that nothing applies, which is what the negative parent
+already said, so it asserts nothing new and satisfies the validator.
 
 Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>

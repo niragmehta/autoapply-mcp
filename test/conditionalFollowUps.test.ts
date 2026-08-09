@@ -67,7 +67,7 @@ describe("conditional follow-ups", () => {
     const resolved = resolveConditionalFollowUps(questions, drafted);
 
     expect(resolved[1]!.requiresHuman).toBe(false);
-    expect(resolved[1]!.answer).toBe("");
+    expect(resolved[1]!.answer).toBe("N/A");
     expect(resolved[1]!.citation).toMatch(/answered "No"/);
     expect(resolved[3]!.requiresHuman).toBe(false);
   });
