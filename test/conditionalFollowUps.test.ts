@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { DraftAnswer } from "../src/domain/job.js";
 import type { FormQuestion } from "../src/drafting/answers.js";
+import { unresolvedRequired } from "../src/drafting/answers.js";
 import {
   isConditionalFollowUp,
   isNegativeAnswer,
   resolveConditionalFollowUps,
 } from "../src/drafting/conditionalFollowUps.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
 
 function question(key: string, label: string, type = "input_text"): FormQuestion {
   return { key, label, required: true, type };
@@ -146,5 +148,53 @@ describe("conditional follow-ups", () => {
 
     expect(resolved[1]!.requiresHuman).toBe(false);
     expect(resolved[2]!.requiresHuman).toBe(false);
+  });
+
+  it("stops unresolvedRequired reporting a not-applicable field as missing", () => {
+    const questions = [
+      question("q_parent", "Do you have any outside business activities?"),
+      question("q_detail", "If yes, please describe: "),
+    ];
+    const drafted = [
+      answer("q_parent", questions[0]!.label, "No"),
+      answer("q_detail", questions[1]!.label, "", true),
+    ];
+
+    const resolved = resolveConditionalFollowUps(questions, drafted);
+
+    expect(unresolvedRequired(questions, drafted)).toContain("If yes, please describe: ");
+    expect(unresolvedRequired(questions, resolved)).toEqual([]);
+  });
+
+  it("stops the submit guard aborting on a not-applicable required field", () => {
+    // Okta aborted here: the form was complete but a deliberate blank looked
+    // identical to a field nothing could fill.
+    const questions = [
+      question("q_parent", "Do you have any outside business activities?"),
+      question("q_detail", "If yes, please describe: "),
+    ];
+    const resolved = resolveConditionalFollowUps(questions, [
+      answer("q_parent", questions[0]!.label, "No"),
+      answer("q_detail", questions[1]!.label, "", true),
+    ]);
+
+    const fields = [
+      { selectorIndex: 0, label: questions[0]!.label, type: "select", name: "a", required: true },
+      { selectorIndex: 1, label: questions[1]!.label, type: "input_text", name: "b", required: true },
+    ];
+
+    const plan = buildFillPlan(fields, resolved);
+
+    expect(plan.unmatchedRequired.map((field) => field.label)).toEqual([]);
+  });
+
+  it("still aborts on a required field that is blank for no stated reason", () => {
+    const fields = [
+      { selectorIndex: 0, label: "Why do you want this job?", type: "textarea", name: "a", required: true },
+    ];
+
+    const plan = buildFillPlan(fields, [answer("q", "Why do you want this job?", "", true)]);
+
+    expect(plan.unmatchedRequired.map((field) => field.label)).toEqual(["Why do you want this job?"]);
   });
 });

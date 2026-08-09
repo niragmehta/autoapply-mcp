@@ -1096,7 +1096,12 @@ export function buildFillPlan(fields: readonly FieldDescriptor[], answers: reado
   );
   return {
     toFill: matches.filter((match) => match.answer !== null && match.answer.answer.trim().length > 0),
-    unmatchedRequired: unfilled.filter((match) => match.field.required).map((match) => match.field),
+    // A field marked notApplicable is finished, not missing. "If yes, please
+    // describe" after a "No" has nothing to describe, and reporting it as
+    // unfillable aborted an application that was in fact complete.
+    unmatchedRequired: unfilled
+      .filter((match) => match.field.required && match.answer?.notApplicable !== true)
+      .map((match) => match.field),
     unfilled: unfilled.map((match) => match.field),
     unusedAnswers: answers.filter((answer) => !used.has(answer.questionKey)),
   };
