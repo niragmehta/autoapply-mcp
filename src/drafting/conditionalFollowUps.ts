@@ -35,6 +35,15 @@ const FREE_TEXT_TYPES = new Set(["input_text", "textarea", "text", "long_text", 
  */
 const NEGATIVE_ANSWER = /^(?:no|none|n\/?a|nope|false|not applicable|i have not|i do not|no\.)$/i;
 
+/**
+ * What to write when the governing question was answered negatively. Okta's
+ * form marks these follow-ups required and refuses a blank, so leaving them
+ * empty fails client-side validation on a form that is otherwise complete.
+ * "N/A" states only that nothing applies, which is exactly what the negative
+ * parent already said, so it asserts nothing new.
+ */
+const NOT_APPLICABLE_TEXT = "N/A";
+
 export function isConditionalFollowUp(label: string): boolean {
   return CONDITIONAL_PREFIX.test(label);
 }
@@ -70,7 +79,7 @@ export function resolveConditionalFollowUps(
 
     return {
       ...answer,
-      answer: "",
+      answer: NOT_APPLICABLE_TEXT,
       source: "profile" as const,
       citation: `not applicable: "${truncate(governing.label)}" answered "${governing.answer}"`,
       requiresHuman: false,
