@@ -168,11 +168,24 @@ describe("queue", () => {
     );
     upsertJobs(db, jobs);
     for (const job of jobs) saveEvaluation(db, evaluation(job.id));
-    saveApplication(db, application(jobs[0].id, { id: "app_held" }));
+    saveApplication(db, application(jobs[0].id, { id: "app_held", status: "submitted" }));
 
     // One slot is spent, and that role is already excluded as applied to, so
     // only one of the two remaining roles may be taken.
     expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(1);
+  });
+
+  it("does not let an unsubmitted draft hold a company's slot", () => {
+    const jobs = ["a", "b", "c"].map((suffix) =>
+      makeJob({ id: `job_${suffix}`, externalId: suffix, fingerprint: `fp_${suffix}` }),
+    );
+    upsertJobs(db, jobs);
+    for (const job of jobs) saveEvaluation(db, evaluation(job.id));
+    // A draft never reached the employer, so it must not consume a slot; the
+    // role itself is still excluded as already applied to.
+    saveApplication(db, application(jobs[0].id, { id: "app_draft", status: "drafted" }));
+
+    expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(2);
   });
 
   it("frees a slot when an application is withdrawn", () => {

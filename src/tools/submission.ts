@@ -11,7 +11,7 @@ import {
   saveApplication,
 } from "../db/repositories/applications.js";
 import { appendEvent } from "../db/repositories/events.js";
-import { getEvaluation, getJob } from "../db/repositories/jobs.js";import { runApplicationForm } from "../submission/browser.js";
+import { applicationCountsByCompany, getEvaluation, getJob } from "../db/repositories/jobs.js";import { runApplicationForm } from "../submission/browser.js";
 import { checkSubmissionAllowed, startOfDayIso } from "../submission/guards.js";
 import { computePacketHash, renderPacketPreview, type SubmissionPacket } from "../submission/packet.js";
 import { AppError } from "../util/errors.js";
@@ -148,6 +148,7 @@ export function registerSubmissionTools(server: McpServer): void {
         campaign: workspace.campaign,
         approval,
         submittedToday: countSubmittedSince(workspace.db, startOfDayIso()),
+        companyApplicationCount: applicationCountsByCompany(workspace.db).get(job.companyName.toLowerCase()) ?? 0,
         lastSubmissionAt: lastSubmissionAt(workspace.db),
         requestedMode: mode,
       });

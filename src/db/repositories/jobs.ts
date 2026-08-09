@@ -197,8 +197,10 @@ export type QueueFilter = {
 /**
  * Applications already held per company, keyed by lowercased name.
  *
- * Only counts applications that still occupy a slot against an employer's own
- * per-candidate cap: a withdrawn or failed application does not.
+ * Counts only what has actually reached the employer or is committed to doing
+ * so. A draft is a candidate, not an application: it may be discarded freely
+ * and the employer never saw it, so counting drafts would let abandoned
+ * paperwork from an earlier run block a company permanently.
  */
 export function applicationCountsByCompany(db: Db): Map<string, number> {
   const rows = db
@@ -206,7 +208,7 @@ export function applicationCountsByCompany(db: Db): Map<string, number> {
       SELECT j.company_name AS company_name, COUNT(*) AS total
       FROM applications a
       JOIN jobs j ON j.id = a.job_id
-      WHERE a.status NOT IN ('skipped', 'failed')
+      WHERE a.status IN ('approved', 'submitted')
       GROUP BY j.company_name
     `)
     .all() as JobRow[];

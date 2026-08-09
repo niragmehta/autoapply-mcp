@@ -138,6 +138,24 @@ describe("checkSubmissionAllowed", () => {
     expect(result.code).toBe("daily_limit_reached");
   });
 
+  it("enforces the per-company ceiling", () => {
+    // The count includes this approved application, so the ceiling is only
+    // breached once another one sits beyond it.
+    const result = checkSubmissionAllowed({
+      ...baseInput,
+      companyApplicationCount: campaign.submission.maxPerCompany + 1,
+    });
+    expect(result.code).toBe("company_cap_reached");
+  });
+
+  it("lets an approved application spend the slot it already holds", () => {
+    const result = checkSubmissionAllowed({
+      ...baseInput,
+      companyApplicationCount: campaign.submission.maxPerCompany,
+    });
+    expect(result.allowed).toBe(true);
+  });
+
   it("enforces pacing between submissions", () => {
     const result = checkSubmissionAllowed({ ...baseInput, lastSubmissionAt: new Date().toISOString() });
     expect(result.code).toBe("pacing");
