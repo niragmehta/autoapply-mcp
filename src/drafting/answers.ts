@@ -462,6 +462,7 @@ export function unresolvedRequired(questions: readonly FormQuestion[], answers: 
     .filter((question) => question.required)
     .filter((question) => {
       const answer = byKey.get(question.key);
+      if (answer?.notApplicable) return false;
       return !answer || answer.answer.trim().length === 0;
     })
     .map((question) => question.label);

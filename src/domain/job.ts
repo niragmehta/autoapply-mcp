@@ -103,6 +103,14 @@ export const DraftAnswerSchema = z.object({
    * never blocks; a blank required one always does.
    */
   required: z.boolean().default(true),
+  /**
+   * Set when blank is the complete and correct answer, not a gap: a
+   * conditional follow-up whose governing question was answered negatively has
+   * nothing to describe. Without this the submit guard cannot tell a
+   * deliberate blank from a field nothing could fill, and aborts on a form
+   * that is in fact finished.
+   */
+  notApplicable: z.boolean().optional(),
   category: z.string().default("general"),
   /** Advice shown alongside a question that a person must decide. */
   guidance: z.string().default(""),

@@ -74,6 +74,7 @@ export function resolveConditionalFollowUps(
       source: "profile" as const,
       citation: `not applicable: "${truncate(governing.label)}" answered "${governing.answer}"`,
       requiresHuman: false,
+      notApplicable: true,
     };
   });
 }

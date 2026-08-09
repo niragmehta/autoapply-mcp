@@ -1,27 +1,16 @@
-fix: leave a follow-up to a negative answer blank instead of blocking
+fix: tell a deliberate blank apart from a field nothing could fill
 
-Employers pair a yes/no question with a free-text follow-up that only
-applies when the answer was yes:
+The drafting fix resolved Okta's "If yes, please describe" follow-ups, but
+the submit guard still aborted the application: a resolved blank and an
+unresolved one are the same empty string, so a finished form looked
+incomplete.
 
-  Do you have any outside business activities?  -> No
-  If yes, please describe:                       -> nothing to describe
+Marks the answer instead of inferring it. notApplicable says blank is the
+complete answer, and both guards - unresolvedRequired and the live fill
+plan - honour it. A required field that is blank for no stated reason
+still aborts, so the guard keeps its purpose.
 
-The follow-up carries no question of its own, so no profile answer could
-ever match it and the whole application stalled waiting for a person to
-type something that does not exist. Okta asked three of them on one form.
-
-When the governing question was answered negatively, blank is the
-complete and correct answer, so it now resolves rather than blocking.
-
-Guards, because a wrong reading here silently drops a disclosure the
-employer asked for:
-- Only free-text fields. A select would need an option chosen on the
-  candidate's behalf, which asserts something.
-- Only a plainly negative parent. "No, but ..." does not count.
-- The parent must itself be answered; a follow-up to an unresolved or
-  human-blocked question stays blocked.
-- Labels that merely begin with "if" and then ask a real question are
-  untouched - Stripe's "If located in the US, in what city and state do
-  you reside?" still needs a city.
+Optional in the schema so undefined reads as false; stored packets drafted
+before this change load unchanged.
 
 Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>
