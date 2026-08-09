@@ -22,7 +22,7 @@ import {
   type BatchItem,
 } from "../db/repositories/batches.js";
 import { appendEvent } from "../db/repositories/events.js";
-import { getEvaluation, getJob, listQueue } from "../db/repositories/jobs.js";
+import { applicationCountsByCompany, getEvaluation, getJob, listQueue } from "../db/repositories/jobs.js";
 import { prepareApplicationFor } from "../drafting/prepare.js";
 import { autoFillableFields } from "../drafting/personal.js";
 import { runApplicationForm } from "../submission/browser.js";
@@ -406,6 +406,7 @@ export function registerBatchTools(server: McpServer): void {
           campaign: workspace.campaign,
           approval: latestApproval(workspace.db, application.id),
           submittedToday: countSubmittedSince(workspace.db, startOfDayIso()),
+          companyApplicationCount: applicationCountsByCompany(workspace.db).get(job.companyName.toLowerCase()) ?? 0,
           lastSubmissionAt: lastSubmissionAt(workspace.db),
           requestedMode: mode,
         });

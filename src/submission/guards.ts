@@ -18,6 +18,12 @@ export type GuardInput = {
   campaign: Campaign;
   approval: ApprovalRecord | null;
   submittedToday: number;
+  /**
+   * Applications already sent to, or approved for, this job's company. A draft
+   * is not counted, so the ceiling has to hold here as well as at drafting
+   * time: otherwise a pile of drafts could all be submitted one by one.
+   */
+  companyApplicationCount?: number;
   lastSubmissionAt: string | null;
   requestedMode: "manual" | "assisted" | "auto";
   now?: Date;
@@ -93,6 +99,18 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
 
   if (input.submittedToday >= policy.dailyLimit) {
     return deny("daily_limit_reached", `daily submission limit of ${policy.dailyLimit} reached`);
+  }
+
+  // This application's own approval is already counted, so it must be allowed
+  // to consume the slot it holds rather than be blocked by it.
+  const heldForCompany = (input.companyApplicationCount ?? 0) - (application.status === "approved" ? 1 : 0);
+  if (heldForCompany >= policy.maxPerCompany) {
+    return deny(
+      "company_cap_reached",
+      `${job.companyName} already has ${heldForCompany} submitted or approved application${
+        heldForCompany === 1 ? "" : "s"
+      }, at the campaign ceiling of ${policy.maxPerCompany} per company`,
+    );
   }
 
   if (input.lastSubmissionAt) {
