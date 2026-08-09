@@ -1,16 +1,27 @@
-fix: take a lone consent option whatever the question's category
+fix: leave a follow-up to a negative answer blank instead of blocking
 
-Roblox requires "Please review and acknowledge Roblox's Job Applicant
-Privacy Notice" and offers exactly one option: a full sentence naming the
-notice. Two applications blocked on it.
+Employers pair a yes/no question with a free-text follow-up that only
+applies when the answer was yes:
 
-Two separate paths reached that field before the existing sole-consent rule
-could apply. The label classifies as a legal attestation, so the category
-gate returned first; and where a stored acknowledgement matched the question,
-the approved-answer branch returned first because "Yes" is not the option
-text. Both now apply the rule.
+  Do you have any outside business activities?  -> No
+  If yes, please describe:                       -> nothing to describe
 
-Consent is still never manufactured: sensitive categories are excluded, since
-a lone "I agree" on a demographic or work-authorization question states a
-fact rather than a formality, and a declining stored answer is never turned
-into an agreement.
+The follow-up carries no question of its own, so no profile answer could
+ever match it and the whole application stalled waiting for a person to
+type something that does not exist. Okta asked three of them on one form.
+
+When the governing question was answered negatively, blank is the
+complete and correct answer, so it now resolves rather than blocking.
+
+Guards, because a wrong reading here silently drops a disclosure the
+employer asked for:
+- Only free-text fields. A select would need an option chosen on the
+  candidate's behalf, which asserts something.
+- Only a plainly negative parent. "No, but ..." does not count.
+- The parent must itself be answered; a follow-up to an unresolved or
+  human-blocked question stays blocked.
+- Labels that merely begin with "if" and then ask a real question are
+  untouched - Stripe's "If located in the US, in what city and state do
+  you reside?" still needs a city.
+
+Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>

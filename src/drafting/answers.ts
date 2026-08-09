@@ -2,6 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { classifyQuestion, isBlockedCategory, looksLikeEssay, questionCore } from "./blockedQuestions.js";
+import { resolveConditionalFollowUps } from "./conditionalFollowUps.js";
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
@@ -125,13 +126,17 @@ export function draftAnswers(
   context?: NarrativeContext,
 ): { answers: DraftAnswer[]; blockedQuestions: string[]; blockingQuestions: string[] } {
   const blockedCategories = campaign.submission.blockedQuestionCategories;
-  const answers = questions.map((question) => ({
+  const drafted = questions.map((question) => ({
     ...answerOne(question, profile, blockedCategories, context),
     // Stamped in one place: answerOne returns from eleven branches and any one
     // of them forgetting this flag would silently make an optional field block
     // submission again.
     required: question.required,
   }));
+  // Runs over the whole form because a conditional follow-up is only
+  // answerable in the light of the question above it, which answerOne - which
+  // sees one question at a time - cannot know about.
+  const answers = resolveConditionalFollowUps(questions, drafted);
   const requiredLabels = new Set(questions.filter((question) => question.required).map((question) => question.label));
   const blockedQuestions = answers.filter((answer) => answer.requiresHuman).map((answer) => answer.label);
   // An optional question cannot stop the form being submitted, and a blank
