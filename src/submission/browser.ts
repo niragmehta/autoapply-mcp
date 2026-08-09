@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SubmissionPolicy } from "../domain/campaign.js";
 import { AppError } from "../util/errors.js";
@@ -123,6 +124,18 @@ export type BrowserRunOptions = {
    * front of a browser.
    */
   verificationCode?: string;
+  /**
+   * How long to hold the browser open at a verification gate while waiting for
+   * the code to appear at `codeFilePath`.
+   *
+   * A code cannot be carried between runs: clicking submit is what causes one
+   * to be emailed, so a second run invalidates whatever the first produced.
+   * Waiting inside the run is the only way an automated submission can clear
+   * the gate.
+   */
+  codeWaitMs?: number;
+  /** File polled for the code while `codeWaitMs` has not elapsed. */
+  codeFilePath?: string;
 };
 
 export type BrowserRunResult = {
@@ -535,8 +548,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
       const verification = detectVerificationCodeGate(postSubmitText);
-      if (verification && options.verificationCode) {
-        const entered = await enterVerificationCode(page, options.verificationCode);
+      const code = verification
+        ? options.verificationCode ?? (await awaitVerificationCode(options, page))
+        : undefined;
+      if (verification && code) {
+        const entered = await enterVerificationCode(page, code);
         if (entered) {
           await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
           await page.waitForTimeout(1500);
@@ -578,7 +594,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       if (verification) {
         return {
           status: "aborted",
-          reason: `${verification} Every field is filled; re-run with verificationCode set, or in assisted mode and enter it by hand.`,
+          reason: `${verification} Every field is filled. A code cannot be carried over from an earlier run, because clicking submit is what causes one to be sent; re-run with waitForCodeSeconds so the browser holds this session open, or in assisted mode and enter it by hand.`,
           filledFields: filled,
           unmatchedRequired: [],
           unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -867,6 +883,49 @@ async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
     await fileInput.setInputFiles(resumePath);
   } catch (error) {
     throw new AppError("resume_upload_failed", `could not attach resume: ${String(error)}`, { path: resumePath });
+  }
+}
+
+/**
+ * Holds the session open at a verification gate, polling for the code.
+ *
+ * The code is bound to the submit that requested it, so it cannot survive into
+ * a later run: re-submitting to supply an old code is exactly what invalidates
+ * it. Waiting here keeps one browser session alive across the round trip to
+ * whoever is reading the inbox, which is the only point at which the code is
+ * still good.
+ */
+async function awaitVerificationCode(
+  options: BrowserRunOptions,
+  page: AnyPage,
+): Promise<string | undefined> {
+  const waitMs = options.codeWaitMs ?? 0;
+  const path = options.codeFilePath;
+  if (waitMs <= 0 || !path) return undefined;
+
+  // A code emailed before this moment is already dead, so whoever is reading
+  // the inbox needs to know when this attempt's code was sent rather than
+  // guessing which of several similar emails is current.
+  const signalPath = `${path}.waiting`;
+  await writeFile(signalPath, new Date().toISOString(), "utf8").catch(() => undefined);
+
+  try {
+    const deadline = Date.now() + waitMs;
+    while (Date.now() < deadline) {
+      const code = await readFile(path, "utf8")
+        .then((text) => text.trim())
+        .catch(() => "");
+      if (code) {
+        // Consumed, so a stale code from an earlier attempt can never be picked
+        // up by the next one.
+        await rm(path, { force: true }).catch(() => undefined);
+        return code;
+      }
+      await page.waitForTimeout(2000);
+    }
+    return undefined;
+  } finally {
+    await rm(signalPath, { force: true }).catch(() => undefined);
   }
 }
 

@@ -186,7 +186,36 @@ export type QueueFilter = {
   allowUnknownCompensation?: boolean;
   /** FX rates for converting posted currencies to the campaign currency. */
   fx?: Record<string, number>;
+  /**
+   * Ceiling on applications per company. Roles at a company already at the
+   * ceiling are dropped, and no single company may take more than its
+   * remaining headroom from one queue.
+   */
+  maxPerCompany?: number;
 };
+
+/**
+ * Applications already held per company, keyed by lowercased name.
+ *
+ * Only counts applications that still occupy a slot against an employer's own
+ * per-candidate cap: a withdrawn or failed application does not.
+ */
+export function applicationCountsByCompany(db: Db): Map<string, number> {
+  const rows = db
+    .prepare(`
+      SELECT j.company_name AS company_name, COUNT(*) AS total
+      FROM applications a
+      JOIN jobs j ON j.id = a.job_id
+      WHERE a.status NOT IN ('skipped', 'failed')
+      GROUP BY j.company_name
+    `)
+    .all() as JobRow[];
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(String(row.company_name).toLowerCase(), Number(row.total ?? 0));
+  }
+  return counts;
+}
 
 function annualizedMaxIn(job: Job, fx: Record<string, number>): number | null {
   const range = job.compensation;
@@ -212,6 +241,11 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
        )`
     : "";
 
+  // Every constraint below this line is applied in JS, so the rows SQL returns
+  // are candidates rather than results. Over-fetch, or a filter that discards
+  // heavily leaves the caller short of a limit the data could have satisfied.
+  const candidateLimit = Math.max(limit * 20, 200);
+
   const rows = db
     .prepare(`
       SELECT e.*, j.* FROM evaluations e
@@ -221,7 +255,7 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
       ORDER BY e.score DESC, j.posted_at DESC
       LIMIT ?
     `)
-    .all(minScore, limit) as JobRow[];
+    .all(minScore, candidateLimit) as JobRow[];
 
   return rows
     .map((row) => ({ job: rowToJob(row), evaluation: rowToEvaluation(row) }))
@@ -247,7 +281,30 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
       const value = annualizedMaxIn(item.job, filter.fx ?? { USD: 1 });
       if (value === null) return filter.allowUnknownCompensation === true;
       return value >= filter.minCompensation;
-    });
+    })
+    .filter(capPerCompany(db, filter.maxPerCompany))
+    .slice(0, limit);
+}
+
+/**
+ * Stateful predicate that keeps any one company from taking more than its
+ * remaining headroom. Applications already on file count against the ceiling,
+ * so a company at the cap contributes nothing further.
+ *
+ * Applied last, after every other filter, so headroom is only ever spent on a
+ * role the caller would actually have taken.
+ */
+function capPerCompany(db: Db, maxPerCompany: number | undefined): (item: QueueItem) => boolean {
+  if (maxPerCompany === undefined) return () => true;
+  const remaining = new Map<string, number>();
+  const existing = applicationCountsByCompany(db);
+  return (item: QueueItem) => {
+    const key = item.job.companyName.toLowerCase();
+    const left = remaining.get(key) ?? Math.max(maxPerCompany - (existing.get(key) ?? 0), 0);
+    if (left <= 0) return false;
+    remaining.set(key, left - 1);
+    return true;
+  };
 }
 
 export type RejectionSummary = { rule: string; count: number };
