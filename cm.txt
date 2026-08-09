@@ -1,12 +1,20 @@
-fix: write N/A rather than a blank into a not-applicable follow-up
+feat: finish an emailed verification code without a person at the browser
 
-Okta marks "If yes, please describe" required and refuses to submit while
-it is empty, even though the question above it was answered No. A blank is
-logically complete but fails the employer's own validation, so the form
-came back with a red "This field is required" on an application that had
-nothing left to say.
+Greenhouse increasingly refuses a submission until an emailed one-time code
+is typed back. Naming that gate stopped the misleading failure report, but
+every affected application still needed someone sitting in front of an
+assisted window: Stripe, Okta, Tailscale and Discord all stop here.
 
-"N/A" states only that nothing applies, which is what the negative parent
-already said, so it asserts nothing new and satisfies the validator.
+submit_application now takes verificationCode and completes the gate.
+
+The code box is rendered as one input per character, so a fill() into any
+single box delivers one character and silently leaves the rest blank. The
+segmented path is tried first and requires exactly as many visible boxes as
+the code has characters, then reads each box back, so a partial code is
+never submitted as though it were complete. A single-box layout still works
+through the original selectors.
+
+A refused code is now said plainly, including that a new one has been
+emailed - the remedy is a fresh code, not another attempt at the old one.
 
 Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>

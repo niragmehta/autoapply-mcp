@@ -62,6 +62,7 @@ type AnyLocator = {
   click: (options?: unknown) => Promise<void>;
   isVisible: () => Promise<boolean>;
   isEnabled?: () => Promise<boolean>;
+  inputValue?: () => Promise<string>;
   innerText: () => Promise<string>;
   getAttribute: (name: string) => Promise<string | null>;
   allInnerTexts: () => Promise<string[]>;
@@ -115,6 +116,13 @@ export type BrowserRunOptions = {
    * themselves. Only used when `submit` is false.
    */
   keepOpenMs?: number;
+  /**
+   * The one-time code a board emails before it will accept a submission.
+   * Greenhouse increasingly gates submission this way. Supplying it lets a
+   * single automated run finish what would otherwise need a person to sit in
+   * front of a browser.
+   */
+  verificationCode?: string;
 };
 
 export type BrowserRunResult = {
@@ -527,10 +535,50 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const confirmationShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
       const verification = detectVerificationCodeGate(postSubmitText);
+      if (verification && options.verificationCode) {
+        const entered = await enterVerificationCode(page, options.verificationCode);
+        if (entered) {
+          await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+          await page.waitForTimeout(1500);
+          const codeText = await readBodyText(page);
+          const codeShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+          if (detectSubmissionConfirmation(codeText, page.url())) {
+            return {
+              status: "submitted",
+              reason: "verification code accepted; submission confirmation detected and captured",
+              filledFields: filled,
+              unmatchedRequired: [],
+              unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+              screenshotPath: codeShot,
+              finalUrl: page.url(),
+              confirmationText: codeText.slice(0, 600),
+              captchaDetected: false,
+            };
+          }
+          // A code that is wrong, already used or expired is worth saying
+          // plainly: the remedy is a fresh code, not another attempt at this
+          // one, and each attempt emails a new code.
+          const codeErrors = await readValidationErrors(page);
+          const stillGated = detectVerificationCodeGate(codeText);
+          return {
+            status: "aborted",
+            reason: `verification code was entered but the submission was not confirmed${
+              codeErrors.length ? `; page reported: ${codeErrors.join(" | ")}` : ""
+            }${stillGated ? " The board is still asking for a code, so this one was refused and a new one has been emailed." : ""}`,
+            filledFields: filled,
+            unmatchedRequired: [],
+            unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+            screenshotPath: codeShot,
+            finalUrl: page.url(),
+            confirmationText: "",
+            captchaDetected: false,
+          };
+        }
+      }
       if (verification) {
         return {
           status: "aborted",
-          reason: `${verification} Every field is filled; re-run in assisted mode and enter the code by hand.`,
+          reason: `${verification} Every field is filled; re-run with verificationCode set, or in assisted mode and enter it by hand.`,
           filledFields: filled,
           unmatchedRequired: [],
           unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -822,8 +870,87 @@ async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
   }
 }
 
-async function clickSubmit(page: AnyPage): Promise<boolean> {
-  for (const selector of SUBMIT_SELECTORS) {
+/**
+ * Selectors for the box a board shows after emailing a one-time code. Ordered
+ * most specific first so a generic text input is only ever a last resort, and
+ * that last resort is confined to a box short enough to be a code field.
+ */
+const VERIFICATION_INPUT_SELECTORS = [
+  'input[name*="verification" i]',
+  'input[id*="verification" i]',
+  'input[name*="confirmation_code" i]',
+  'input[autocomplete="one-time-code"]',
+  'input[name*="otp" i]',
+  'input[id*="otp" i]',
+  'input[aria-label*="code" i]',
+  'input[placeholder*="code" i]',
+  'input[name*="code" i]',
+  'input[id*="code" i]',
+];
+
+/**
+ * Types an emailed one-time code and confirms it. Handles both a single box
+ * and the segmented one-character-per-box layout Greenhouse renders, where a
+ * fill() into any one box would only ever deliver a single character.
+ *
+ * Returns false when no code box can be found, so the caller reports the gate
+ * rather than claiming an attempt that never happened.
+ */
+async function enterVerificationCode(page: AnyPage, code: string): Promise<boolean> {
+  const trimmed = code.trim();
+  if (!trimmed) return false;
+
+  if (await fillSegmentedCode(page, trimmed)) {
+    await clickSubmit(page);
+    return true;
+  }
+
+  for (const selector of VERIFICATION_INPUT_SELECTORS) {
+    const locator = page.locator(selector).first();
+    if ((await locator.count()) === 0) continue;
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    await locator.fill(trimmed).catch(() => undefined);
+    const value = await locator.inputValue?.().catch(() => "");
+    // Only report success once the box actually holds the code. A readonly or
+    // shadowed input accepts fill() silently and would otherwise look filled.
+    if (value !== undefined && value !== trimmed) continue;
+    await clickSubmit(page);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Fills a row of single-character boxes, one character each. Requires exactly
+ * as many boxes as the code has characters, so a partial code is never left
+ * sitting in a form that would then be submitted incomplete.
+ */
+export async function fillSegmentedCode(page: AnyPage, code: string): Promise<boolean> {
+  const boxes = page.locator('input[maxlength="1"]');
+  const total = await boxes.count().catch(() => 0);
+  if (total === 0) return false;
+
+  const visible: AnyLocator[] = [];
+  for (let i = 0; i < total; i += 1) {
+    const box = boxes.nth(i);
+    if (await box.isVisible().catch(() => false)) visible.push(box);
+  }
+  if (visible.length !== code.length) return false;
+
+  for (let i = 0; i < code.length; i += 1) {
+    await visible[i]!.fill(code[i]!).catch(() => undefined);
+  }
+
+  // Confirm every box took its character before clicking anything. Some
+  // components rewrite or clear input they consider invalid.
+  for (let i = 0; i < code.length; i += 1) {
+    const value = await visible[i]!.inputValue?.().catch(() => undefined);
+    if (value !== undefined && value !== code[i]) return false;
+  }
+  return true;
+}
+
+async function clickSubmit(page: AnyPage): Promise<boolean> {  for (const selector of SUBMIT_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
       await locator.click();

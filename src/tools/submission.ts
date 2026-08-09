@@ -117,10 +117,17 @@ export function registerSubmissionTools(server: McpServer): void {
           .max(1800)
           .optional()
           .describe("Assisted mode: how long to leave the filled form open for review."),
+        verificationCode: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "The one-time code the board emailed after a previous attempt hit its verification gate. Each attempt emails a new code, so use the most recent one.",
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    handler(async (args: { applicationId: string; mode?: "manual" | "assisted" | "auto"; headless?: boolean; keepOpenSeconds?: number }) => {
+    handler(async (args: { applicationId: string; mode?: "manual" | "assisted" | "auto"; headless?: boolean; keepOpenSeconds?: number; verificationCode?: string }) => {
       const { workspace, application, job, packet, currentHash } = packetFor(args.applicationId);
       const mode = args.mode ?? "manual";
       const approval = latestApproval(workspace.db, application.id);
@@ -170,6 +177,7 @@ export function registerSubmissionTools(server: McpServer): void {
         // public form, so it is only done when a person is watching the window.
         allowAccountCreation: mode === "assisted",
         keepOpenMs: mode === "assisted" ? (args.keepOpenSeconds ?? 240) * 1000 : 0,
+        verificationCode: args.verificationCode,
       });
 
       if (result.status === "submitted") {
