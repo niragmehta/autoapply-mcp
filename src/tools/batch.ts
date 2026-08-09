@@ -119,6 +119,7 @@ export function registerBatchTools(server: McpServer): void {
         minCompensation: args.minCompensation,
         allowUnknownCompensation: args.allowUnknownCompensation ?? false,
         fx: workspace.campaign.compensation.fx,
+        maxPerCompany: workspace.campaign.submission.maxPerCompany,
         limit,
       });
 

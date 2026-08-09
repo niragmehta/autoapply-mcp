@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getWorkspace } from "../config/load.js";
 import { getApplication, saveApplication } from "../db/repositories/applications.js";
 import { appendEvent } from "../db/repositories/events.js";
-import { getEvaluation, getJob } from "../db/repositories/jobs.js";
+import { applicationCountsByCompany, getEvaluation, getJob } from "../db/repositories/jobs.js";
 import type { Application, DraftAnswer } from "../domain/job.js";
 import { unresolvedRequired, type FormQuestion } from "../drafting/answers.js";
 import { prepareApplicationFor } from "../drafting/prepare.js";
@@ -51,6 +51,17 @@ export function registerDraftingTools(server: McpServer): void {
         throw new AppError(
           "job_not_accepted",
           `job was ${evaluation.decision} (${evaluation.gate.rule ?? "score below threshold"}: ${evaluation.gate.reason}). Pass force=true to override deliberately.`,
+        );
+      }
+
+      // A ceiling only meant per batch would be bypassed by preparing one job
+      // at a time, which is the normal way this tool is used.
+      const cap = workspace.campaign.submission.maxPerCompany;
+      const held = applicationCountsByCompany(workspace.db).get(job.companyName.toLowerCase()) ?? 0;
+      if (held >= cap && args.force !== true) {
+        throw new AppError(
+          "company_cap_reached",
+          `${job.companyName} already has ${held} application${held === 1 ? "" : "s"}, at the campaign ceiling of ${cap} per company. Withdraw one, raise submission.maxPerCompany, or pass force=true to override deliberately.`,
         );
       }
 

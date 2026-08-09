@@ -81,6 +81,14 @@ export const SubmissionPolicySchema = z.object({
    * when a caller passes a larger explicit limit.
    */
   maxBatchSize: z.number().int().positive().default(3),
+  /**
+   * Hard ceiling on how many applications may exist for any one company.
+   * Several employers cap applications per candidate over a rolling window and
+   * reject the excess outright, so spreading across companies is worth more
+   * than depth at one. Counts every application that still occupies a slot;
+   * withdrawn and failed ones are not counted.
+   */
+  maxPerCompany: z.number().int().positive().default(3),
   minDelaySeconds: z.number().int().min(0).default(45),
   /** Question categories that always require a human decision. */
   blockedQuestionCategories: z.array(nonEmpty).default([

@@ -142,6 +142,50 @@ describe("queue", () => {
     expect(listQueue(db, { tiers: ["B"], trackId: "software" })).toHaveLength(1);
   });
 
+  it("caps how many roles one company may take", () => {
+    const jobs = ["a", "b", "c", "d"].map((suffix) =>
+      makeJob({ id: `job_${suffix}`, externalId: suffix, fingerprint: `fp_${suffix}` }),
+    );
+    const elsewhere = makeJob({
+      id: "job_other",
+      externalId: "e",
+      fingerprint: "fp_e",
+      companyName: "Other Co",
+    });
+    upsertJobs(db, [...jobs, elsewhere]);
+    for (const job of [...jobs, elsewhere]) saveEvaluation(db, evaluation(job.id));
+
+    const capped = listQueue(db, { maxPerCompany: 3 });
+    expect(capped.filter((item) => item.job.companyName === jobs[0].companyName)).toHaveLength(3);
+    // The cap is per company, so an unrelated employer is unaffected.
+    expect(capped.map((item) => item.job.id)).toContain("job_other");
+    expect(listQueue(db, {})).toHaveLength(5);
+  });
+
+  it("counts applications already on file against a company's ceiling", () => {
+    const jobs = ["a", "b", "c"].map((suffix) =>
+      makeJob({ id: `job_${suffix}`, externalId: suffix, fingerprint: `fp_${suffix}` }),
+    );
+    upsertJobs(db, jobs);
+    for (const job of jobs) saveEvaluation(db, evaluation(job.id));
+    saveApplication(db, application(jobs[0].id, { id: "app_held" }));
+
+    // One slot is spent, and that role is already excluded as applied to, so
+    // only one of the two remaining roles may be taken.
+    expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(1);
+  });
+
+  it("frees a slot when an application is withdrawn", () => {
+    const jobs = ["a", "b", "c"].map((suffix) =>
+      makeJob({ id: `job_${suffix}`, externalId: suffix, fingerprint: `fp_${suffix}` }),
+    );
+    upsertJobs(db, jobs);
+    for (const job of jobs) saveEvaluation(db, evaluation(job.id));
+    saveApplication(db, application(jobs[0].id, { id: "app_gone", status: "skipped" }));
+
+    expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(2);
+  });
+
   it("summarizes rejections and tiers", () => {
     const job = makeJob();
     upsertJobs(db, [job]);

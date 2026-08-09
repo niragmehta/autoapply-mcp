@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getWorkspace } from "../config/load.js";
 import {
@@ -124,10 +125,19 @@ export function registerSubmissionTools(server: McpServer): void {
           .describe(
             "The one-time code the board emailed after a previous attempt hit its verification gate. Each attempt emails a new code, so use the most recent one.",
           ),
+        waitForCodeSeconds: z
+          .number()
+          .int()
+          .min(0)
+          .max(1800)
+          .optional()
+          .describe(
+            "Hold the browser at a verification gate for this long while waiting for the code to be written to <artifacts>/<applicationId>.code. A code cannot be carried between runs, so this is the only way an automated submission clears the gate.",
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    handler(async (args: { applicationId: string; mode?: "manual" | "assisted" | "auto"; headless?: boolean; keepOpenSeconds?: number; verificationCode?: string }) => {
+    handler(async (args: { applicationId: string; mode?: "manual" | "assisted" | "auto"; headless?: boolean; keepOpenSeconds?: number; verificationCode?: string; waitForCodeSeconds?: number }) => {
       const { workspace, application, job, packet, currentHash } = packetFor(args.applicationId);
       const mode = args.mode ?? "manual";
       const approval = latestApproval(workspace.db, application.id);
@@ -178,6 +188,8 @@ export function registerSubmissionTools(server: McpServer): void {
         allowAccountCreation: mode === "assisted",
         keepOpenMs: mode === "assisted" ? (args.keepOpenSeconds ?? 240) * 1000 : 0,
         verificationCode: args.verificationCode,
+        codeWaitMs: (args.waitForCodeSeconds ?? 0) * 1000,
+        codeFilePath: join(workspace.paths.artifacts, `${application.id}.code`),
       });
 
       if (result.status === "submitted") {

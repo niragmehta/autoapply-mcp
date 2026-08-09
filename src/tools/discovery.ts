@@ -212,6 +212,7 @@ export function registerDiscoveryTools(server: McpServer): void {
         minCompensation: args.minCompensation,
         allowUnknownCompensation: args.allowUnknownCompensation ?? true,
         fx: workspace.campaign.compensation.fx,
+        maxPerCompany: workspace.campaign.submission.maxPerCompany,
         limit: args.limit ?? 25,
       });
 
