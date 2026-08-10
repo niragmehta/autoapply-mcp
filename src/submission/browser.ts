@@ -624,7 +624,10 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         const entered = await enterVerificationCode(page, code);
         if (entered) {
           await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-          const codeText = await waitForSubmissionOutcome(page);
+          const codeText = await waitForSubmissionOutcome(page, {
+            gateIsOutcome: false,
+            timeoutMs: VERIFIED_SUBMIT_TIMEOUT_MS,
+          });
           const codeShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
           if (detectSubmissionConfirmation(codeText, page.url())) {
             return {
@@ -641,14 +644,20 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           }
           // A code that is wrong, already used or expired is worth saying
           // plainly: the remedy is a fresh code, not another attempt at this
-          // one, and each attempt emails a new code.
+          // one, and each attempt emails a new code. A gate that reports no
+          // error at all usually means the code was never sent rather than
+          // refused, so the controls it offers are recorded to tell the two
+          // apart without burning another code on a guess.
           const codeErrors = await readValidationErrors(page);
           const stillGated = detectVerificationCodeGate(codeText);
+          const gate = codeErrors.length ? "" : await describeVerificationGate(page);
           return {
             status: "aborted",
             reason: `verification code was entered but the submission was not confirmed${
               codeErrors.length ? `; page reported: ${codeErrors.join(" | ")}` : ""
-            }${stillGated ? " The board is still asking for a code, so this one was refused and a new one has been emailed." : ""}`,
+            }${stillGated ? " The gate is still on screen after the wait, so the code was most likely refused and a new one has been emailed." : ""}${
+              gate ? ` Gate controls: ${gate}` : ""
+            }`,
             filledFields: filled,
             unmatchedRequired: [],
             unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -713,6 +722,10 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
  * is idle" is not the same as "the outcome is on screen".
  */
 const SUBMISSION_OUTCOME_TIMEOUT_MS = 30_000;
+// A code-verified submit is slower than an ordinary one: the board revalidates
+// the whole application behind the gate, and its button sits disabled with a
+// spinner the entire time.
+const VERIFIED_SUBMIT_TIMEOUT_MS = 120_000;
 const SUBMISSION_OUTCOME_POLL_MS = 1_000;
 
 /**
@@ -726,12 +739,23 @@ const SUBMISSION_OUTCOME_POLL_MS = 1_000;
  * Polling stops early on a confirmation, and also on a validation error, since
  * a form that is objecting to its own contents is not going to confirm.
  */
-async function waitForSubmissionOutcome(page: AnyPage): Promise<string> {
-  const deadline = Date.now() + SUBMISSION_OUTCOME_TIMEOUT_MS;
+/**
+ * The verification gate is an outcome the first time it appears - the board
+ * asked for a code, so there is nothing left to wait for. After a code has been
+ * sent it is the opposite: the gate stays on screen with its button spinning
+ * while the submission is in flight, so treating it as an outcome ends the wait
+ * before the board has answered and reports an accepted code as a refused one.
+ */
+export async function waitForSubmissionOutcome(
+  page: AnyPage,
+  options: { gateIsOutcome?: boolean; timeoutMs?: number } = {},
+): Promise<string> {
+  const gateIsOutcome = options.gateIsOutcome ?? true;
+  const deadline = Date.now() + (options.timeoutMs ?? SUBMISSION_OUTCOME_TIMEOUT_MS);
   let text = await readBodyText(page);
   while (Date.now() < deadline) {
     if (detectSubmissionConfirmation(text, page.url())) return text;
-    if (detectVerificationCodeGate(text)) return text;
+    if (gateIsOutcome && detectVerificationCodeGate(text)) return text;
     if ((await readValidationErrors(page)).length > 0) return text;
     await page.waitForTimeout(SUBMISSION_OUTCOME_POLL_MS);
     text = await readBodyText(page);
@@ -1100,7 +1124,70 @@ async function enterVerificationCode(page: AnyPage, code: string): Promise<boole
  * code. The search is scoped to the form owning the code boxes, and falls back
  * to pressing Enter in the code field itself.
  */
+const DESCRIBE_GATE = `(() => {
+  const boxes = Array.from(document.querySelectorAll('input[maxlength="1"]'));
+  if (boxes.length === 0) return 'no code boxes present';
+  const first = boxes[0];
+  const form = first.closest('form');
+  const scope = form || (first.parentElement && first.parentElement.parentElement) || document;
+  const controls = Array.from(scope.querySelectorAll('button, input[type=submit]')).slice(0, 6).map((node) => {
+    const text = (node.innerText || node.value || node.getAttribute('aria-label') || '').trim().slice(0, 30);
+    const type = node.getAttribute('type') || '-';
+    return node.tagName.toLowerCase() + '[type=' + type + ']' + (node.disabled ? '[disabled]' : '') + '"' + text + '"';
+  });
+  const values = boxes.map((el) => el.value || '_').join('');
+  return 'form=' + (form ? 'yes' : 'no') + ' boxes="' + values + '" controls=' + (controls.length ? controls.join(', ') : 'none');
+})()`;
+
+/**
+ * Describes the controls a persistent code gate offers, so a run that failed
+ * because nothing was clicked can be told apart from one that failed because
+ * the code was genuinely refused. Reading this costs nothing; guessing wrong
+ * costs another emailed code and another round trip to the candidate.
+ */
+async function describeVerificationGate(page: AnyPage): Promise<string> {
+  const described = await page.evaluate(DESCRIBE_GATE).catch(() => "");
+  return typeof described === "string" ? described : "";
+}
+
+/**
+ * Clicks the control that belongs to the code gate, identified by proximity to
+ * the code boxes rather than by type or wording. Greenhouse puts the boxes
+ * inside the whole application form and gives the gate an unlabelled
+ * `type=button` arrow, so neither a submit-type search nor a text search can
+ * find it, and a form-wide search finds "Remove file" instead.
+ *
+ * The scope widens one ancestor at a time and stops as soon as a container
+ * holds a small, unambiguous set of controls. A container crowded with buttons
+ * belongs to the form rather than the gate, so it is refused instead of clicked.
+ */
+const CLICK_CODE_SUBMIT = `(() => {
+  const boxes = Array.from(document.querySelectorAll('input[maxlength="1"]'));
+  if (boxes.length === 0) return 'no-boxes';
+  const last = boxes[boxes.length - 1];
+  let scope = last.parentElement;
+  while (scope && boxes.some((box) => !scope.contains(box))) scope = scope.parentElement;
+  if (!scope) return 'no-scope';
+  for (let depth = 0; depth < 4 && scope; depth += 1) {
+    const controls = Array.from(scope.querySelectorAll('button, input[type=submit]')).filter((node) => {
+      return !node.disabled && node.getClientRects().length > 0;
+    });
+    if (controls.length > 2) return 'ambiguous:' + controls.length;
+    if (controls.length > 0) {
+      const target = controls[controls.length - 1];
+      const label = (target.innerText || target.value || target.getAttribute('aria-label') || 'unlabelled').trim().slice(0, 30);
+      target.click();
+      return 'clicked:' + label;
+    }
+    scope = scope.parentElement;
+  }
+  return 'no-control';
+})()`;
+
 export async function submitVerificationCode(page: AnyPage, codeField: AnyLocator): Promise<boolean> {
+  const nearby = await page.evaluate(CLICK_CODE_SUBMIT).catch(() => "");
+  if (typeof nearby === "string" && nearby.startsWith("clicked:")) return true;
+
   for (const selector of VERIFICATION_SUBMIT_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count().catch(() => 0)) === 0) continue;
