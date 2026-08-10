@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { detectVerificationCodeGate, fillSegmentedCode, submitVerificationCode } from "../src/submission/browser.js";
+import {
+  detectVerificationCodeGate,
+  fillSegmentedCode,
+  submitVerificationCode,
+  waitForSubmissionOutcome,
+} from "../src/submission/browser.js";
 
 /**
  * Greenhouse renders the code as one box per character, so a single fill()
@@ -117,6 +122,7 @@ describe("submitting the code", () => {
     return {
       clicked,
       page: {
+        evaluate: async () => "no-control",
         locator: (selector: string) => {
           if (selector.startsWith("form:has(input[maxlength=")) return control("code-form-submit");
           if (selector === 'button[type="submit"]') return control("page-apply");
@@ -137,6 +143,7 @@ describe("submitting the code", () => {
   it("presses Enter in the code field when the gate has no button of its own", async () => {
     const clicked: string[] = [];
     const page = {
+      evaluate: async () => "no-control",
       locator: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
     };
     const box = {
@@ -147,5 +154,72 @@ describe("submitting the code", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(await submitVerificationCode(page as any, box as any)).toBe(true);
     expect(clicked).toEqual(["Enter"]);
+  });
+});
+describe("clicking the gate's own control", () => {
+  it("takes the control found beside the code boxes", async () => {
+    const page = {
+      evaluate: async () => "clicked:unlabelled",
+      locator: () => {
+        throw new Error("must not fall through to a page-wide search");
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(await submitVerificationCode(page as any, {} as any)).toBe(true);
+  });
+
+  it("falls through when the surrounding container is too crowded to be the gate", async () => {
+    const pressed: string[] = [];
+    const page = {
+      evaluate: async () => "ambiguous:7",
+      locator: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+    };
+    const box = {
+      press: async (key: string) => {
+        pressed.push(key);
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    expect(pressed).toEqual(["Enter"]);
+  });
+});
+describe("waiting for the outcome of a code-verified submit", () => {
+  function pollingPage(texts: string[]) {
+    let call = 0;
+    return {
+      url: () => "https://job-boards.greenhouse.io/acme/jobs/1",
+      waitForTimeout: async () => undefined,
+      locator: () => ({
+        all: async () => [],
+        first: () => ({
+          count: async () => 1,
+          isVisible: async () => false,
+          innerText: async () => texts[Math.min(call++, texts.length - 1)],
+        }),
+      }),
+      evaluate: async () => texts[Math.min(call, texts.length - 1)],
+    };
+  }
+
+  it("keeps waiting while the gate is still on screen after a code was sent", async () => {
+    const page = pollingPage([
+      "A verification code was sent to you. Security code",
+      "A verification code was sent to you. Security code",
+      "Thank you for applying to Acme.",
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const text = await waitForSubmissionOutcome(page as any, { gateIsOutcome: false });
+    expect(text).toContain("Thank you for applying");
+  });
+
+  it("still stops at the gate on the first submit, when the gate is the answer", async () => {
+    const page = pollingPage([
+      "A verification code was sent to you. Security code",
+      "Thank you for applying to Acme.",
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const text = await waitForSubmissionOutcome(page as any);
+    expect(text).toContain("verification code was sent");
   });
 });
