@@ -126,8 +126,7 @@ describe("draftAnswers", () => {
     expect(answers[0]?.requiresHuman).toBe(true);
   });
 
-  it("carries a suggestion and guidance on questions it hands back", () => {
-    const p = ProfileSchema.parse({
+  it("carries a suggestion and guidance on questions it hands back", () => {    const p = ProfileSchema.parse({
       ...profile,
       answers: [
         {
@@ -543,5 +542,39 @@ describe("Greenhouse demographic question shape", () => {
     const [parsed] = greenhouseQuestionsToForm(ordinary as never);
     expect(parsed?.key).toBe("question_1");
     expect(parsed?.declineOption).toBeUndefined();
+  });
+});
+
+describe("profile pattern bounds", () => {
+  // A pattern containing typographic quotes, rewritten 22 times by an editor
+  // that saved in the wrong encoding, reached 119 MB while remaining a valid
+  // non-empty string. Every path that reads the profile kept working, so the
+  // only symptom was the server exhausting its heap part-way through a
+  // submission run, because matching lowercases each pattern before comparing.
+  const answerWithPattern = (pattern: string) => ({
+    ...profile,
+    answers: [{ key: "tn-sponsorship", label: "Sponsorship", patterns: [pattern], answer: "Yes" }],
+  });
+
+  it("rejects a pattern too long to match any ATS question label", () => {
+    const corrupted = "commence (".concat("\u00C3\u0192\u00E2\u20AC\u0161".repeat(200), ") an immigration case");
+    expect(corrupted.length).toBeGreaterThan(500);
+    expect(() => ProfileSchema.parse(answerWithPattern(corrupted))).toThrowError(/question pattern longer than 500/);
+  });
+
+  it("names the offending field so the corruption can be found", () => {
+    const result = ProfileSchema.safeParse(answerWithPattern("x".repeat(501)));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["answers", 0, "patterns", 0]);
+    }
+  });
+
+  it("still accepts the real patterns this profile relies on", () => {
+    expect(() => ProfileSchema.parse(answerWithPattern('commence ("sponsor") an immigration case'))).not.toThrow();
+    expect(() =>
+      ProfileSchema.parse(answerWithPattern("commence (\u201Csponsor\u201D) an immigration case"),
+    )).not.toThrow();
+    expect(() => ProfileSchema.parse(answerWithPattern("a".repeat(500)))).not.toThrow();
   });
 });
