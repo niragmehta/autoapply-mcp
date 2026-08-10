@@ -299,10 +299,29 @@ export function answerValueForField(field: FieldDescriptor, answer: DraftAnswer)
   if (fieldLabel.includes("i agree") && /^(yes|true|1)$/i.test(answer.answer.trim())) {
     return "I agree";
   }
-  if (DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {
+  if (offersOptions(field) && DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {
     return "wish to answer";
   }
   return answer.answer;
+}
+
+/**
+ * "wish to answer" is a *search key* for finding a decline option in a list,
+ * not a value anyone would type. Harvey's Ashby form renders Pronouns as a
+ * plain text box, so returning the key unconditionally typed the literal words
+ * "wish to answer" into the field and reported it filled. Only controls that
+ * offer options can use a search key; a free-text box takes the answer as
+ * written.
+ */
+const OPTION_BEARING_TYPE = /^(?:select|select-one|select-multiple|radio|checkbox)$/;
+const OPTION_BEARING_ROLE = /^(?:combobox|listbox|radiogroup|menu)$/;
+
+function offersOptions(field: FieldDescriptor): boolean {
+  return (
+    OPTION_BEARING_TYPE.test(field.type) ||
+    field.optionLabel !== undefined ||
+    (field.role !== undefined && OPTION_BEARING_ROLE.test(field.role))
+  );
 }
 
 /**

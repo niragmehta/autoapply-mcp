@@ -112,13 +112,13 @@ describe("answerValueForField", () => {
   it("normalizes decline-to-identify wording for ATS option matching", () => {
     expect(
       answerValueForField(
-        field("Gender identity"),
+        field("Gender identity", { type: "select-one" }),
         answer("Gender identity", "Decline to self-identify"),
       ),
     ).toBe("wish to answer");
     expect(
       answerValueForField(
-        field("Disability status"),
+        field("Disability status", { type: "select-one" }),
         answer("Disability status", "I do not wish to answer"),
       ),
     ).toBe("wish to answer");
@@ -1484,5 +1484,21 @@ describe("whole-name questions", () => {
     );
     expect(matches[0]?.answer?.answer).toBe("Nirag");
     expect(matches[1]?.answer?.answer).toBe("Mehta");
+  });
+});
+describe("decline answers in free-text boxes", () => {
+  const decline = answer("Pronouns", "I prefer not to say");
+
+  it("types the answer as written into a plain text box", () => {
+    expect(answerValueForField(field("Pronouns"), decline)).toBe("I prefer not to say");
+    expect(answerValueForField(field("Pronouns", { type: "textarea" }), decline)).toBe("I prefer not to say");
+  });
+
+  it("still uses the decline search key for controls that offer options", () => {
+    expect(answerValueForField(field("Gender", { type: "select-one" }), decline)).toBe("wish to answer");
+    expect(answerValueForField(field("Gender", { type: "radio", optionLabel: "I do not wish to answer" }), decline)).toBe(
+      "wish to answer",
+    );
+    expect(answerValueForField(field("Gender", { type: "text", role: "combobox" }), decline)).toBe("wish to answer");
   });
 });
