@@ -300,7 +300,39 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   if (field.optionLabel && optionPolarityConflicts(field.optionLabel, answer.answer)) {
     return true;
   }
+  if (contactFieldRejectsValue(field, answer.answer)) {
+    return true;
+  }
   return field.type === "checkbox" && !field.optionLabel && !BOOLEAN_ANSWER.test(answer.answer.trim());
+}
+
+/**
+ * Ashby groups an SMS-consent radio pair under the same "Phone Number" legend
+ * as the phone input itself, so the consent sentence and the phone number are
+ * competing for a text box with identical labels. The sentence won, and Plaid
+ * received "No - I do not consent to receiving text messages" where its phone
+ * number should be while the real number went unused.
+ *
+ * A label cannot separate them, but the values are unmistakable: a phone box
+ * takes digits, an email box takes an address, a URL box takes a link. Judge by
+ * the shape of the value rather than by wording nothing distinguishes.
+ */
+const PHONE_FIELD = /\b(phone|mobile|cell)\b/;
+const EMAIL_FIELD = /\be-?mail\b/;
+
+function contactFieldRejectsValue(field: FieldDescriptor, value: string): boolean {
+  if (offersOptions(field) || field.optionLabel) return false;
+  if (field.type !== "text" && field.type !== "textarea") return false;
+  const label = normalizeLabel(field.label);
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  if (PHONE_FIELD.test(label)) {
+    return (trimmed.match(/\d/g) ?? []).length < 7;
+  }
+  if (EMAIL_FIELD.test(label)) {
+    return !trimmed.includes("@");
+  }
+  return false;
 }
 
 /** Pairs each detected form field with the best matching drafted answer. */
