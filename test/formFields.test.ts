@@ -293,6 +293,29 @@ describe("optionSearchCandidates", () => {
     ).toContain("wish to answer");
   });
 
+  it("recognizes a decline whose wording names the subject", () => {
+    // Ashby renders the veteran decline as "I decline to self-identify for
+    // protected veteran status". Matched exactly, that is not a decline, and
+    // the field falls through to an option that answers the question.
+    const candidates = optionSearchCandidates(
+      field("Veteran Status", { role: "radio" }),
+      answer("VeteranStatus", "I decline to self-identify for protected veteran status", {
+        category: "demographic",
+      }),
+    );
+    expect(
+      pickOptionIndex(
+        [
+          "I identify as one or more of the classifications of protected veteran listed above",
+          "I am not a protected veteran",
+          "I decline to self-identify for protected veteran status",
+        ],
+        candidates,
+      ),
+    ).toBe(2);
+    expect(pickOptionIndex(["Yes", "No"], candidates)).toBe(-1);
+  });
+
   it("falls back to the locality when a full location string finds nothing", () => {
     const candidates = optionSearchCandidates(
       field("Location (City)*", { role: "combobox" }),
