@@ -123,5 +123,16 @@
       "allowAutoFill": false,
       "note": "Never auto-filled: anchoring on a number too early is costly."
     }
+  ],
+  "narratives": [
+    {
+      "key": "why-company",
+      "label": "Why this company?",
+      "patterns": ["why {company}", "why do you want to work", "why are you interested", "what interests you about", "cover letter", "what excites you about this role"],
+      "template": "I have spent the last {years} years building {your domain}, most recently {one clause naming a real project}. {company}'s work on {topics} lines up closely with the problems I have been solving, and {role} is where I would want to apply that depth.",
+      "allowAutoFill": true,
+      "minTopics": 1,
+      "note": "Braced placeholders are filled from the posting. Renders only when the posting yields at least one matched topic; otherwise the question is handed back to you rather than answered with boilerplate."
+    }
   ]
 }

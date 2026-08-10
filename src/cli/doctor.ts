@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import { readFileSync, existsSync } from "node:fs";
 import { loadCampaign, loadCompanies, loadProfile } from "../config/load.js";
 import { resolvePaths } from "../config/paths.js";
+import { findStrayKeys, locateInSchema } from "../config/strayKeys.js";
+import { CampaignSchema } from "../domain/campaign.js";
+import { ProfileSchema } from "../domain/profile.js";
 import { adapterFor } from "../sources/registry.js";
 import { probeJson } from "../sources/http.js";
 import { validateResumeFile } from "../submission/resume.js";
@@ -17,6 +21,26 @@ type Check = { name: string; ok: boolean; detail: string };
 
 function print(check: Check): void {
   console.log(`${check.ok ? "PASS" : "FAIL"}  ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
+}
+
+/**
+ * Reports settings the schema will discard. Zod strips unknown keys without
+ * complaint, so a setting written one level too high reads as configured and
+ * behaves as absent; naming the correct location turns that into a one-line fix.
+ */
+function reportStrayKeys(label: string, path: string, schema: Parameters<typeof findStrayKeys>[0]): string[] {
+  if (!existsSync(path)) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    // Invalid JSON is already reported by the load check above.
+    return [];
+  }
+  return findStrayKeys(schema, parsed).map((key) => {
+    const home = locateInSchema(schema, key.split(".").pop() ?? key);
+    return home ? `${label}: "${key}" is ignored; it belongs at "${home}"` : `${label}: "${key}" is not a known setting and is ignored`;
+  });
 }
 
 async function main(): Promise<void> {
@@ -74,6 +98,15 @@ async function main(): Promise<void> {
   }
 
   checks.forEach(print);
+
+  const strays = [
+    ...reportStrayKeys("profile.json", paths.profile, ProfileSchema),
+    ...reportStrayKeys("campaign.json", paths.campaign, CampaignSchema),
+  ];
+  if (strays.length > 0) {
+    console.log("");
+    for (const stray of strays) console.log(`WARN  ${stray}`);
+  }
 
   if (companies && companies.length > 0 && process.argv.includes("--probe")) {
     console.log("\nProbing configured boards...\n");

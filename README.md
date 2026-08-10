@@ -45,6 +45,14 @@ npm test
 Personal data lives outside the repository, so a checkout can be published as-is. The default home is `~/.autoapply`:
 
 ```bash
+npm run init
+```
+
+`init` creates `~/.autoapply` from the shipped examples, adds `resumes/`, `data/` and `artifacts/`, and prints the editing order. It never overwrites a file that already exists, so it is safe to re-run.
+
+To do it by hand instead:
+
+```bash
 mkdir -p ~/.autoapply
 cp examples/profile.example.json   ~/.autoapply/profile.json
 cp examples/campaign.example.json  ~/.autoapply/campaign.json
@@ -57,11 +65,19 @@ Then edit them and verify:
 node dist/cli/doctor.js --probe
 ```
 
-`doctor` validates all three files, checks that your resume files exist and are real PDFs, confirms every track points at a resume variant, and probes each configured board.
+`doctor` validates all three files, checks that your resume files exist and are real PDFs, confirms every track points at a resume variant, warns about settings written in the wrong place, and probes each configured board.
+
+Unknown keys are stripped silently by the schema, so a setting written one level too high reads as configured and behaves as absent. `doctor` reports these as `WARN` and names where the setting belongs:
+
+```
+WARN  campaign.json: "maxBatchSize" is ignored; it belongs at "submission.maxBatchSize"
+```
 
 `presets/ai-security-us-canada.json` ships 80 company boards that were verified live against the ATS APIs, weighted toward AI, security and infrastructure companies in the US and Canada.
 
 Nothing in this repository is specific to one candidate. Keep `profile.json`, resumes and the database in `~/.autoapply` and they can never be committed by accident.
+
+A fresh install cannot contact an employer: `submission.mode` is `manual`, and `submission.allowedCompanies` is empty, which blocks every company until you add it by name.
 
 ### Environment variables
 
