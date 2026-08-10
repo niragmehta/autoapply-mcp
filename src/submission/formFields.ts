@@ -1041,19 +1041,28 @@ export function orderFieldsForBrowser(matches: readonly FieldMatch[]): FieldMatc
 }
 
 /**
- * Radios arrive one descriptor per option. Reduce each group to the single
- * option that states the approved answer, and report an unfilled required group
- * once rather than once per option.
+ * Radios arrive one descriptor per option, and grouped checkboxes do too. Reduce
+ * each group to the single option that states the approved answer, and report an
+ * unfilled required group once rather than once per option.
+ *
+ * Checkboxes have to be collapsed for a stronger reason than tidiness. Nothing
+ * stops several options in one "select all that apply" group from each matching
+ * the same answer on their shared question label, and every one of them was then
+ * ticked: a demographic survey came back claiming every ethnicity and every
+ * orientation at once, alongside both "None of the above" and "I prefer not to
+ * answer". A single stored answer names a single option, so exactly one is
+ * selected - over-ticking a group states things about the candidate that are not
+ * true.
  */
-function collapseRadioGroups(
+function collapseOptionGroups(
   matches: readonly FieldMatch[],
   answers: readonly DraftAnswer[],
 ): FieldMatch[] {
   const groups = new Map<string, FieldMatch[]>();
   const out: FieldMatch[] = [];
   for (const match of matches) {
-    const key = match.field.name;
-    if (match.field.type !== "radio" || !match.field.optionLabel || key.length === 0) {
+    const key = groupIdentity(match.field);
+    if (!key) {
       out.push(match);
       continue;
     }
@@ -1100,9 +1109,22 @@ function collapseRadioGroups(
   return out;
 }
 
+/**
+ * Identifies the option group a control belongs to, or nothing when it stands
+ * alone. Radios are grouped by their shared `name`, which the browser already
+ * enforces; checkboxes have independent names, so they are grouped by the
+ * structural `groupKey` derived from the surrounding question.
+ */
+function groupIdentity(field: FieldDescriptor): string | undefined {
+  if (!field.optionLabel) return undefined;
+  if (field.type === "radio") return field.name.length > 0 ? `radio:${field.name}` : undefined;
+  if (field.type === "checkbox") return field.groupKey ? `checkbox:${field.groupKey}` : undefined;
+  return undefined;
+}
+
 /** Builds a plan and reports required fields that nothing can safely fill. */
 export function buildFillPlan(fields: readonly FieldDescriptor[], answers: readonly DraftAnswer[]): FillPlan {
-  const matches = collapseRadioGroups(matchFields(fields, answers), answers);
+  const matches = collapseOptionGroups(matchFields(fields, answers), answers);
   const used = new Set(
     matches.filter((match) => match.answer !== null).map((match) => match.answer!.questionKey),
   );
