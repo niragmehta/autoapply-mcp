@@ -1544,3 +1544,54 @@ describe("greenhouse education blocks", () => {
     expect(year?.label).toBe("End date year*");
   });
 });
+describe("questions about where the candidate is right now", () => {
+  const harveyLabel =
+    "Are you currently based in the listed location and able to work in person 3 days per week?";
+  const options = [
+    "Yes, I'm based in this location and able to work from the office 3 days per week",
+    "No, I'm not based in this location but willing to relocate",
+    "No, I'm only able to work remotely",
+    "Other (optional context)",
+  ];
+
+  function radios(label: string) {
+    return options.map((optionLabel, index) =>
+      field(label, { type: "radio", optionLabel, selectorIndex: index }),
+    );
+  }
+
+  it("refuses a willing-to-commute answer on the residence half of a compound question", () => {
+    const hybrid = answer("Able to work in person 3 days per week", "Yes");
+    const matches = matchFields(radios(harveyLabel), [hybrid]);
+    expect(matches.filter((match) => match.answer)).toEqual([]);
+  });
+
+  it("still lets a willing-to-commute answer fill a question that only asks about commuting", () => {
+    const hybrid = answer("Able to work in person 3 days per week", "Yes");
+    const commute = [
+      field("Are you able to work in person 3 days per week?", { type: "radio", optionLabel: "Yes", selectorIndex: 0 }),
+      field("Are you able to work in person 3 days per week?", { type: "radio", optionLabel: "No", selectorIndex: 1 }),
+    ];
+    const chosen = matchFields(commute, [hybrid]).find((match) => match.answer);
+    expect(chosen?.field.optionLabel).toBe("Yes");
+  });
+
+  it("answers the compound question from the stored residence fact", () => {
+    const based = answer(
+      "Currently based in the role's location",
+      "No - based in Vancouver, Canada and willing to relocate.",
+    );
+    const chosen = matchFields(radios(harveyLabel), [based]).find((match) => match.answer);
+    expect(chosen?.field.optionLabel).toBe("No, I'm not based in this location but willing to relocate");
+  });
+
+  it("keeps the residence fact when a relocation-willingness answer competes for it", () => {
+    const based = answer(
+      "Currently based in the role's location",
+      "No - based in Vancouver, Canada and willing to relocate.",
+    );
+    const relocation = answer("Open to relocation", "Yes");
+    const chosen = matchFields(radios(harveyLabel), [relocation, based]).find((match) => match.answer);
+    expect(chosen?.field.optionLabel).toBe("No, I'm not based in this location but willing to relocate");
+  });
+});
