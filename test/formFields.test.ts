@@ -1618,3 +1618,31 @@ describe("choosing between options that all match", () => {
     expect(sponsorship[index]).toBe("Yes, no restriction.");
   });
 });
+describe("contact fields judged by the shape of the value", () => {
+  it("does not write an SMS consent sentence into the phone box", () => {
+    const matches = matchFields(
+      [field("Phone Number", { type: "text", selectorIndex: 0 })],
+      [
+        answer("Phone Number", "No - I do not consent to receiving text messages"),
+        answer("Phone", "604-653-6919"),
+      ],
+    );
+    expect(matches[0]?.answer?.answer).toBe("604-653-6919");
+  });
+
+  it("still accepts a phone number written in any punctuation", () => {
+    const matches = matchFields(
+      [field("Mobile phone", { type: "text", selectorIndex: 0 })],
+      [answer("Phone", "+1 (604) 653 6919")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("+1 (604) 653 6919");
+  });
+
+  it("does not write a sentence into an email box", () => {
+    const matches = matchFields(
+      [field("Email", { type: "text", selectorIndex: 0 })],
+      [answer("Email preference", "I do not wish to be emailed")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+});
