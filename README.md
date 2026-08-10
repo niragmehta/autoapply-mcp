@@ -73,7 +73,9 @@ Unknown keys are stripped silently by the schema, so a setting written one level
 WARN  campaign.json: "maxBatchSize" is ignored; it belongs at "submission.maxBatchSize"
 ```
 
-`presets/ai-security-us-canada.json` ships 80 company boards that were verified live against the ATS APIs, weighted toward AI, security and infrastructure companies in the US and Canada.
+`presets/ai-security-us-canada.json` ships 135 company boards that were verified live against the ATS APIs, weighted toward AI, security and infrastructure companies in the US and Canada, alongside large-cap technology employers.
+
+Seven of those are Workday boards. Workday is fully supported for discovery, but applying to one means creating an account on that employer's tenant and walking a multi-step wizard, so expect those to need more hand-holding than a Greenhouse or Ashby posting.
 
 Nothing in this repository is specific to one candidate. Keep `profile.json`, resumes and the database in `~/.autoapply` and they can never be committed by accident.
 

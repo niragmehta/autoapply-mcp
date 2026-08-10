@@ -30,12 +30,34 @@
       ]
     },
     {
+      "name": "Adobe",
+      "ats": "workday",
+      "board": "adobe/wd5/external_experienced",
+      "tier": "B",
+      "tags": [
+        "cloud",
+        "security",
+        "bay-area"
+      ],
+      "query": "security"
+    },
+    {
       "name": "Affirm",
       "ats": "greenhouse",
       "board": "affirm",
       "tier": "B",
       "tags": [
         "fintech"
+      ]
+    },
+    {
+      "name": "Airbnb",
+      "ats": "greenhouse",
+      "board": "airbnb",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
       ]
     },
     {
@@ -93,12 +115,49 @@
       ]
     },
     {
+      "name": "Aptura AI",
+      "ats": "ashby",
+      "board": "aptura",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Asana",
+      "ats": "greenhouse",
+      "board": "asana",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "Atom Computing",
+      "ats": "lever",
+      "board": "atomcomputing",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Baseten",
       "ats": "ashby",
       "board": "baseten",
       "tier": "B",
       "tags": [
         "ai"
+      ]
+    },
+    {
+      "name": "Baton",
+      "ats": "greenhouse",
+      "board": "baton",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -111,12 +170,49 @@
       ]
     },
     {
+      "name": "Block",
+      "ats": "greenhouse",
+      "board": "block",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
       "name": "Brex",
       "ats": "greenhouse",
       "board": "brex",
       "tier": "B",
       "tags": [
         "fintech"
+      ]
+    },
+    {
+      "name": "Brightcore Energy",
+      "ats": "greenhouse",
+      "board": "brightcoreenergy",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Canopy",
+      "ats": "greenhouse",
+      "board": "canopyworks",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Category Labs",
+      "ats": "ashby",
+      "board": "category-labs",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -127,6 +223,35 @@
       "tags": [
         "security"
       ]
+    },
+    {
+      "name": "Charge Robotics",
+      "ats": "ashby",
+      "board": "charge-robotics",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Checkly",
+      "ats": "ashby",
+      "board": "checkly",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Cisco",
+      "ats": "workday",
+      "board": "cisco/wd5/Cisco_Careers",
+      "tier": "B",
+      "tags": [
+        "security",
+        "platform"
+      ],
+      "query": "security engineer"
     },
     {
       "name": "Cloudflare",
@@ -162,6 +287,15 @@
       "tier": "A",
       "tags": [
         "crypto"
+      ]
+    },
+    {
+      "name": "Confido",
+      "ats": "ashby",
+      "board": "confido",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -202,6 +336,15 @@
       ]
     },
     {
+      "name": "Deepsetai",
+      "ats": "ashby",
+      "board": "deepsetai",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Descope",
       "ats": "greenhouse",
       "board": "descope",
@@ -239,6 +382,15 @@
       ]
     },
     {
+      "name": "DoubleVerify",
+      "ats": "greenhouse",
+      "board": "doubleverify",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Dragos",
       "ats": "greenhouse",
       "board": "dragos",
@@ -257,12 +409,61 @@
       ]
     },
     {
+      "name": "Dropbox",
+      "ats": "greenhouse",
+      "board": "dropbox",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "DuckDuckGo",
+      "ats": "ashby",
+      "board": "duck-duck-go",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "eBay",
+      "ats": "workday",
+      "board": "ebay/wd5/apply",
+      "tier": "B",
+      "tags": [
+        "cloud",
+        "security",
+        "bay-area"
+      ],
+      "query": "security"
+    },
+    {
+      "name": "Eleos Technologies",
+      "ats": "lever",
+      "board": "eleostech",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "ElevenLabs",
       "ats": "ashby",
       "board": "elevenlabs",
       "tier": "B",
       "tags": [
         "ai"
+      ]
+    },
+    {
+      "name": "Everis",
+      "ats": "ashby",
+      "board": "everis",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -299,6 +500,24 @@
       "tier": "B",
       "tags": [
         "ai"
+      ]
+    },
+    {
+      "name": "Forus",
+      "ats": "ashby",
+      "board": "forus",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Gauss Labs",
+      "ats": "lever",
+      "board": "gausslabs",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -347,12 +566,39 @@
       ]
     },
     {
+      "name": "IonQ",
+      "ats": "greenhouse",
+      "board": "ionq",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Jane Software",
       "ats": "ashby",
       "board": "jane",
       "tier": "B",
       "tags": [
         "canada"
+      ]
+    },
+    {
+      "name": "Kinelo",
+      "ats": "greenhouse",
+      "board": "kinelo",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Lago",
+      "ats": "ashby",
+      "board": "lago",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -374,12 +620,50 @@
       ]
     },
     {
+      "name": "LinkedIn",
+      "ats": "greenhouse",
+      "board": "linkedin",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "LiveKit",
+      "ats": "ashby",
+      "board": "livekit",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Luma AI",
       "ats": "ashby",
       "board": "lumaai",
       "tier": "B",
       "tags": [
         "ai"
+      ]
+    },
+    {
+      "name": "Lyft",
+      "ats": "greenhouse",
+      "board": "lyft",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "Maincode",
+      "ats": "ashby",
+      "board": "maincode",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -392,6 +676,15 @@
       ]
     },
     {
+      "name": "Middesk",
+      "ats": "ashby",
+      "board": "middesk",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Modal",
       "ats": "ashby",
       "board": "modal",
@@ -401,12 +694,42 @@
       ]
     },
     {
+      "name": "Nango",
+      "ats": "ashby",
+      "board": "nango",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Netflix",
+      "ats": "workday",
+      "board": "netflix/wd108/Netflix",
+      "tier": "A",
+      "tags": [
+        "faang",
+        "platform",
+        "security"
+      ],
+      "query": "security"
+    },
+    {
       "name": "Netskope",
       "ats": "greenhouse",
       "board": "netskope",
       "tier": "B",
       "tags": [
         "security"
+      ]
+    },
+    {
+      "name": "Norm Ai",
+      "ats": "ashby",
+      "board": "norm-ai",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -419,6 +742,18 @@
       ]
     },
     {
+      "name": "NVIDIA",
+      "ats": "workday",
+      "board": "nvidia/wd5/NVIDIAExternalCareerSite",
+      "tier": "A",
+      "tags": [
+        "ai",
+        "security",
+        "bay-area"
+      ],
+      "query": "security"
+    },
+    {
       "name": "Okta",
       "ats": "greenhouse",
       "board": "okta",
@@ -426,6 +761,24 @@
       "tags": [
         "security",
         "identity"
+      ]
+    },
+    {
+      "name": "OneCrew",
+      "ats": "ashby",
+      "board": "onecrew",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Oneleet",
+      "ats": "ashby",
+      "board": "oneleet",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -447,6 +800,15 @@
       ]
     },
     {
+      "name": "Oscilar",
+      "ats": "ashby",
+      "board": "oscilar",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Oso",
       "ats": "ashby",
       "board": "oso",
@@ -454,6 +816,34 @@
       "tags": [
         "security",
         "authorization"
+      ]
+    },
+    {
+      "name": "Palantir",
+      "ats": "lever",
+      "board": "palantir",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "Pear Vc",
+      "ats": "ashby",
+      "board": "pear-vc",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "PermitFlow",
+      "ats": "ashby",
+      "board": "permitflow",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -485,12 +875,58 @@
       ]
     },
     {
+      "name": "Pinterest",
+      "ats": "greenhouse",
+      "board": "pinterest",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
       "name": "Plaid",
       "ats": "ashby",
       "board": "plaid",
       "tier": "B",
       "tags": [
         "fintech"
+      ]
+    },
+    {
+      "name": "Prior Labs",
+      "ats": "ashby",
+      "board": "prior-labs",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Proxima Fusion",
+      "ats": "ashby",
+      "board": "proxima-fusion",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Radical Numerics",
+      "ats": "ashby",
+      "board": "radical-numerics",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Railway",
+      "ats": "ashby",
+      "board": "railway",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -530,6 +966,16 @@
       ]
     },
     {
+      "name": "Roblox",
+      "ats": "greenhouse",
+      "board": "roblox",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
       "name": "Runway",
       "ats": "ashby",
       "board": "runway",
@@ -537,6 +983,18 @@
       "tags": [
         "ai"
       ]
+    },
+    {
+      "name": "Salesforce",
+      "ats": "workday",
+      "board": "salesforce/wd12/External_Career_Site",
+      "tier": "B",
+      "tags": [
+        "cloud",
+        "security",
+        "bay-area"
+      ],
+      "query": "security"
     },
     {
       "name": "Samsara",
@@ -563,6 +1021,15 @@
       "tier": "B",
       "tags": [
         "security"
+      ]
+    },
+    {
+      "name": "SentiLink",
+      "ats": "ashby",
+      "board": "sentilink",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
       ]
     },
     {
@@ -667,6 +1134,44 @@
       ]
     },
     {
+      "name": "Tonic AI",
+      "ats": "ashby",
+      "board": "tonicai",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Turquoise Health",
+      "ats": "ashby",
+      "board": "turquoise-health",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
+      "name": "Twilio",
+      "ats": "greenhouse",
+      "board": "twilio",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
+      "name": "Twitch",
+      "ats": "greenhouse",
+      "board": "twitch",
+      "tier": "A",
+      "tags": [
+        "faang-adjacent",
+        "bay-area"
+      ]
+    },
+    {
       "name": "Vanta",
       "ats": "ashby",
       "board": "vanta",
@@ -695,6 +1200,15 @@
       ]
     },
     {
+      "name": "Voltai",
+      "ats": "ashby",
+      "board": "voltai.careers",
+      "tier": "C",
+      "tags": [
+        "hacker-news"
+      ]
+    },
+    {
       "name": "Wealthsimple",
       "ats": "ashby",
       "board": "wealthsimple",
@@ -713,6 +1227,18 @@
         "security",
         "cloud"
       ]
+    },
+    {
+      "name": "Workday",
+      "ats": "workday",
+      "board": "workday/wd5/Workday",
+      "tier": "B",
+      "tags": [
+        "cloud",
+        "security",
+        "bay-area"
+      ],
+      "query": "security"
     },
     {
       "name": "WorkOS",

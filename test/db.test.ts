@@ -71,6 +71,27 @@ function application(jobId: string, overrides: Partial<Application> = {}): Appli
 }
 
 describe("jobs repository", () => {
+  it("refreshes the company name, tier and fingerprint when companies.json changes", () => {
+    // A company renamed in companies.json keeps the same job id, because the id
+    // is derived from the board slug rather than the name. Before this, the
+    // stored row kept the old name forever: the queue displayed a name the
+    // config no longer used, and role-level dedupe compared the stale
+    // fingerprint against the freshly computed one, so the same role showed up
+    // as two. The real case was a board recorded as "Oscilar.com".
+    const job = makeJob({ companyName: "Oscilar.com", companyTier: "B", fingerprint: "fp-old" });
+    upsertJobs(db, [job]);
+
+    upsertJobs(db, [{ ...job, companyName: "Oscilar", companyTier: "A", fingerprint: "fp-new" }]);
+
+    const stored = getJob(db, job.id);
+    expect({ name: stored?.companyName, tier: stored?.companyTier, fingerprint: stored?.fingerprint }).toEqual({
+      name: "Oscilar",
+      tier: "A",
+      fingerprint: "fp-new",
+    });
+    expect(countJobs(db)).toBe(1);
+  });
+
   it("inserts new jobs and updates existing ones", () => {
     const job = makeJob();
     expect(upsertJobs(db, [job])).toEqual({ inserted: 1, updated: 0 });

@@ -75,6 +75,40 @@ describe("shipped example configuration", () => {
     expect(result.success ? [] : result.error.issues.map((issue) => issue.path.join("."))).toEqual([]);
   });
 
+  it("names every preset company exactly once, in a form a human would write", () => {
+    // Company name is an identity, not a label: `upsertCompany` matches on it
+    // case-insensitively and the per-company submission cap is keyed by it. Two
+    // spellings of one employer therefore become two boards with two ceilings.
+    // The preset shipped `Oscilar.com` and `LAGO -` until this test existed.
+    const companies = CompanyListSchema.parse(readExample("presets/ai-security-us-canada.json")).companies;
+    const names = companies.map((company) => company.name);
+
+    const duplicated = names.filter(
+      (name, index) => names.findIndex((other) => other.toLowerCase() === name.toLowerCase()) !== index,
+    );
+    expect(duplicated).toEqual([]);
+    // A trailing separator or a bare domain is a name that was pasted rather
+    // than written: `Oscilar.com` and `LAGO -` both shipped that way.
+    expect(names.filter((name) => name !== name.trim())).toEqual([]);
+    expect(names.filter((name) => /[-.,/]$/.test(name))).toEqual([]);
+    expect(names.filter((name) => /\.(com|io|ai|co|dev|net|org)$/i.test(name))).toEqual([]);
+  });
+
+  it("points every preset board at an ATS the source layer can fetch", () => {
+    const companies = CompanyListSchema.parse(readExample("presets/ai-security-us-canada.json")).companies;
+
+    for (const company of companies) {
+      expect(company.board.startsWith("http")).toBe(false);
+      // Workday boards are a `tenant/datacenter/site` triple; every other ATS
+      // takes a bare slug, so a slash there means someone pasted a URL fragment.
+      const expectedSlashes = company.ats === "workday" ? 2 : 0;
+      expect({ name: company.name, slashes: company.board.split("/").length - 1 }).toEqual({
+        name: company.name,
+        slashes: expectedSlashes,
+      });
+    }
+  });
+
   it("carries no keys the schema would silently discard", () => {
     expect(findStrayKeys(ProfileSchema, readExample("examples/profile.example.json"))).toEqual([]);
     expect(findStrayKeys(CampaignSchema, readExample("examples/campaign.example.json"))).toEqual([]);
