@@ -69,6 +69,13 @@ function semanticSimilarity(field: FieldDescriptor, answer: DraftAnswer): number
   const fieldLabel = normalizeLabel(field.label);
   const answerLabel = normalizeLabel(answer.label);
   if (fieldLabel === "country" && answerLabel.includes("location")) return 0.7;
+  // "Legal First and Last Name" asks for the whole name, but shares only the
+  // word "name" with the stored "Full Name" answer, so token overlap scores it
+  // ~0.2 and the required field would be left blank once name fragments are
+  // ruled out. Pair whole-name questions with the whole-name answer directly.
+  if (BARE_NAME_FIELD.test(fieldLabel) && /^(?:your |applicant |candidate )?(?:full |legal )?name$/.test(answerLabel)) {
+    return 0.95;
+  }
   if (
     fieldLabel.includes("legally") &&
     fieldLabel.includes("work") &&
@@ -114,7 +121,8 @@ const SELF_ID_CHARACTERISTICS: ReadonlyArray<{ field: RegExp; answer: RegExp }> 
 
 const MIN_CONFIDENCE = 0.6;
 
-const BARE_NAME_FIELD = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
+const BARE_NAME_FIELD =
+  /^(?:your |applicant |candidate )?(?:full |legal )?name$|\bfirst\s+(?:and\s+|&\s*|\/\s*)?(?:middle\s+(?:and\s+)?)?last\s+name\b/;const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
 const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge|i understand|understand|understood|i confirm|confirm|i accept|accept)\b/i;
 
 /**
