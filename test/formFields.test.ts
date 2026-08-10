@@ -5,6 +5,7 @@ import {
   augmentAnswersForBrowser,
   detectCaptcha,
   detectSubmissionConfirmation,
+  educationDateLabels,
   fallbackAnswersForFields,
   looksLikeApplicationForm,
   matchFields,
@@ -1500,5 +1501,46 @@ describe("decline answers in free-text boxes", () => {
       "wish to answer",
     );
     expect(answerValueForField(field("Gender", { type: "text", role: "combobox" }), decline)).toBe("wish to answer");
+  });
+});
+describe("greenhouse education blocks", () => {
+  const eduFields = [
+    field("School*", { selectorIndex: 0, domId: "school--0", required: true }),
+    field("End date year*", { selectorIndex: 1, domId: "end-year--0", required: true, type: "number" }),
+  ];
+
+  it("recognises the graduation year behind an ambiguous label", () => {
+    const labels = educationDateLabels(eduFields);
+    expect(labels.get(1)).toBe("Graduation year");
+  });
+
+  it("leaves an employment end date alone", () => {
+    const labels = educationDateLabels([
+      field("Company*", { selectorIndex: 0, domId: "company--0" }),
+      field("End date year*", { selectorIndex: 1, domId: "end-year--0" }),
+    ]);
+    expect(labels.size).toBe(0);
+  });
+
+  it("declines when one index carries both a school and a company", () => {
+    const labels = educationDateLabels([
+      field("School*", { selectorIndex: 0, domId: "school--0" }),
+      field("Company*", { selectorIndex: 1, domId: "company--0" }),
+      field("End date year*", { selectorIndex: 2, domId: "end-year--0" }),
+    ]);
+    expect(labels.size).toBe(0);
+  });
+
+  it("asks the resolver for the graduation year, and binds it to the live label", () => {
+    const asked: string[] = [];
+    const derived = fallbackAnswersForFields(eduFields, [], [], (label) => {
+      asked.push(label);
+      if (!/graduation/i.test(label)) return null;
+      return { answer: "2020", authorized: true, citation: "education[0].end", category: "education" };
+    });
+    expect(asked).toContain("Graduation year");
+    const year = derived.find((entry) => entry.citation === "education[0].end");
+    expect(year?.answer).toBe("2020");
+    expect(year?.label).toBe("End date year*");
   });
 });

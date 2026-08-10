@@ -319,6 +319,7 @@ export const COLLECT_FIELDS = `(() => {
       groupKey: container ? (group || undefined) : undefined,
       type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
       name,
+      domId: el.id || undefined,
       required:
         el.hasAttribute('required') ||
         el.getAttribute('aria-required') === 'true' ||
