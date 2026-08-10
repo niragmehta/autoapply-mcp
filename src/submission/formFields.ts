@@ -144,6 +144,19 @@ export function isAffirmativeAnswer(value: string): boolean {
   return AFFIRMATIVE_ANSWER.test(value.trim());
 }
 const RESIDENCE_QUESTION = /\b(located|located in|reside|residing|live|living|based)\b/;
+/**
+ * A question about where the candidate is *right now* is a claim of fact, not a
+ * statement of willingness. Boards routinely ask it as a compound - "are you
+ * currently based in the listed location and able to work in person 3 days per
+ * week?" - and the second clause matched a willing-to-commute answer of "Yes",
+ * which answered the residence half with the opposite of the truth. Only an
+ * answer that is itself about where the candidate lives may fill one of these.
+ */
+const CURRENT_RESIDENCE_QUESTION =
+  /\b(currently based|currently located|currently live|currently reside|currently residing|are you based|are you located|do you live|do you reside)\b/;
+// Willingness to relocate is deliberately absent: "Open to relocation" is a
+// statement about the future and says nothing about where the candidate is now.
+const RESIDENCE_ANSWER = /\b(based|located|reside|residing|lives?|living)\b/;
 const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
 const SELF_ID_QUESTION = /\b(disabilit|chronic condition|gender identity|racial|race ethnicity|ethnic background|veteran|protected veteran|sexual orientation|transgender|pronoun)/;
 const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic|hispanic|latino|veteran|military|sexual orientation|transgender|pronoun|self identif|decline|prefer not)/;
@@ -268,6 +281,23 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     !RESIDENCE_QUESTION.test(answerLabel) &&
     WORK_AUTHORITY_TEXT.test(answerLabel)
   ) {
+    return true;
+  }
+  // Only choice questions: "Where are you based?" as a text field wants the
+  // city itself, and the city answer is not phrased as a residence claim.
+  if (
+    offersOptions(field) &&
+    CURRENT_RESIDENCE_QUESTION.test(fieldLabel) &&
+    !WORK_AUTHORITY_TEXT.test(fieldLabel) &&
+    !RESIDENCE_ANSWER.test(answerLabel)
+  ) {
+    return true;
+  }
+  // A radio or checkbox option is scored as its own field, so the polarity
+  // guard that protects a list of options has no list to work on here. An
+  // option stating the opposite of the answer can never be the right control,
+  // however closely its wording matches.
+  if (field.optionLabel && optionPolarityConflicts(field.optionLabel, answer.answer)) {
     return true;
   }
   return field.type === "checkbox" && !field.optionLabel && !BOOLEAN_ANSWER.test(answer.answer.trim());
@@ -547,23 +577,31 @@ export function optionTextMatches(optionText: string, value: string): boolean {
   return locality.length > 1 && option.startsWith(locality);
 }
 
-const BARE_POLARITY = /^(?:yes|no|true|false)$/;
 const POSITIVE_LEAD = /^(?:yes|true|agree|agreed|accept|confirm|confirmed)$/;
 const NEGATIVE_LEAD = /^(?:no|not|never|false|decline|disagree)$/;
 
 /**
- * A bare "No" must not select an option that opens with "Yes". Datadog offers
+ * A "No" must not select an option that opens with "Yes". Datadog offers
  * "Yes, no restriction.", which contains "no" as a whole word, so a stored "No"
  * matched it and would have reported unrestricted work authorization to an
  * employer - the exact opposite of the stored answer. Whole-word containment is
- * not enough here: when the candidate is nothing but a polarity word, the
- * option's own leading polarity decides.
+ * not enough here: when a candidate opens with a polarity word, the option's own
+ * leading polarity decides.
+ *
+ * The candidate does not have to be nothing but that word. "No - based in
+ * Vancouver, Canada and willing to relocate." answering "are you currently based
+ * in the listed location and able to work in person 3 days per week?" shares
+ * almost all its wording with the option that begins "Yes, I'm based in this
+ * location", and picked it on similarity alone - stating the opposite of the
+ * stored fact about where the candidate lives.
  */
 function optionPolarityConflicts(optionText: string, candidate: string): boolean {
   const expected = normalizeOptionText(candidate);
-  if (!BARE_POLARITY.test(expected)) return false;
+  const candidateLead = expected.split(" ")[0] ?? "";
+  const candidatePositive = POSITIVE_LEAD.test(candidateLead);
+  const candidateNegative = NEGATIVE_LEAD.test(candidateLead);
+  if (!candidatePositive && !candidateNegative) return false;
   const lead = normalizeOptionText(optionText).split(" ")[0] ?? "";
-  const candidatePositive = POSITIVE_LEAD.test(expected);
   const optionPositive = POSITIVE_LEAD.test(lead);
   const optionNegative = NEGATIVE_LEAD.test(lead);
   if (!optionPositive && !optionNegative) return false;
