@@ -1595,3 +1595,26 @@ describe("questions about where the candidate is right now", () => {
     expect(chosen?.field.optionLabel).toBe("No, I'm not based in this location but willing to relocate");
   });
 });
+describe("choosing between options that all match", () => {
+  const options = [
+    "Yes, I'm based in this location and able to work from the office 3 days per week",
+    "No, I'm not based in this location but willing to relocate",
+    "No, I'm only able to work remotely",
+    "Other (optional context)",
+  ];
+
+  it("prefers the option carrying what the answer actually says over the shortest one", () => {
+    const index = pickOptionIndex(options, ["No - based in Vancouver, Canada and willing to relocate."]);
+    expect(options[index]).toBe("No, I'm not based in this location but willing to relocate");
+  });
+
+  it("still prefers the least elaborated option when the answer is bare", () => {
+    const sponsorship = [
+      "Yes, no restriction.",
+      "Yes, but I will need sponsorship in the future.",
+      "No, I need sponsorship now.",
+    ];
+    const index = pickOptionIndex(sponsorship, ["Yes"]);
+    expect(sponsorship[index]).toBe("Yes, no restriction.");
+  });
+});
