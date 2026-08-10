@@ -44,6 +44,14 @@ export function upsertJobs(db: Db, jobs: readonly Job[]): UpsertResult {
       first_seen_at, last_seen_at
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(id) DO UPDATE SET
+      -- Company name, tier and the role fingerprint derived from the name are
+      -- refreshed too. They come from companies.json, so leaving them alone
+      -- meant renaming or re-tiering a company never reached jobs already
+      -- stored: the queue kept showing the old name and role-level dedupe
+      -- compared a stale fingerprint against a freshly computed one.
+      company_name = excluded.company_name,
+      company_tier = excluded.company_tier,
+      fingerprint = excluded.fingerprint,
       title = excluded.title,
       locations_raw = excluded.locations_raw,
       location_class = excluded.location_class,

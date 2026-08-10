@@ -189,6 +189,8 @@ Thresholds set the tiers. Calibrate them against your own pool: run `discover_jo
 }
 ```
 
-`ats` is `greenhouse`, `lever` or `ashby`. `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances.
+`ats` is `greenhouse`, `lever`, `ashby` or `workday`. `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it. For Workday there is no single slug: `board` is the `tenant/datacenter/site` triple read off the employer's career-site URL, e.g. `nvidia/wd5/NVIDIAExternalCareerSite`, and it cannot be guessed, so record it with `add_company_board`. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances. `query` is a server-side search filter, worth setting on large Workday tenants that publish thousands of unrelated postings.
 
-Start from `presets/ai-security-us-canada.json`, which contains 80 boards verified live against the ATS APIs.
+`name` is an identity, not a label. Boards are matched on it case-insensitively, and `submission.maxPerCompany` is keyed by it, so two spellings of one employer become two boards with two separate ceilings.
+
+Start from `presets/ai-security-us-canada.json`, which contains 135 boards verified live against the ATS APIs. `npm run init` copies it for you. It is a starting point, not a fixed list: this file is your own selection, so add and remove boards freely. Boards found during a campaign land in your copy, not in the repository, so contribute anything worth sharing back to the preset.
