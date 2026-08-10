@@ -74,6 +74,61 @@ describe("COLLECT_FIELDS", () => {
     expect(fields.every((field) => field.required)).toBe(true);
   });
 
+  it("groups a Greenhouse checkbox question, which has no Ashby wrapper", () => {
+    // Grouping used to be keyed off an Ashby-only container, so on Greenhouse
+    // every option arrived as its own required field labelled with the option
+    // text. The drafted answer was keyed on the question, matched nothing, and
+    // the whole group was reported as eleven unmet requirements.
+    const labels = {
+      friend: "Someone I know personally (friend, family, former colleague)",
+      board: "Job posting on LinkedIn, Indeed, or other job board",
+      event: "Industry event or conference",
+    };
+    const boxes: Array<Record<string, unknown>> = [];
+    const container = {
+      innerText: [
+        "How did you hear about Faire? (Select all that apply)",
+        labels.friend,
+        labels.board,
+        labels.event,
+      ].join("\n"),
+      querySelectorAll: (selector: string) =>
+        selector.includes("checkbox") && !selector.includes(":not") ? boxes : [],
+    };
+    for (const id of ["friend", "board", "event"]) {
+      boxes.push(element({ type: "checkbox", name: id, id, rect: { width: 16, height: 16 }, parent: container }));
+    }
+
+    const fields = collect(boxes, labels) as unknown as Array<{
+      label: string;
+      optionLabel?: string;
+      groupKey?: string;
+    }>;
+
+    expect(fields.map((field) => field.groupKey)).toEqual(
+      Array(3).fill("How did you hear about Faire? (Select all that apply)"),
+    );
+    expect(fields.map((field) => field.optionLabel)).toEqual([labels.friend, labels.board, labels.event]);
+  });
+
+  it("does not group checkboxes that only share an outer form with other inputs", () => {
+    // Walking up too far would fuse unrelated questions into one group and
+    // report a single label for boxes that answer different things.
+    const boxes: Array<Record<string, unknown>> = [];
+    const form = {
+      innerText: "Apply for this job",
+      querySelectorAll: (selector: string) =>
+        selector.includes(":not") ? [{}] : selector.includes("checkbox") ? boxes : [],
+    };
+    for (const id of ["a", "b"]) {
+      boxes.push(element({ type: "checkbox", name: id, id, rect: { width: 16, height: 16 }, parent: form }));
+    }
+
+    const fields = collect(boxes, { a: "A", b: "B" }) as unknown as Array<{ groupKey?: string }>;
+
+    expect(fields.every((field) => field.groupKey === undefined)).toBe(true);
+  });
+
   it("leaves a lone checkbox ungrouped, so it stands on its own", () => {
     const entry = ashbyFieldset("I agree to the terms", { required: true, checkboxes: 1 });
     const box = element({ type: "checkbox", name: "agree", id: "agree", rect: { width: 16, height: 16 }, entry });
@@ -119,6 +174,7 @@ type FakeElementSpec = {
   automationId?: string;
   rect: { width: number; height: number };
   entry?: Record<string, unknown>;
+  parent?: Record<string, unknown>;
 };
 
 function element(spec: FakeElementSpec): Record<string, unknown> {
@@ -138,6 +194,7 @@ function element(spec: FakeElementSpec): Record<string, unknown> {
     // the older class selector would fail rather than quietly pass.
     closest: (selector: string) =>
       spec.entry && (selector.includes("_fieldEntry_") || selector === "fieldset") ? spec.entry : null,
+    parentElement: spec.parent ?? null,
   };
 }
 
