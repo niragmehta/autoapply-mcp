@@ -251,19 +251,58 @@ export const COLLECT_FIELDS = `(() => {
   // boxes, so the options have to be reported as one group. Without this each
   // unticked box counts as its own unmet requirement and a fully answered
   // question still reads as blocking.
-  const checkboxGroupKey = (el) => {
+  //
+  // The container holding the options is ATS-specific, so it is found
+  // structurally: the nearest ancestor that holds more than one checkbox and is
+  // not the whole form. Keying this off an Ashby-only wrapper meant Greenhouse
+  // "select all that apply" groups were never grouped at all - each option
+  // arrived as its own required field labelled with the option text, so the
+  // question label never matched a drafted answer and the group stayed empty.
+  const checkboxGroup = (el) => {
     if (el.type !== 'checkbox') return undefined;
     const entry = ashbyEntry(el);
-    if (!entry) return undefined;
-    if (entry.querySelectorAll('input[type="checkbox"]').length < 2) return undefined;
-    const title = groupLabel(el).slice(0, 200);
-    return title || undefined;
+    if (entry && entry.querySelectorAll('input[type="checkbox"]').length >= 2) return entry;
+    let node = el.parentElement;
+    while (node && node !== document.body) {
+      const boxes = node.querySelectorAll('input[type="checkbox"]').length;
+      // Stop before a container that has swallowed unrelated questions.
+      if (boxes >= 2) {
+        if (node.querySelectorAll('input:not([type="checkbox"]), select, textarea').length > 0) return undefined;
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return undefined;
+  };
+  // The question sits above the options, so it is the container text with every
+  // option's own text removed.
+  const checkboxGroupLabel = (el, container) => {
+    const explicit = groupLabel(el);
+    if (explicit) return explicit;
+    const options = Array.from(container.querySelectorAll('input[type="checkbox"]')).map((box) =>
+      optionLabelFor(box),
+    );
+    const NL = String.fromCharCode(10);
+    let text = (container.innerText || '').trim();
+    for (const option of options) {
+      if (option) text = text.split(option).join(NL);
+    }
+    const lines = text
+      .split(NL)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    return lines[0] || '';
   };
   const out = [];
   controls.filter(visible).forEach((el) => {
     const isRadio = el.type === 'radio';
-    const optionLabel = (isRadio ? optionLabelFor(el) : labelFor(el)).slice(0, 200);
-    const group = isRadio ? groupLabel(el).slice(0, 200) : '';
+    const container = checkboxGroup(el);
+    const optionLabel = (isRadio || container ? optionLabelFor(el) : labelFor(el)).slice(0, 200);
+    const group = isRadio
+      ? groupLabel(el).slice(0, 200)
+      : container
+        ? checkboxGroupLabel(el, container).slice(0, 200)
+        : '';
     const label = group || optionLabel;
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
@@ -277,7 +316,7 @@ export const COLLECT_FIELDS = `(() => {
       label,
       optionLabel: group ? optionLabel : undefined,
       questionLabel: questionTitle && questionTitle !== label ? questionTitle : undefined,
-      groupKey: checkboxGroupKey(el),
+      groupKey: container ? (group || undefined) : undefined,
       type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
       name,
       required:
