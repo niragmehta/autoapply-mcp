@@ -154,10 +154,76 @@ describe("buildFillPlan", () => {
 
     expect(plan.unmatchedRequired).toHaveLength(0);
   });
+
+  it("ticks one option in a select-all-that-apply group, never every option", () => {
+    // Sierra's diversity survey came back with all seven orientations ticked at
+    // once, plus both "Other" and "I prefer not to answer", because each option
+    // matched the shared question label independently. That states things about
+    // the candidate that are not true.
+    const options = [
+      "Bisexual",
+      "Lesbian",
+      "Gay",
+      "Queer",
+      "Heterosexual / straight",
+      "Other",
+      "I prefer not to answer",
+    ];
+    const label = "How do you identify your sexual orientation? Please select all that apply.";
+    const fields = options.map((optionLabel, index) =>
+      field(label, {
+        selectorIndex: index,
+        type: "checkbox",
+        name: `orientation_${index}`,
+        optionLabel,
+        groupKey: label,
+      }),
+    );
+
+    const plan = buildFillPlan(fields, [
+      answer(label, "I prefer not to answer", { category: "demographic" }),
+    ]);
+
+    expect(plan.toFill).toHaveLength(1);
+    expect(plan.toFill[0]!.field.optionLabel).toBe("I prefer not to answer");
+  });
+
+  it("reports an unanswerable checkbox group once rather than once per option", () => {
+    const label = "Which ethnicity(ies) do you identify with? Please select all that apply.";
+    const fields = ["Asian or Asian American", "White", "Other"].map((optionLabel, index) =>
+      field(label, {
+        selectorIndex: index,
+        type: "checkbox",
+        name: `ethnicity_${index}`,
+        optionLabel,
+        required: true,
+        groupKey: label,
+      }),
+    );
+
+    const plan = buildFillPlan(fields, []);
+
+    expect(plan.unmatchedRequired).toHaveLength(1);
+  });
+
+  it("keeps ungrouped checkboxes independent of one another", () => {
+    // Two acknowledgement boxes are separate obligations and both must tick.
+    const plan = buildFillPlan(
+      [
+        field("I acknowledge the privacy notice", { type: "checkbox", name: "ack1" }),
+        field("I acknowledge the arbitration agreement", { type: "checkbox", name: "ack2" }),
+      ],
+      [
+        answer("I acknowledge the privacy notice", "Yes"),
+        answer("I acknowledge the arbitration agreement", "Yes"),
+      ],
+    );
+
+    expect(plan.toFill).toHaveLength(2);
+  });
 });
 
-describe("orderFieldsForBrowser", () => {
-  it("fills stateful choice controls after text and combobox fields", () => {
+describe("orderFieldsForBrowser", () => {  it("fills stateful choice controls after text and combobox fields", () => {
     const matches = matchFields(
       [
         field("Eligible", { type: "checkbox" }),
