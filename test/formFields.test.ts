@@ -243,6 +243,26 @@ describe("detectSubmissionConfirmation", () => {
       ),
     ).toBe(false);
   });
+
+  it("recognizes confirmation copy carrying an adverb", () => {
+    // Ashby renders "Your application was successfully submitted", which no
+    // literal marker matched, so a real submission was reported as unverified.
+    expect(
+      detectSubmissionConfirmation(
+        "Success\nYour application was successfully submitted. We'll reach out with any next steps!",
+        "https://jobs.ashbyhq.com/modal/73c97bbc/application",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat a promise of future submission as confirmation", () => {
+    expect(
+      detectSubmissionConfirmation(
+        "Your application will be submitted once you press the button below.",
+        "https://jobs.ashbyhq.com/acme/123/application",
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("augmentAnswersForBrowser demographic consent", () => {
