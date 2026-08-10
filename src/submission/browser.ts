@@ -528,6 +528,28 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       };
     }
 
+    // Choices were verified before the screenshot, but every fill after that
+    // point re-renders the form, and Ashby drops a selection when it re-renders
+    // the control that holds it. Harvey rejected two submissions for a missing
+    // work-authorisation answer that the run had verified as set moments
+    // earlier. Verify again with nothing left to disturb the form, so what is
+    // submitted is what was checked.
+    const lostAtSubmit = await reassertChoices(page, choiceLog);
+    if (lostAtSubmit.length > 0) {
+      for (const label of lostAtSubmit) logger.warn("choice would not hold at submit", { label });
+      return {
+        status: "aborted",
+        reason: `choice(s) would not stay selected, so nothing was submitted: ${lostAtSubmit.join("; ")}`,
+        filledFields: filled.filter((entry) => !lostAtSubmit.includes(entry.label)),
+        unmatchedRequired: lostAtSubmit,
+        unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+        screenshotPath,
+        finalUrl: page.url(),
+        confirmationText: "",
+        captchaDetected: false,
+      };
+    }
+
     // A submit that leaves us on the page is ambiguous: the request may have
     // been rejected by the board, or never sent at all. Recording what the
     // network actually did is the difference between a diagnosable failure and
@@ -801,6 +823,14 @@ async function fillControl(
  * `_active_` class the board adds. Without checking it a lost click is reported
  * as a filled field and the reviewer finds the question blank.
  */
+/**
+ * Ashby renders yes/no questions as a pair of buttons over a hidden checkbox,
+ * and those buttons are toggles: clicking the option that is already selected
+ * clears the answer. A 300ms wait was not always enough for the class to
+ * appear, so a slow render made this click a second time and switch the answer
+ * back off, leaving the question unanswered. Never click a control that is
+ * already in the wanted state, and wait properly before deciding a click missed.
+ */
 async function clickUntilActive(
   page: AnyPage,
   button: AnyLocator,
@@ -808,11 +838,19 @@ async function clickUntilActive(
   choice: string,
 ): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await button.click({ timeout: 4000 });
-    await page.waitForTimeout(300);
     if (await isActive(button)) return;
+    await button.click({ timeout: 4000 });
+    if (await waitForActive(page, button)) return;
   }
   throw new Error(`"${choice}" did not register for "${label}"`);
+}
+
+async function waitForActive(page: AnyPage, button: AnyLocator): Promise<boolean> {
+  for (let waited = 0; waited < 2000; waited += 200) {
+    await page.waitForTimeout(200);
+    if (await isActive(button)) return true;
+  }
+  return false;
 }
 
 async function isActive(button: AnyLocator): Promise<boolean> {
