@@ -8,6 +8,25 @@ import { z } from "zod";
 
 const nonEmpty = z.string().trim().min(1);
 
+/**
+ * A question pattern is matched as a case-insensitive substring against an ATS
+ * question label, so it can never usefully be longer than a label itself.
+ *
+ * The bound exists to make corruption loud. Editing this file with a tool that
+ * rewrites it in the wrong encoding re-encodes any typographic character, and
+ * each pass multiplies its length: one pattern containing curly quotes survived
+ * 22 such passes and reached 119 MB. Nothing rejected it, because the value was
+ * still a valid non-empty string. The first thing the field matcher does is
+ * lowercase every pattern, so the damage only surfaced as an out-of-memory
+ * crash of the whole server, part-way through a submission run and far from its
+ * cause. Failing at load names the offending field instead.
+ */
+const MAX_PATTERN_LENGTH = 500;
+const questionPattern = nonEmpty.max(
+  MAX_PATTERN_LENGTH,
+  `a question pattern longer than ${MAX_PATTERN_LENGTH} characters cannot match an ATS question label; this is almost certainly text corrupted by a re-encoding edit`,
+);
+
 export const SkillLevelSchema = z.enum(["expert", "strong", "working", "familiar"]);
 
 export const SkillSchema = z.object({
@@ -63,7 +82,7 @@ export const ApprovedAnswerSchema = z.object({
   key: nonEmpty,
   label: nonEmpty,
   /** Case-insensitive substrings matched against the ATS question label. */
-  patterns: z.array(nonEmpty).min(1),
+  patterns: z.array(questionPattern).min(1),
   /** May be empty to record a known question that must still be decided. */
   answer: z.string().default(""),
   /**
@@ -94,7 +113,7 @@ export const ApprovedAnswerSchema = z.object({
 export const NarrativeTemplateSchema = z.object({
   key: nonEmpty,
   label: nonEmpty,
-  patterns: z.array(nonEmpty).min(1),
+  patterns: z.array(questionPattern).min(1),
   template: nonEmpty,
   allowAutoFill: z.boolean().default(false),
   /** Skip the template when the posting yields fewer matched topics than this. */
