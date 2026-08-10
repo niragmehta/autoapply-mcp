@@ -21,6 +21,13 @@ export type FieldDescriptor = {
   label: string;
   type: string;
   name: string;
+  /**
+   * The control's DOM id. Greenhouse leaves `name` empty on its repeatable
+   * education and employment blocks and carries the meaning in the id instead,
+   * as in `school--0` and `end-year--0`, which is the only way to tell which
+   * block an "End date year" belongs to.
+   */
+  domId?: string;
   required: boolean;
   role?: string;
   /**
@@ -723,6 +730,42 @@ function bankEntryAsAnswer(entry: ApprovedAnswerEntry): DraftAnswer {
   };
 }
 
+/**
+ * Greenhouse renders education and employment as repeatable blocks whose
+ * controls share one label vocabulary: both call the graduation year and the
+ * year a job ended "End date year". Affirm's form aborted on that field with
+ * the answer sitting in the profile the whole time, because no resolver pattern
+ * matches "End date year" and matching it loosely would put a graduation year
+ * into a job history.
+ *
+ * The block is only identifiable from the DOM id, where the trailing index ties
+ * a date control to the `school--N` or `company--N` it belongs to. A date is
+ * only re-labelled when its own index has a school and no company, so a form
+ * that numbers both blocks alike is left alone rather than answered wrongly.
+ */
+const EDUCATION_DATE_ID = /^end-year--(\d+)$/;
+
+export function educationDateLabels(fields: readonly FieldDescriptor[]): Map<number, string> {
+  const blocks = new Set<string>();
+  const employment = new Set<string>();
+  for (const field of fields) {
+    const id = field.domId ?? "";
+    const school = /^school--(\d+)$/.exec(id);
+    if (school) blocks.add(school[1]!);
+    const company = /^company--(\d+)$/.exec(id);
+    if (company) employment.add(company[1]!);
+  }
+  const overrides = new Map<number, string>();
+  for (const field of fields) {
+    const match = EDUCATION_DATE_ID.exec(field.domId ?? "");
+    if (!match) continue;
+    const index = match[1]!;
+    if (!blocks.has(index) || employment.has(index)) continue;
+    overrides.set(field.selectorIndex, "Graduation year");
+  }
+  return overrides;
+}
+
 export function fallbackAnswersForFields(
   fields: readonly FieldDescriptor[],
   answers: readonly DraftAnswer[],
@@ -736,10 +779,15 @@ export function fallbackAnswersForFields(
 
   const alreadyAnswered = new Set(answers.map((entry) => entry.questionKey));
   const matched = matchFields(fields, answers);
+  const resolverLabels = educationDateLabels(fields);
   const derived: DraftAnswer[] = [];
   const used = new Set<string>();
 
   for (const match of matched) {
+    // The resolvers only ever see a label, so an ambiguous one is replaced by
+    // the question the control actually asks. The derived answer keeps the live
+    // label so it still binds to this field.
+    const resolverLabel = resolverLabels.get(match.field.selectorIndex) ?? match.field.label;
     if (match.answer !== null && match.answer.answer.trim().length > 0) {
       // A radio option counts as answered only if the matched answer actually
       // names it. Ashby's consent radios are labelled "Phone Number", so the
@@ -753,7 +801,7 @@ export function fallbackAnswersForFields(
     // Employment history first: these labels are exact, and they name the
     // position being left rather than the one being applied for, so no broader
     // bank pattern should be able to win them.
-    const experience = resolveExperienceAnswer?.(match.field.label);
+    const experience = resolveExperienceAnswer?.(resolverLabel);
     if (experience && experience.authorized && experience.answer.trim().length > 0) {
       // Start month and start year cite the same profile value, so the citation
       // alone would let one control spend the other's answer.
@@ -814,7 +862,7 @@ export function fallbackAnswersForFields(
       continue;
     }
 
-    const personal = resolvePersonalAnswer?.(match.field.label);
+    const personal = resolvePersonalAnswer?.(resolverLabel);
     if (personal && personal.authorized && personal.answer.trim().length > 0) {
       // Radios arrive one field per option, so key on the citation to answer once.
       if (used.has(personal.citation) || alreadyAnswered.has(personal.citation)) continue;
@@ -835,7 +883,7 @@ export function fallbackAnswersForFields(
 
     // Open-ended questions only ever reach a text box, never an option list.
     if (match.field.optionLabel) continue;
-    const narrative = resolveNarrativeAnswer?.(match.field.label);
+    const narrative = resolveNarrativeAnswer?.(resolverLabel);
     if (!narrative || !narrative.authorized || narrative.answer.trim().length === 0) continue;
     if (used.has(narrative.citation) || alreadyAnswered.has(narrative.citation)) continue;
     used.add(narrative.citation);
