@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectVerificationCodeGate, fillSegmentedCode } from "../src/submission/browser.js";
+import { detectVerificationCodeGate, fillSegmentedCode, submitVerificationCode } from "../src/submission/browser.js";
 
 /**
  * Greenhouse renders the code as one box per character, so a single fill()
@@ -62,7 +62,7 @@ describe("segmented code entry", () => {
     const { page, values } = segmentedPage(8);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBe(true);
+    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).not.toBeNull();
     expect(values.join("")).toBe("N8NFAEQw");
   });
 
@@ -71,7 +71,7 @@ describe("segmented code entry", () => {
     const { page, values } = segmentedPage(6);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBe(false);
+    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBeNull();
     expect(values.join("")).toBe("");
   });
 
@@ -79,20 +79,73 @@ describe("segmented code entry", () => {
     const { page } = segmentedPage(8, { rejects: true });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBe(false);
+    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBeNull();
   });
 
   it("ignores hidden boxes", async () => {
     const { page } = segmentedPage(8, { visible: false });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBe(false);
+    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBeNull();
   });
 
   it("reports no segmented layout when the page has none", async () => {
     const page = { locator: () => ({ count: async () => 0 }) };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBe(false);
+    expect(await fillSegmentedCode(page as any, "N8NFAEQw")).toBeNull();
+  });
+});
+
+describe("submitting the code", () => {
+  /**
+   * A job post keeps its own apply control in the document while the code gate
+   * is showing, so an unscoped search finds the wrong button and the typed code
+   * is never sent.
+   */
+  function gatedPage() {
+    const clicked: string[] = [];
+    const control = (name: string, visible = true) => ({
+      first: () => ({
+        count: async () => 1,
+        isVisible: async () => visible,
+        click: async () => {
+          clicked.push(name);
+        },
+      }),
+    });
+    return {
+      clicked,
+      page: {
+        locator: (selector: string) => {
+          if (selector.startsWith("form:has(input[maxlength=")) return control("code-form-submit");
+          if (selector === 'button[type="submit"]') return control("page-apply");
+          return { first: () => ({ count: async () => 0, isVisible: async () => false }) };
+        },
+      },
+    };
+  }
+
+  it("clicks the button belonging to the code form, not the job post's apply button", async () => {
+    const { page, clicked } = gatedPage();
+    const box = { press: async () => undefined };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    expect(clicked).toEqual(["code-form-submit"]);
+  });
+
+  it("presses Enter in the code field when the gate has no button of its own", async () => {
+    const clicked: string[] = [];
+    const page = {
+      locator: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+    };
+    const box = {
+      press: async (key: string) => {
+        clicked.push(key);
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    expect(clicked).toEqual(["Enter"]);
   });
 });

@@ -64,6 +64,7 @@ type AnyLocator = {
   isVisible: () => Promise<boolean>;
   isEnabled?: () => Promise<boolean>;
   inputValue?: () => Promise<string>;
+  press?: (key: string, options?: unknown) => Promise<void>;
   innerText: () => Promise<string>;
   getAttribute: (name: string) => Promise<string | null>;
   allInnerTexts: () => Promise<string[]>;
@@ -329,6 +330,13 @@ export const COLLECT_FIELDS = `(() => {
   });
   return out;
 })()`;
+
+const VERIFICATION_SUBMIT_SELECTORS = [
+  'form:has(input[maxlength="1"]) button[type="submit"]',
+  'form:has(input[maxlength="1"]) button:has-text("Submit")',
+  'form:has(input[maxlength="1"]) button:has-text("Confirm")',
+  'form:has(input[maxlength="1"]) button:has-text("Verify")',
+];
 
 const SUBMIT_SELECTORS = [
   'button[type="submit"]',
@@ -1067,10 +1075,8 @@ async function enterVerificationCode(page: AnyPage, code: string): Promise<boole
   const trimmed = code.trim();
   if (!trimmed) return false;
 
-  if (await fillSegmentedCode(page, trimmed)) {
-    await clickSubmit(page);
-    return true;
-  }
+  const lastBox = await fillSegmentedCode(page, trimmed);
+  if (lastBox) return submitVerificationCode(page, lastBox);
 
   for (const selector of VERIFICATION_INPUT_SELECTORS) {
     const locator = page.locator(selector).first();
@@ -1081,28 +1087,52 @@ async function enterVerificationCode(page: AnyPage, code: string): Promise<boole
     // Only report success once the box actually holds the code. A readonly or
     // shadowed input accepts fill() silently and would otherwise look filled.
     if (value !== undefined && value !== trimmed) continue;
-    await clickSubmit(page);
-    return true;
+    return submitVerificationCode(page, locator);
   }
   return false;
 }
 
 /**
+ * The code gate renders its own submit control, while the job post it sits under
+ * usually still carries an apply control earlier in the document. Clicking the
+ * first submit-looking button on the page therefore lands on the wrong one and
+ * the correctly typed code is never sent, which reads exactly like a refused
+ * code. The search is scoped to the form owning the code boxes, and falls back
+ * to pressing Enter in the code field itself.
+ */
+export async function submitVerificationCode(page: AnyPage, codeField: AnyLocator): Promise<boolean> {
+  for (const selector of VERIFICATION_SUBMIT_SELECTORS) {
+    const locator = page.locator(selector).first();
+    if ((await locator.count().catch(() => 0)) === 0) continue;
+    if (!(await locator.isVisible().catch(() => false))) continue;
+    await locator.click().catch(() => undefined);
+    return true;
+  }
+  const pressed = await codeField
+    .press?.("Enter")
+    .then(() => true)
+    .catch(() => false);
+  if (pressed) return true;
+  return clickSubmit(page);
+}
+
+/**
  * Fills a row of single-character boxes, one character each. Requires exactly
  * as many boxes as the code has characters, so a partial code is never left
- * sitting in a form that would then be submitted incomplete.
+ * sitting in a form that would then be submitted incomplete. Returns the last
+ * box so the caller can submit from inside the code field.
  */
-export async function fillSegmentedCode(page: AnyPage, code: string): Promise<boolean> {
+export async function fillSegmentedCode(page: AnyPage, code: string): Promise<AnyLocator | null> {
   const boxes = page.locator('input[maxlength="1"]');
   const total = await boxes.count().catch(() => 0);
-  if (total === 0) return false;
+  if (total === 0) return null;
 
   const visible: AnyLocator[] = [];
   for (let i = 0; i < total; i += 1) {
     const box = boxes.nth(i);
     if (await box.isVisible().catch(() => false)) visible.push(box);
   }
-  if (visible.length !== code.length) return false;
+  if (visible.length !== code.length) return null;
 
   for (let i = 0; i < code.length; i += 1) {
     await visible[i]!.fill(code[i]!).catch(() => undefined);
@@ -1112,9 +1142,9 @@ export async function fillSegmentedCode(page: AnyPage, code: string): Promise<bo
   // components rewrite or clear input they consider invalid.
   for (let i = 0; i < code.length; i += 1) {
     const value = await visible[i]!.inputValue?.().catch(() => undefined);
-    if (value !== undefined && value !== code[i]) return false;
+    if (value !== undefined && value !== code[i]) return null;
   }
-  return true;
+  return visible[code.length - 1] ?? null;
 }
 
 async function clickSubmit(page: AnyPage): Promise<boolean> {  for (const selector of SUBMIT_SELECTORS) {
