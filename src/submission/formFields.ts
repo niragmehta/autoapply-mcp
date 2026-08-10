@@ -291,18 +291,20 @@ export function answerValueForField(field: FieldDescriptor, answer: DraftAnswer)
   if (fieldLabel.includes("i agree") && /^(yes|true|1)$/i.test(answer.answer.trim())) {
     return "I agree";
   }
-  if (
-    /^(decline to self-identify|i (?:do not|don't) wish to answer|prefer not to (?:answer|say))$/i.test(
-      answer.answer.trim(),
-    )
-  ) {
+  if (DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {
     return "wish to answer";
   }
   return answer.answer;
 }
 
+/**
+ * Anchored at the start but deliberately open at the end: boards attach the
+ * subject to the option itself, as in "I decline to self-identify for
+ * protected veteran status". Requiring an exact match would leave those
+ * fields on their default, which for a veteran question means answering it.
+ */
 const DECLINE_ANSWER_PATTERN =
-  /^(?:decline to (?:self[\s-]?identify|answer|state)|i (?:do not|don't) wish to answer|do not wish to answer|prefer not to (?:answer|say|disclose))$/i;
+  /^(?:i\s+)?(?:decline to (?:self[\s-]?identify|answer|state)|(?:do not|don't) wish to (?:answer|self[\s-]?identify)|prefer not to (?:answer|say|disclose))\b/i;
 
 /**
  * Boards word the "decline to answer" option differently — Greenhouse alone

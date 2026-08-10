@@ -522,9 +522,8 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     }
 
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-    await page.waitForTimeout(1500);
+    const postSubmitText = await waitForSubmissionOutcome(page);
     page.off?.("response", onResponse as (payload: never) => void);
-    const postSubmitText = await readBodyText(page);
     const captchaDetected = detectCaptcha(postSubmitText) || (await hasVisibleCaptchaChallenge(page));
     if (captchaDetected) {
       const shot = await capture(page, options.artifactsDir, packet.applicationId, "captcha");
@@ -555,8 +554,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         const entered = await enterVerificationCode(page, code);
         if (entered) {
           await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-          await page.waitForTimeout(1500);
-          const codeText = await readBodyText(page);
+          const codeText = await waitForSubmissionOutcome(page);
           const codeShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
           if (detectSubmissionConfirmation(codeText, page.url())) {
             return {
@@ -637,6 +635,38 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
   } finally {
     await browser.close().catch(() => undefined);
   }
+}
+
+/**
+ * How long to keep looking for a confirmation before deciding one never came.
+ * Single-page boards re-render in place after the POST returns, so "load state
+ * is idle" is not the same as "the outcome is on screen".
+ */
+const SUBMISSION_OUTCOME_TIMEOUT_MS = 30_000;
+const SUBMISSION_OUTCOME_POLL_MS = 1_000;
+
+/**
+ * Reads the page repeatedly until it shows a submission outcome.
+ *
+ * Sampling once shortly after the click reports "no confirmation" for any board
+ * that takes a moment to render one, and that verdict is worse than a slow
+ * answer: it says an application failed when it was in fact accepted, and the
+ * obvious response - submit again - sends the employer a duplicate.
+ *
+ * Polling stops early on a confirmation, and also on a validation error, since
+ * a form that is objecting to its own contents is not going to confirm.
+ */
+async function waitForSubmissionOutcome(page: AnyPage): Promise<string> {
+  const deadline = Date.now() + SUBMISSION_OUTCOME_TIMEOUT_MS;
+  let text = await readBodyText(page);
+  while (Date.now() < deadline) {
+    if (detectSubmissionConfirmation(text, page.url())) return text;
+    if (detectVerificationCodeGate(text)) return text;
+    if ((await readValidationErrors(page)).length > 0) return text;
+    await page.waitForTimeout(SUBMISSION_OUTCOME_POLL_MS);
+    text = await readBodyText(page);
+  }
+  return text;
 }
 
 /**
