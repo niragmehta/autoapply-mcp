@@ -961,6 +961,20 @@ const SUBMISSION_CONFIRMATION_MARKERS = [
 ];
 
 /**
+ * Employers write the same confirmation with an adverb in the middle - Ashby
+ * renders "Your application was successfully submitted" - which no literal
+ * marker matches. A run that really did submit is then reported as unverified,
+ * and the obvious response, submitting again, sends a duplicate. These patterns
+ * allow one optional adverb between the verb and its participle; the subject
+ * and participle are still both required, so unrelated page copy cannot pass.
+ */
+const SUBMISSION_CONFIRMATION_PATTERNS = [
+  /\byour application (?:was|has been|is)(?: \w+ly)? (?:submitted|received|sent|complete[d]?)\b/,
+  /\bapplication (?:was|has been)(?: \w+ly)? (?:submitted|received)\b/,
+  /\b(?:successfully|already) (?:submitted|applied)\b/,
+];
+
+/**
  * ATS platforms route to a dedicated confirmation URL only after a submission
  * is accepted, so the path is a stronger signal than employer copy. Pinterest
  * writes "Good news: your application is in!" and Greenhouse still landed on
@@ -990,6 +1004,7 @@ export function isConfirmationUrl(url: string): boolean {
 export function detectSubmissionConfirmation(pageText: string, finalUrl = ""): boolean {
   const haystack = pageText.toLowerCase();
   if (SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker))) return true;
+  if (SUBMISSION_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(haystack))) return true;
   return isConfirmationUrl(finalUrl);
 }
 
