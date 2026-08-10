@@ -483,3 +483,65 @@ describe("conditional question clauses", () => {
     expect(answers[0]?.answer.trim().toLowerCase()).not.toBe("yes");
   });
 });
+
+describe("Greenhouse demographic question shape", () => {
+  const declineAll = {
+    gender: { value: "Decline to self-identify", autoFill: true },
+    pronouns: { value: "I prefer not to say", autoFill: true },
+    raceEthnicity: { value: "Decline to self-identify", autoFill: true },
+    hispanicLatino: { value: "Decline to self-identify", autoFill: true },
+    veteranStatus: { value: "I decline to self-identify for protected veteran status", autoFill: true },
+    disabilityStatus: { value: "I don't wish to answer", autoFill: true },
+    sexualOrientation: { value: "Decline to self-identify", autoFill: true },
+    transgenderIdentity: { value: "Decline to self-identify", autoFill: true },
+  };
+
+  // Greenhouse serves these with no `fields` array: the type and choices sit on
+  // the question itself. Read with the ordinary parser they look like required
+  // free text, which classified a race multi-select as an essay.
+  const raw = [
+    {
+      id: 4000407002,
+      label: "Which categories describe you? Select all that apply to you:",
+      required: true,
+      type: "multi_value_multi_select",
+      answer_options: [
+        { id: 1, label: "East Asian", free_form: false, decline_to_answer: false },
+        { id: 2, label: "South Asian", free_form: false, decline_to_answer: false },
+        { id: 3, label: "I don't wish to answer", free_form: false, decline_to_answer: true },
+      ],
+    },
+  ];
+
+  it("reads the type and options that live on the question itself", () => {
+    const [parsed] = greenhouseQuestionsToForm(raw as never);
+    expect(parsed?.type).toBe("multi_value_multi_select");
+    expect(parsed?.options).toEqual(["East Asian", "South Asian", "I don't wish to answer"]);
+    expect(parsed?.declineOption).toBe("I don't wish to answer");
+  });
+
+  it("answers an unrecognised self-ID question with the employer's own decline option", () => {
+    const declining = ProfileSchema.parse({ ...makeProfile(), personal: { demographics: declineAll } });
+    const [answer] = draftAnswers(greenhouseQuestionsToForm(raw as never), declining, campaign).answers;
+    expect(answer?.answer).toBe("I don't wish to answer");
+    expect(answer?.requiresHuman).toBe(false);
+  });
+
+  it("asks a candidate who discloses his demographics rather than declining for him", () => {
+    const disclosing = ProfileSchema.parse({
+      ...makeProfile(),
+      personal: { demographics: { ...declineAll, gender: { value: "Male", autoFill: true } } },
+    });
+    const [answer] = draftAnswers(greenhouseQuestionsToForm(raw as never), disclosing, campaign).answers;
+    expect(answer?.requiresHuman).toBe(true);
+  });
+
+  it("leaves ordinary field-bearing questions alone", () => {
+    const ordinary = [
+      { label: "Website", required: false, fields: [{ name: "question_1", type: "input_text", values: [] }] },
+    ];
+    const [parsed] = greenhouseQuestionsToForm(ordinary as never);
+    expect(parsed?.key).toBe("question_1");
+    expect(parsed?.declineOption).toBeUndefined();
+  });
+});

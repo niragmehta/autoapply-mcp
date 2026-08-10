@@ -224,3 +224,25 @@ describe("education resolution", () => {
     expect(disability?.category ?? null).not.toBe("education");
   });
 });
+
+describe("voluntary self-identification wording", () => {
+  // Boards rarely use the words "sexual orientation": Faire asks about the
+  // LGBTQIA+ community, which matched nothing and blocked the application.
+  it("recognizes an LGBTQIA+ question as the orientation field", () => {
+    const profile = withPersonal({
+      demographics: { sexualOrientation: { value: "Decline to self-identify", autoFill: true } },
+    });
+    const resolved = resolvePersonal("Do you consider yourself a member of the LGBTQIA+ community?", profile);
+    expect(resolved?.citation).toBe("personal.demographics.sexualOrientation");
+    expect(resolved?.answer).toBe("Decline to self-identify");
+  });
+
+  it("still recognizes the formal wording", () => {
+    const profile = withPersonal({
+      demographics: { sexualOrientation: { value: "Decline to self-identify", autoFill: true } },
+    });
+    expect(resolvePersonal("What is your sexual orientation?", profile)?.citation).toBe(
+      "personal.demographics.sexualOrientation",
+    );
+  });
+});

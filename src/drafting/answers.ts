@@ -22,6 +22,11 @@ export type FormQuestion = {
   /** input_text | textarea | multi_value_single_select | input_file | ... */
   type: string;
   options?: string[];
+  /**
+   * The option the employer itself marked as declining to answer, where the ATS
+   * publishes that flag. Only set on voluntary self-identification questions.
+   */
+  declineOption?: string;
 };
 
 const CONTACT_RESOLVERS: ReadonlyArray<readonly [RegExp, (profile: Profile) => string, string]> = [
@@ -297,6 +302,28 @@ function answerOne(
     };
   }
 
+  // Voluntary self-identification questions the ATS flags with its own
+  // decline-to-answer option. The label of one of these need not name a
+  // protected characteristic at all - Greenhouse asks "Which categories
+  // describe you?" for race and ethnicity - so pattern matching cannot be
+  // relied on to recognise them, and an unrecognised one is classified as an
+  // essay and blocks the whole application. Selecting the option the employer
+  // marked as declining discloses nothing, so it is safe here, but it is
+  // applied only when the candidate has in fact declined the demographics they
+  // did store. A candidate who answers demographic questions should be asked.
+  if (question.declineOption && declinesDemographics(profile)) {
+    return {
+      questionKey: question.key,
+      label: question.label,
+      answer: question.declineOption,
+      source: "profile",
+      citation: "personal.demographics (declined; option marked decline-to-answer by the employer)",
+      requiresHuman: false,
+      category: "demographic",
+      guidance: "",
+    };
+  }
+
   if (isBlockedCategory(category, blockedCategories)) {
     // A required choice offering exactly one consent option carries no decision
     // whatever its category: "Please review and acknowledge our Privacy Notice"
@@ -420,6 +447,23 @@ function answerOne(
 }
 
 const SOLE_CONSENT_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+
+/**
+ * Whether the candidate has declined the demographic questions he has stored an
+ * answer for. Used to decide whether an unrecognised voluntary self-ID question
+ * may be answered with the employer's own decline option: doing so is only
+ * consistent with the candidate's wishes if he declined the ones we can read.
+ * A candidate who discloses his demographics gets asked instead.
+ */
+function declinesDemographics(profile: Profile): boolean {
+  const stored = Object.values(profile.personal.demographics)
+    .map((entry) => (typeof entry === "string" ? entry : (entry?.value ?? "")))
+    .filter((value) => value.trim().length > 0);
+  if (stored.length === 0) return false;
+  return stored.every((value) =>
+    /\b(?:decline|prefer not|don'?t wish|do not wish|not (?:to )?(?:answer|disclose|specify)|wish not)\b/i.test(value),
+  );
+}
 
 /**
  * Categories where a lone consent option is a formality rather than a
