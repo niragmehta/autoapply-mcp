@@ -1458,3 +1458,31 @@ describe("how did you hear about us", () => {
     expect(candidates).toEqual(["Friend"]);
   });
 });
+describe("whole-name questions", () => {
+  const nameAnswers = [
+    answer("Full Name", "Nirag Mehta"),
+    answer("First Name", "Nirag"),
+    answer("Last Name", "Mehta"),
+  ];
+
+  it("fills a combined first-and-last name field with the whole name", () => {
+    const [match] = matchFields([field("Legal First and Last Name *", { required: true })], nameAnswers);
+    expect(match.answer?.answer).toBe("Nirag Mehta");
+  });
+
+  it("never lets a name fragment answer a combined name field", () => {
+    for (const label of ["First and Last Name", "First & Last Name", "First, Middle and Last Name"]) {
+      const [match] = matchFields([field(label)], [answer("Last Name", "Mehta"), answer("First Name", "Nirag")]);
+      expect(match.answer ?? null).toBeNull();
+    }
+  });
+
+  it("still fills the separate name fields from their own fragments", () => {
+    const matches = matchFields(
+      [field("Preferred First Name"), field("Preferred Last Name")],
+      nameAnswers,
+    );
+    expect(matches[0]?.answer?.answer).toBe("Nirag");
+    expect(matches[1]?.answer?.answer).toBe("Mehta");
+  });
+});
