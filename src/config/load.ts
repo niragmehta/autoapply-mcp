@@ -22,7 +22,11 @@ function readJson(path: string, label: string): unknown {
     throw new AppError("config_unreadable", `cannot read ${label} at ${path}: ${String(error)}`, { path });
   }
   try {
-    return JSON.parse(raw);
+    // Windows editors and PowerShell's UTF8 encoder prepend a byte order mark.
+    // JSON.parse rejects it, and the resulting "unexpected token" points at
+    // what looks like a perfectly good opening brace, so strip it rather than
+    // let a routine hand-edit look like a corrupt file.
+    return JSON.parse(raw.replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new AppError("config_invalid_json", `${label} at ${path} is not valid JSON: ${String(error)}`, { path });
   }

@@ -194,6 +194,7 @@ describe("MCP server", () => {
         "record_submission",
         "reload_config",
         "resolve_company_board",
+        "scan_hiring_thread",
         "set_application_content",
         "submit_application",
         "submit_batch",

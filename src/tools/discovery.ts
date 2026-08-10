@@ -7,6 +7,7 @@ import { countJobs, listQueue, rejectionBreakdown, tierBreakdown, upsertJobs, ge
 import { countSubmittedSince, listApplications } from "../db/repositories/applications.js";
 import { evaluateAndStore } from "../pipeline.js";
 import { discoverJobs, resolveBoards, verifyBoard } from "../sources/registry.js";
+import { scanHiringThread } from "../sources/hackernews.js";
 import { CompanySchema } from "../domain/campaign.js";
 import { startOfDayIso } from "../submission/guards.js";
 import { prepareUntrusted, wrapUntrusted } from "../text/untrusted.js";
@@ -165,6 +166,89 @@ export function registerDiscoveryTools(server: McpServer): void {
         postings: verification.postings,
         sampleTitles: verification.sampleTitles,
         totalBoards: result.total,
+      });
+    }),
+  );
+
+  server.registerTool(
+    "scan_hiring_thread",
+    {
+      title: "Find new boards from Hacker News 'Who is hiring?'",
+      description:
+        "Scans a monthly Hacker News 'Ask HN: Who is hiring?' thread for links to employers' own ATS boards, verifies each one actually serves postings, and optionally saves the new ones to companies.json. This is a lead source, not a job source: the thread's prose cannot be gated on reliably, so only the board slug is taken and discover_jobs then ingests every role at that company with full structured pay and location. Free to call — it uses the public Hacker News API and no third-party scraping credits.",
+      inputSchema: {
+        threadId: z
+          .string()
+          .optional()
+          .describe("Hacker News item id. Defaults to the most recent monthly thread."),
+        save: z
+          .boolean()
+          .optional()
+          .describe("Save verified new boards to companies.json. Defaults to false, so a scan is read-only unless asked."),
+        tier: z.enum(["A", "B", "C"]).optional().describe("Company tier to record for saved boards. Defaults to C, since a thread post is not evidence of tier."),
+        limit: z.number().int().min(1).max(200).optional().describe("Maximum leads to verify. Each costs one request."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    handler(async (args: { threadId?: string; save?: boolean; tier?: "A" | "B" | "C"; limit?: number }) => {
+      const workspace = getWorkspace();
+      const { thread, leads } = await scanHiringThread(args.threadId);
+
+      const known = new Set(
+        workspace.companies.map((company) => `${company.ats}:${company.board.toLowerCase()}`),
+      );
+      const fresh = leads.filter((lead) => !known.has(`${lead.ats}:${lead.board}`));
+      const considered = fresh.slice(0, args.limit ?? 60);
+
+      const verified: Array<{ company: string; ats: string; board: string; postings: number; saved: boolean }> = [];
+      const rejected: Array<{ company: string; ats: string; board: string; reason: string }> = [];
+
+      for (const lead of considered) {
+        const candidate = CompanySchema.parse({
+          name: lead.companyName,
+          ats: lead.ats,
+          board: lead.board,
+          tier: args.tier ?? "C",
+          tags: ["hacker-news"],
+        });
+        const check = await verifyBoard(candidate);
+        if (!check.ok) {
+          rejected.push({ company: candidate.name, ats: lead.ats, board: lead.board, reason: check.detail });
+          continue;
+        }
+        let saved = false;
+        if (args.save === true) {
+          upsertCompany(workspace.paths.companies, candidate);
+          appendEvent(workspace.db, "board.added", "campaign", {
+            company: candidate.name,
+            ats: candidate.ats,
+            board: candidate.board,
+            source: "hacker-news",
+            thread: thread.id,
+          });
+          saved = true;
+        }
+        verified.push({
+          company: candidate.name,
+          ats: lead.ats,
+          board: lead.board,
+          postings: check.postings,
+          saved,
+        });
+      }
+
+      if (args.save === true && verified.length > 0) reloadWorkspace();
+
+      return ok({
+        thread,
+        leadsFound: leads.length,
+        alreadyKnown: leads.length - fresh.length,
+        verified,
+        rejected,
+        hint:
+          args.save === true
+            ? "Saved boards are live now; run discover_jobs to ingest their postings."
+            : "Nothing was saved. Re-run with save=true to add the verified boards.",
       });
     }),
   );
