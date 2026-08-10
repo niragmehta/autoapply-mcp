@@ -59,6 +59,8 @@
     "allowedAtsDomains": ["boards.greenhouse.io", "job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"],
     "allowedCompanies": [],
     "dailyLimit": 20,
+    "maxBatchSize": 3,
+    "maxPerCompany": 3,
     "minDelaySeconds": 60,
     "captureScreenshots": true
   }

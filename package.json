@@ -38,6 +38,7 @@
     "coverage": "vitest run --coverage",
     "start": "node dist/index.js",
     "doctor": "node dist/cli/doctor.js",
+    "init": "node dist/cli/init.js",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {

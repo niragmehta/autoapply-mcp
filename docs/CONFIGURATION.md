@@ -2,11 +2,31 @@
 
 Three files drive everything. The server itself contains no personal data or campaign policy, which is what makes it reusable.
 
+Scaffold them from the shipped examples:
+
+```bash
+npm run init                      # writes to ~/.autoapply
+AUTOAPPLY_HOME=/path npm run init # or anywhere else
+```
+
+`init` never overwrites an existing file, so re-running it after adding one config fills in only what is missing.
+
 Validate with:
 
 ```bash
 AUTOAPPLY_HOME=/path/to/config node dist/cli/doctor.js --probe
 ```
+
+## A key written in the wrong place does nothing
+
+The schemas strip keys they do not define rather than rejecting the file, so a misplaced setting parses cleanly and then has no effect — the file says one thing and the campaign does another. `doctor` reports these:
+
+```
+WARN  campaign.json: "maxBatchSize" is ignored; it belongs at "submission.maxBatchSize"
+WARN  profile.json: "answers[4].citation" is not a known setting and is ignored
+```
+
+Treat every `WARN` as a real defect. The commonest cases are submission policy written at the top level of `campaign.json` instead of under `submission`, and extra bookkeeping fields on an `answers` entry — the only fields an answer accepts are `key`, `label`, `patterns`, `answer`, `alternatives`, `allowAutoFill`, `skip` and `note`.
 
 ## profile.json
 
@@ -63,7 +83,7 @@ Pre-approved answers to recurring questions:
 }
 ```
 
-`patterns` are case-insensitive substrings matched against the employer's question label, and the **longest** matching pattern wins, so a specific entry overrides a general one. Set `allowAutoFill` to false for anything you want to review each time; the answer is still offered as a suggestion and `note` is shown as guidance.
+`patterns` are case-insensitive substrings matched against the employer's question label, and the **longest** matching pattern wins, so a specific entry overrides a general one. They are plain substrings, not regular expressions: `record(?:ing)?` matches nothing, because no employer writes that. Write the literal words the form uses. Set `allowAutoFill` to false for anything you want to review each time; the answer is still offered as a suggestion and `note` is shown as guidance.
 
 `alternatives` is an ordered preference list for questions rendered as a fixed set of choices. The first entry the employer actually offers is used; if none are offered, the question is handed back rather than submitted with an unlisted value. See [BATCH.md](BATCH.md).
 
@@ -146,11 +166,17 @@ Thresholds set the tiers. Calibrate them against your own pool: run `discover_jo
   "allowedAtsDomains": ["job-boards.greenhouse.io", "jobs.lever.co", "jobs.ashbyhq.com"],
   "allowedCompanies": [],
   "dailyLimit": 15,
+  "maxBatchSize": 3,
+  "maxPerCompany": 3,
   "minDelaySeconds": 90
 }
 ```
 
 `mode` is a ceiling: a tool call may request a weaker mode but never a stronger one. `blockedQuestionCategories` defaults to the full sensitive set; removing an entry is a deliberate, consequential choice.
+
+`allowedCompanies` is an allowlist, not a filter: an empty list blocks every employer. A company must be added by name before any application to it can be submitted, which is what stops a mis-scoped batch from contacting people you never intended to apply to.
+
+`maxBatchSize` caps how many applications a single `prepare_batch` or `submit_batch` run may touch, even when a caller passes a larger explicit limit. Keeping it small keeps a run reviewable and avoids the rapid consecutive submissions that ATS platforms rate-limit. `maxPerCompany` caps how many live applications may exist for one employer, since several reject the excess outright.
 
 ## companies.json
 
