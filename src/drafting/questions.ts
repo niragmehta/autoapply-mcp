@@ -32,10 +32,58 @@ function selectPrimaryField(label: string, fields: Array<Record<string, unknown>
   return fields[0] ?? {};
 }
 
+/**
+ * Greenhouse serves demographic self-identification questions in a different
+ * shape from the rest of the application: there is no `fields` array, and the
+ * type and choices sit directly on the question as `type` and `answer_options`.
+ * Read as an ordinary question that payload looks like a required free-text
+ * field with no options, so a race/ethnicity multi-select was classified as an
+ * essay and blocked every application carrying one.
+ *
+ * The options also carry `decline_to_answer`, which names the choice that
+ * discloses nothing. That flag is the employer's own marking, so it is more
+ * reliable than matching decline wording, and it is preserved on the question.
+ */
+function demographicShape(
+  question: Record<string, unknown>,
+): { type: string; options: string[]; declineOption?: string } | null {
+  const options = asRecordArray(question.answer_options);
+  if (options.length === 0) return null;
+
+  const labels: string[] = [];
+  let declineOption: string | undefined;
+  for (const option of options) {
+    const label = String(option.label ?? "").trim();
+    if (label.length === 0) continue;
+    labels.push(label);
+    if (option.decline_to_answer === true && declineOption === undefined) declineOption = label;
+  }
+  if (labels.length === 0) return null;
+
+  return {
+    type: typeof question.type === "string" ? question.type : "multi_value_single_select",
+    options: labels,
+    declineOption,
+  };
+}
+
 export function greenhouseQuestionsToForm(questions: readonly GreenhouseQuestion[]): FormQuestion[] {
   return questions.map((question, index) => {
     const fields = asRecordArray(question.fields);
     const label = typeof question.label === "string" ? question.label : `Question ${index + 1}`;
+    const demographic = fields.length === 0 ? demographicShape(question as Record<string, unknown>) : null;
+    if (demographic) {
+      const id = (question as Record<string, unknown>).id;
+      return {
+        key: typeof id === "number" || typeof id === "string" ? `question_${id}` : `question_${index}`,
+        label,
+        required: question.required === true,
+        type: demographic.type,
+        options: demographic.options,
+        ...(demographic.declineOption ? { declineOption: demographic.declineOption } : {}),
+      };
+    }
+
     const primary = selectPrimaryField(label, fields);
     const values = asRecordArray(primary.values);
     return {

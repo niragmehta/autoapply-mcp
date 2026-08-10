@@ -89,7 +89,7 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.demographics.pronouns",
   },
   {
-    pattern: /\b(sexual orientation|orientation)\b/i,
+    pattern: /(?:\bsexual orientation\b|\borientation\b|\blgbtq[a-z]*\+?)/i,
     category: "demographic",
     resolve: (personal) => personal.demographics.sexualOrientation,
     citation: "personal.demographics.sexualOrientation",
