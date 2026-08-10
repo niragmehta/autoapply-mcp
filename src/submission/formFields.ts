@@ -652,6 +652,8 @@ export function pickOptionIndex(
     if (exact >= 0) return exact;
     const partial = leastQualifiedMatch(optionTexts, candidate);
     if (partial >= 0) return partial;
+    const overlap = bestCoverageMatch(optionTexts, candidate);
+    if (overlap >= 0) return overlap;
   }
   const band = pickNumericBandIndex(optionTexts, candidates);
   if (band >= 0) return band;
@@ -681,9 +683,19 @@ export function pickOptionIndex(
  * "No, I need sponsorship now."; a differently ordered board would have claimed
  * the candidate needs sponsorship. Prefer the least elaborated match, because a
  * stored answer of "Yes" means plain yes, not "yes, but".
+ *
+ * Shortness only settles it when the answer says nothing beyond its polarity.
+ * "No - based in Vancouver, Canada and willing to relocate." matches both "No,
+ * I'm not based in this location but willing to relocate" and the shorter "No,
+ * I'm only able to work remotely", and shortness alone picked the second - a
+ * claim the candidate never made and would not want made for him. An option
+ * that carries more of what the answer actually says therefore wins first, and
+ * shortness breaks the remaining ties.
  */
 function leastQualifiedMatch(optionTexts: readonly string[], candidate: string): number {
+  const wanted = answerContentWords(candidate);
   let best = -1;
+  let bestCoverage = -1;
   let bestLength = Number.POSITIVE_INFINITY;
   for (let index = 0; index < optionTexts.length; index += 1) {
     const text = optionTexts[index] ?? "";
@@ -691,10 +703,102 @@ function leastQualifiedMatch(optionTexts: readonly string[], candidate: string):
     if (optionNegatesCandidate(text, candidate)) continue;
     if (optionPolarityConflicts(text, candidate)) continue;
     if (optionContradictsDecline(text, candidate)) continue;
-    const length = normalizeOptionText(text).length;
-    if (length < bestLength) {
+    const normalized = normalizeOptionText(text);
+    const words = new Set(normalized.split(" "));
+    const coverage = wanted.filter((word) => words.has(word)).length;
+    const length = normalized.length;
+    if (coverage > bestCoverage || (coverage === bestCoverage && length < bestLength)) {
       best = index;
+      bestCoverage = coverage;
       bestLength = length;
+    }
+  }
+  return best;
+}
+
+/**
+ * The words an answer contributes beyond its polarity. Short words and the
+ * connective vocabulary every option shares carry no signal about which option
+ * was meant, so counting them would make every option look equally close.
+ */
+const OPTION_STOPWORDS = new Set([
+  "yes",
+  "true",
+  "not",
+  "false",
+  "and",
+  "the",
+  "for",
+  "are",
+  "you",
+  "this",
+  "that",
+  "with",
+  "will",
+  "have",
+  "been",
+  "from",
+  "your",
+  "our",
+  "was",
+  "but",
+  "can",
+  "does",
+  "did",
+  "currently",
+  "other",
+]);
+
+function answerContentWords(candidate: string): string[] {
+  return normalizeOptionText(candidate)
+    .split(" ")
+    .filter((word) => word.length > 3 && !OPTION_STOPWORDS.has(word));
+}
+
+/**
+ * Containment cannot match a stored answer written as a sentence against an
+ * option written as a different sentence. "No - based in Vancouver, Canada and
+ * willing to relocate." is neither a substring of "No, I'm not based in this
+ * location but willing to relocate" nor the reverse, so the option list matched
+ * nothing and a required question was left blank with its answer in hand.
+ *
+ * Overlap is only consulted after exact and containment matching have failed,
+ * needs at least two shared content words so a single incidental word cannot
+ * decide, and still obeys polarity - an option opening with the opposite
+ * polarity is never eligible however much vocabulary it shares.
+ */
+const MIN_OVERLAP_WORDS = 2;
+
+/**
+ * Overlap counts vocabulary without reading grammar, so "I am a veteran" and "I
+ * am not a protected veteran" look similar to it. An option that disagrees with
+ * the answer about negation states the opposite of what the candidate said and
+ * is never an acceptable substitute for it.
+ */
+const NEGATION = /\b(not|never|no|none|neither|decline)\b/;
+
+function negationDiffers(optionText: string, candidate: string): boolean {
+  return NEGATION.test(normalizeOptionText(optionText)) !== NEGATION.test(normalizeOptionText(candidate));
+}
+
+function bestCoverageMatch(optionTexts: readonly string[], candidate: string): number {  const wanted = answerContentWords(candidate);
+  if (wanted.length < MIN_OVERLAP_WORDS) return -1;
+  let best = -1;
+  let bestCoverage = MIN_OVERLAP_WORDS - 1;
+  let bestLength = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < optionTexts.length; index += 1) {
+    const text = optionTexts[index] ?? "";
+    if (optionNegatesCandidate(text, candidate)) continue;
+    if (negationDiffers(text, candidate)) continue;
+    if (optionPolarityConflicts(text, candidate)) continue;
+    if (optionContradictsDecline(text, candidate)) continue;
+    const normalized = normalizeOptionText(text);
+    const words = new Set(normalized.split(" "));
+    const coverage = wanted.filter((word) => words.has(word)).length;
+    if (coverage > bestCoverage || (coverage === bestCoverage && normalized.length < bestLength)) {
+      best = index;
+      bestCoverage = coverage;
+      bestLength = normalized.length;
     }
   }
   return best;
