@@ -50,6 +50,24 @@ function formatLocation(profile: Profile): string {
 }
 
 /**
+ * A parenthetical example is not the subject of the question. Instacart asks
+ * "Do you have experience using AI-assisted development tools (e.g. GitHub
+ * Copilot, Cursor, Claude)...?" - a yes/no about tooling - and the word GitHub
+ * inside the example list matched the resolver for the candidate's GitHub
+ * profile, so a URL was offered as the answer to a yes/no question. Names
+ * listed as illustrations are removed before deciding what a question asks for.
+ */
+const EXAMPLE_CLAUSE = /\((?:\s*(?:e\.?g\.?|i\.?e\.?|such as|including|ex\.?)[^)]*)\)/gi;
+function withoutExamples(label: string): string {
+  return label.replace(EXAMPLE_CLAUSE, " ");
+}
+
+function contactResolverFor(label: string) {
+  const subject = withoutExamples(label);
+  return CONTACT_RESOLVERS.find(([pattern]) => pattern.test(subject));
+}
+
+/**
  * Finds the pre-approved answer whose pattern matches most specifically.
  *
  * Longest match wins rather than array order, because sponsorship questions
@@ -259,7 +277,7 @@ function answerOne(
     approvedEarly !== undefined &&
     category === "contact" &&
     resolveApprovedValue(approvedEarly, asked).unmatchedChoice &&
-    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(question.label));
+    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutExamples(question.label)));
   if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback) {
     const resolved = resolveApprovedValue(approvedEarly, asked);
     // An optional choice question offering none of the stored preferences needs
@@ -431,7 +449,7 @@ function answerOne(
   }
 
   if (category === "contact") {
-    const resolver = CONTACT_RESOLVERS.find(([pattern]) => pattern.test(question.label));
+    const resolver = contactResolverFor(question.label);
     if (resolver) {
       const plain = resolver[1](profile);
       // Boards often render a location field as a closed list whose entries are

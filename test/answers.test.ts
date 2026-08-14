@@ -669,3 +669,27 @@ describe("location questions that ask which place, not whether", () => {
     expect(answers[0]?.requiresHuman).toBe(true);
   });
 });
+
+describe("names used as examples inside a question", () => {
+  it("does not answer an AI-tools question with a GitHub profile URL", () => {
+    const p = ProfileSchema.parse(profile);
+    const { answers } = draftAnswers(
+      [
+        question(
+          "Do you have experience using AI-assisted development tools (e.g. GitHub Copilot, Cursor, Claude) in a professional engineering context?",
+          { type: "multi_value_single_select", options: ["Yes", "No"] },
+        ),
+      ],
+      p,
+      campaign,
+    );
+    expect(answers[0]?.answer).not.toContain("github.com");
+    expect(answers[0]?.citation).not.toContain("links.github");
+  });
+
+  it("still answers a question that really asks for the GitHub profile", () => {
+    const p = ProfileSchema.parse(profile);
+    const { answers } = draftAnswers([question("GitHub profile URL")], p, campaign);
+    expect(answers[0]?.answer).toContain("github.com");
+  });
+});
