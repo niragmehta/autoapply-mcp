@@ -156,7 +156,13 @@ function canonicalSponsorshipDecision(
   question: FormQuestion,
 ): Profile["answers"][number] | undefined {
   if (!/sponsor/i.test(question.label)) return undefined;
-  if (NAMED_IMMIGRATION_CLASS.test(question.label)) return undefined;
+  // Judged with bracketed asides removed. Anduril asks "Will you require
+  // sponsorship from Anduril for employment now or in the future (e.g, H1B
+  // visa)?" - the ordinary question, illustrated by a route this candidate would
+  // not use. Read whole, the illustration made it look like a question about a
+  // named class and blocked an answer already on file. A definition stated
+  // outside brackets still counts.
+  if (NAMED_IMMIGRATION_CLASS.test(withoutAsides(question.label))) return undefined;
   const options = question.options ?? [];
   if (options.length !== 2 || !options.every((option) => YES_OR_NO.test(option.trim()))) return undefined;
   return profile.answers.find(

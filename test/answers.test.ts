@@ -745,6 +745,18 @@ describe("sponsorship questions phrased outside the stored patterns", () => {
     expect(answers[0]?.requiresHuman).toBe(true);
   });
 
+  it("treats a bracketed visa example as an illustration, not a definition", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question("Will you require sponsorship from Anduril for employment now or in the future (e.g, H1B visa)?", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["Yes", "No"],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("No");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
   it("does not guess when the question is not a plain yes/no", () => {
     const p = ProfileSchema.parse(sponsorshipProfile);
     const asked = question("Which countries would you need sponsorship for?", {
