@@ -25,6 +25,11 @@ import {
 import { validateResumeFile } from "./resume.js";
 import { redactSecrets } from "./credentials.js";
 import { enterWorkdayApplication, isWorkdayUrl } from "./workdayFlow.js";
+import {
+  fetchVerificationCode,
+  readVerificationInboxConfig,
+  type VerificationInboxConfig,
+} from "./verificationInbox.js";
 import type { SubmissionPacket } from "./packet.js";
 
 /**
@@ -137,6 +142,11 @@ export type BrowserRunOptions = {
   codeWaitMs?: number;
   /** File polled for the code while `codeWaitMs` has not elapsed. */
   codeFilePath?: string;
+  /**
+   * Mailbox polled alongside `codeFilePath`. Defaults to whatever the
+   * environment configures, and is absent unless deliberately switched on.
+   */
+  verificationInbox?: VerificationInboxConfig | null;
 };
 
 export type BrowserRunResult = {
@@ -1051,6 +1061,8 @@ async function awaitVerificationCode(
 
   try {
     const deadline = Date.now() + waitMs;
+    const inbox = options.verificationInbox ?? readVerificationInboxConfig();
+    const emailedAt = new Date();
     while (Date.now() < deadline) {
       const code = await readFile(path, "utf8")
         .then((text) => text.trim())
@@ -1060,6 +1072,16 @@ async function awaitVerificationCode(
         // up by the next one.
         await rm(path, { force: true }).catch(() => undefined);
         return code;
+      }
+      // A configured mailbox is a second reader of the same round trip, not a
+      // replacement: a person can still drop the code in the file at any point,
+      // and whichever arrives first wins.
+      if (inbox) {
+        const emailed = await fetchVerificationCode(inbox, emailedAt).catch((error: unknown) => {
+          logger.warn("verification inbox unreadable", { detail: String(error) });
+          return null;
+        });
+        if (emailed) return emailed;
       }
       await page.waitForTimeout(2000);
     }

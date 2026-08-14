@@ -194,3 +194,38 @@ Thresholds set the tiers. Calibrate them against your own pool: run `discover_jo
 `name` is an identity, not a label. Boards are matched on it case-insensitively, and `submission.maxPerCompany` is keyed by it, so two spellings of one employer become two boards with two separate ceilings.
 
 Start from `presets/ai-security-us-canada.json`, which contains 135 boards verified live against the ATS APIs. `npm run init` copies it for you. It is a starting point, not a fixed list: this file is your own selection, so add and remove boards freely. Boards found during a campaign land in your copy, not in the repository, so contribute anything worth sharing back to the preset.
+
+## Verification codes (environment only)
+
+Greenhouse increasingly emails a one-time code before it accepts a submission,
+and the code dies the moment a second submit asks for a new one. `submit_application`
+with `waitForCodeSeconds` therefore holds the browser at the gate and polls
+`<artifacts>/<applicationId>.code`, which a person can write by hand.
+
+Setting the variables below lets the server read that code out of a mailbox
+instead. Both readers run together, so the file hand-off keeps working and
+whichever code arrives first is used.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AUTOAPPLY_OTP_IMAP_USER` | - | Mailbox address. Absent means the feature is off. |
+| `AUTOAPPLY_OTP_IMAP_PASSWORD` | - | App password for that mailbox. |
+| `AUTOAPPLY_OTP_IMAP_HOST` | `imap.gmail.com` | IMAP host. |
+| `AUTOAPPLY_OTP_IMAP_PORT` | `993` | IMAPS port. |
+| `AUTOAPPLY_OTP_MAILBOX` | `INBOX` | Folder to read. |
+| `AUTOAPPLY_OTP_FROM` | - | Only consider senders containing this text. |
+
+Point this at a mailbox that receives nothing but forwarded verification mail,
+created by a filter on your real address. An app password grants full read of
+whatever mailbox it belongs to, so the narrower that mailbox is, the less the
+server can see. Credentials are read from the environment and never from
+`profile.json` or `campaign.json`, which are edited by hand, printed in previews
+and backed up.
+
+Only messages that arrive **after** the run clicked submit are considered: an
+earlier code belongs to an earlier attempt and is already dead. When a message
+yields two different candidate codes the server declines to guess, because a
+wrong code is not a free retry - the board rejects it and emails a fresh one,
+invalidating the code the run is waiting for.
+
+Requires `npm install imapflow`, an optional peer dependency.
