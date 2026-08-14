@@ -106,6 +106,19 @@ describe("choosing which email to trust", () => {
     ];
     await expect(fetchVerificationCode(config, since, async () => messages)).resolves.toBe("ZUvwsFBq");
   });
+
+  it("accepts a code dated a second early, which is all IMAP's resolution promises", async () => {
+    // The board emails the code as the submit click lands, and IMAP rounds
+    // arrival down to the second, so the answer can be dated fractionally
+    // before the question. Rejecting it discards every real code.
+    const truncated = [{ receivedAt: new Date("2026-08-13T19:59:59Z"), body: "code gobU461O" }];
+    await expect(fetchVerificationCode(config, since, async () => truncated)).resolves.toBe("gobU461O");
+  });
+
+  it("still refuses a code from the previous attempt minutes earlier", async () => {
+    const previous = [{ receivedAt: new Date("2026-08-13T19:59:00Z"), body: "code dkgqL1KS" }];
+    await expect(fetchVerificationCode(config, since, async () => previous)).resolves.toBeNull();
+  });
 });
 
 describe("decoding a raw message", () => {
