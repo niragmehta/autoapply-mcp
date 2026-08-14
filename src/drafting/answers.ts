@@ -1,7 +1,7 @@
 import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
-import { classifyQuestion, isBlockedCategory, looksLikeEssay, questionCore } from "./blockedQuestions.js";
+import { classifyQuestion, isBlockedCategory, looksLikeEssay, questionCore, withoutAsides } from "./blockedQuestions.js";
 import { resolveConditionalFollowUps } from "./conditionalFollowUps.js";
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
@@ -50,20 +50,10 @@ function formatLocation(profile: Profile): string {
 }
 
 /**
- * A parenthetical example is not the subject of the question. Instacart asks
- * "Do you have experience using AI-assisted development tools (e.g. GitHub
- * Copilot, Cursor, Claude)...?" - a yes/no about tooling - and the word GitHub
- * inside the example list matched the resolver for the candidate's GitHub
- * profile, so a URL was offered as the answer to a yes/no question. Names
- * listed as illustrations are removed before deciding what a question asks for.
+ * A bracketed aside is not the subject of the question; see `withoutAsides`.
  */
-const EXAMPLE_CLAUSE = /\((?:\s*(?:e\.?g\.?|i\.?e\.?|such as|including|ex\.?)[^)]*)\)/gi;
-function withoutExamples(label: string): string {
-  return label.replace(EXAMPLE_CLAUSE, " ");
-}
-
 function contactResolverFor(label: string) {
-  const subject = withoutExamples(label);
+  const subject = withoutAsides(label);
   return CONTACT_RESOLVERS.find(([pattern]) => pattern.test(subject));
 }
 
@@ -123,6 +113,58 @@ function statesWhereCandidateLives(entry: Profile["answers"][number]): boolean {
 function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boolean }): boolean {
   if (entry.skip === true) return true;
   return entry.allowAutoFill && entry.answer.trim().length > 0;
+}
+
+/**
+ * Employers word the sponsorship question in endlessly many ways, and a stored
+ * pattern list can only ever chase them. Abnormal Security asks "Do you need,
+ * or will you need in the future, any immigration related support or
+ * sponsorship...?" - the same question thirteen stored patterns already cover,
+ * phrased so that none of them is a substring - and the application stopped for
+ * a decision the candidate had already written down.
+ *
+ * So a sponsorship question offering nothing but Yes and No may fall back to the
+ * candidate's own standing yes/no sponsorship answer. Two limits keep that
+ * honest. The question must offer exactly those two choices, because anything
+ * else is asking something other than whether sponsorship is needed. And it must
+ * not name an immigration classification: a form defining sponsorship to include
+ * TN is asking a different question, one this candidate answers the other way,
+ * so those stay with the specific stored answer or with a person.
+ */
+const NAMED_IMMIGRATION_CLASS =
+  /\b(h-?1-?b|e-?3|tn|o-?1|l-?1|f-?1|j-?1|usmca|nafta|opt|cpt|green card|permanent residen)/i;
+const YES_OR_NO = /^(yes|no)$/i;
+
+/**
+ * A form that names TN inside its definition of sponsorship is not asking the
+ * usual question. This candidate needs no petition and no lottery, so the plain
+ * "do you require sponsorship" answer is No - but TN status does require a
+ * letter of support from the employer, and a form that counts that as
+ * sponsorship is owed a Yes. A generic stored No must therefore never be handed
+ * to a question that names TN; it falls to an answer written for that wording,
+ * or to a person. H-1B alone does not trigger this: naming the route the
+ * candidate would not use leaves the ordinary question intact.
+ */
+const TN_DEFINED_SPONSORSHIP = /\b(tn\b|usmca|nafta)/i;
+
+function namesTnRoute(entry: Profile["answers"][number]): boolean {
+  return entry.patterns.some((pattern) => TN_DEFINED_SPONSORSHIP.test(pattern)) || TN_DEFINED_SPONSORSHIP.test(entry.label);
+}
+
+function canonicalSponsorshipDecision(
+  profile: Profile,
+  question: FormQuestion,
+): Profile["answers"][number] | undefined {
+  if (!/sponsor/i.test(question.label)) return undefined;
+  if (NAMED_IMMIGRATION_CLASS.test(question.label)) return undefined;
+  const options = question.options ?? [];
+  if (options.length !== 2 || !options.every((option) => YES_OR_NO.test(option.trim()))) return undefined;
+  return profile.answers.find(
+    (entry) =>
+      canAutoFill(entry) &&
+      YES_OR_NO.test(entry.answer.trim()) &&
+      entry.patterns.some((pattern) => /sponsor/i.test(pattern)),
+  );
 }
 
 /**
@@ -247,17 +289,35 @@ function answerOne(
   // Work authorization gets the verified statement as a suggestion, but the
   // candidate still confirms it: the wording is legally material.
   if (category === "work-authorization" || category === "sponsorship" || category === "citizenship") {
-    const approved = matchApprovedAnswer(profile, question.label);
-    const useApproved = approved !== undefined && canAutoFill(approved) && !profile.workAuthorization.alwaysReviewManually;
+    const matched = matchApprovedAnswer(profile, question.label);
+    const reviewAll = profile.workAuthorization.alwaysReviewManually;
+    // A generic sponsorship answer cannot speak for a form that counts TN as
+    // sponsorship; only an entry written for that wording may.
+    const tnDefined = TN_DEFINED_SPONSORSHIP.test(question.label) && /sponsor/i.test(question.label);
+    const eligible = matched && tnDefined && !namesTnRoute(matched) ? undefined : matched;
+    // Fall back only when no stored pattern matched at all: an entry that
+    // matched but is deliberately left blank is a standing request to be asked.
+    const approved = eligible ?? (reviewAll ? undefined : canonicalSponsorshipDecision(profile, question));
+    // This branch used to hand the stored answer straight to the form without
+    // consulting the choices on offer. "Which countries would you need
+    // sponsorship for?" matches the stored "need sponsorship" answer, so a bare
+    // "No" was headed for a list of country names. A stored answer the question
+    // does not offer is unusable, whatever its wording says.
+    const resolved = approved ? resolveApprovedValue(approved, question) : undefined;
+    const unusable = resolved?.unmatchedChoice === true;
+    const useApproved = approved !== undefined && canAutoFill(approved) && !reviewAll && !unusable;
     return {
       questionKey: question.key,
       label: question.label,
-      answer: approved?.answer ?? profile.workAuthorization.statement,
+      answer: useApproved ? (resolved?.value ?? approved.answer) : (approved?.answer ?? profile.workAuthorization.statement),
       source: approved ? "approved-answer" : "profile",
       citation: approved ? `profile.answers.${approved.key}` : "profile.workAuthorization.statement",
       requiresHuman: !useApproved,
       category,
-      guidance: "",
+      guidance:
+        unusable && approved
+          ? `"${approved.answer}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
+          : "",
     };
   }
 
@@ -277,7 +337,7 @@ function answerOne(
     approvedEarly !== undefined &&
     category === "contact" &&
     resolveApprovedValue(approvedEarly, asked).unmatchedChoice &&
-    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutExamples(question.label)));
+    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
   if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback) {
     const resolved = resolveApprovedValue(approvedEarly, asked);
     // An optional choice question offering none of the stored preferences needs
