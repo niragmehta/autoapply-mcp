@@ -41,6 +41,26 @@ export function normalizeQuestionLabel(label: string): string {
 }
 
 /**
+ * Strips a bracketed aside so matching sees what is being asked rather than an
+ * illustration or a follow-up instruction.
+ *
+ * Instacart asks "Do you have experience using AI-assisted development tools
+ * (e.g. GitHub Copilot, Cursor, Claude)...?" and Abnormal Security asks "Are you
+ * currently an employee or contractor at Abnormal? (if Yes, please add your
+ * Abnormal email in the email section...)". Both are yes/no questions, yet
+ * "GitHub" and "email" sit inside the brackets, and each pulled the question
+ * towards a stored contact detail. An example names something the answer might
+ * resemble; a conditional instruction applies only once the question has been
+ * answered. Neither is the subject.
+ */
+const ASIDE_CLAUSE =
+  /\((?:\s*(?:e\.?g\.?|i\.?e\.?|such as|including|ex\.?|if\s+(?:yes|no|so|not|applicable))[^)]*)\)/gi;
+
+export function withoutAsides(label: string): string {
+  return label.replace(ASIDE_CLAUSE, " ");
+}
+
+/**
  * Strips a leading conditional clause so matching sees the question rather than
  * its precondition.
  *
@@ -61,7 +81,7 @@ export function questionCore(label: string): string {
 }
 
 export function classifyQuestion(label: string): string {
-  const raw = label.trim();
+  const raw = withoutAsides(label).trim();
   if (raw.length === 0) return "general";
   // Test both forms: normalization splits camel case, which helps compliance
   // labels but would break single-token names such as "LinkedIn".

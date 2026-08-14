@@ -693,3 +693,79 @@ describe("names used as examples inside a question", () => {
     expect(answers[0]?.answer).toContain("github.com");
   });
 });
+
+describe("sponsorship questions phrased outside the stored patterns", () => {
+  const sponsorshipProfile = makeProfile({
+    workAuthorization: {
+      citizenships: ["Canada"],
+      authorizedIn: ["CA"],
+      requiresSponsorshipIn: ["US"],
+      statement: "Canadian citizen; US roles require employer support for work authorization.",
+      alwaysReviewManually: false,
+    },
+    answers: [
+      {
+        key: "visa-sponsorship",
+        label: "Do you require visa sponsorship?",
+        patterns: ["require visa sponsorship", "need sponsorship"],
+        answer: "No",
+        alternatives: [],
+        allowAutoFill: true,
+      },
+      {
+        key: "sponsorship-named-tn",
+        label: "Sponsorship where the form names TN",
+        patterns: ["h-1b, e-3, tn, o-1"],
+        answer: "Yes",
+        alternatives: [],
+        allowAutoFill: true,
+      },
+    ],
+  });
+
+  it("answers a yes/no sponsorship question no stored pattern matches", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Do you need, or will you need in the future, any immigration related support or sponsorship from Abnormal AI in order to begin or continue employment with Abnormal AI?",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("No");
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.citation).toBe("profile.answers.visa-sponsorship");
+  });
+
+  it("leaves a sponsorship question that names an immigration class alone", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Will you now or in the future need sponsorship such as H-1B or TN status to work for us?",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("does not guess when the question is not a plain yes/no", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question("Which countries would you need sponsorship for?", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["United States", "Canada", "United Kingdom"],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+});
+
+describe("bracketed conditional instructions inside a question", () => {
+  it("does not treat a yes/no question as a request for the email its instruction mentions", () => {
+    const p = ProfileSchema.parse(profile);
+    const asked = question(
+      "Are you currently an employee or contractor at Abnormal?\n(if Yes, please add your Abnormal email in the email section of the application page)\n",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).not.toContain("@");
+    expect(answers[0]?.category).not.toBe("contact");
+  });
+});
