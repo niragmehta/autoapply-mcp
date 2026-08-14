@@ -578,3 +578,45 @@ describe("profile pattern bounds", () => {
     expect(() => ProfileSchema.parse(answerWithPattern("a".repeat(500)))).not.toThrow();
   });
 });
+describe("questions about where the candidate lives right now", () => {
+  const NETSKOPE =
+    "Are you currently located in the San Francisco Bay Area and able to work from our Santa Clara HQ up to 1-2 days weekly when necessary?";
+  const onsite = {
+    key: "onsite-willingness",
+    label: "Willing to work onsite",
+    patterns: ["work from our", "in our office"],
+    answer: "Yes",
+    allowAutoFill: true,
+  };
+  const basedIn = {
+    key: "based-in-location",
+    label: "Currently based in",
+    patterns: ["are you located in"],
+    answer: "No - based in Vancouver, Canada and willing to relocate.",
+    allowAutoFill: true,
+  };
+
+  it("never answers one with a willingness-to-commute answer", () => {
+    const p = ProfileSchema.parse({ ...profile, answers: [onsite] });
+    const { answers } = draftAnswers([question(NETSKOPE, { required: true })], p, campaign);
+    expect(answers[0]?.answer).not.toBe("Yes");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("prefers a residence answer even when another pattern matches more of the label", () => {
+    const p = ProfileSchema.parse({ ...profile, answers: [onsite, basedIn] });
+    const { answers } = draftAnswers(
+      [question("Are you located in the Bay Area and able to work from our office?", { required: true })],
+      p,
+      campaign,
+    );
+    expect(answers[0]?.answer).toContain("Vancouver");
+  });
+
+  it("still lets a willingness answer fill a plain onsite question", () => {
+    const p = ProfileSchema.parse({ ...profile, answers: [onsite] });
+    const { answers } = draftAnswers([question("Are you willing to work from our office 2 days a week?")], p, campaign);
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+});

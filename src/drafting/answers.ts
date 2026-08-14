@@ -59,8 +59,10 @@ function formatLocation(profile: Profile): string {
  */
 function matchApprovedAnswer(profile: Profile, label: string) {
   const haystack = label.toLowerCase();
+  const residenceAsked = CURRENT_RESIDENCE_QUESTION.test(haystack) && !WORK_AUTHORITY_TEXT.test(haystack);
   let best: { entry: Profile["answers"][number]; length: number } | null = null;
   for (const entry of profile.answers) {
+    if (residenceAsked && !statesWhereCandidateLives(entry)) continue;
     for (const pattern of entry.patterns) {
       const needle = pattern.toLowerCase();
       if (!haystack.includes(needle)) continue;
@@ -68,6 +70,31 @@ function matchApprovedAnswer(profile: Profile, label: string) {
     }
   }
   return best?.entry;
+}
+
+/**
+ * Boards ask where the candidate is *now* as a compound: "Are you currently
+ * located in the San Francisco Bay Area and able to work from our Santa Clara
+ * HQ up to 1-2 days weekly?". Only the second clause matched a stored
+ * willingness-to-commute "Yes", so Netskope was told the candidate already
+ * lives in the Bay Area. He lives in Vancouver. Willingness is a statement
+ * about the future and can never answer a question of present fact, so a
+ * residence question may only be filled by an answer that is itself about
+ * where the candidate lives; anything else leaves it for a person to decide.
+ *
+ * The equivalent guard in the form-filling layer cannot catch this, because by
+ * then the answer carries the question's own label and so looks like a
+ * residence answer to any test applied to it.
+ */
+const CURRENT_RESIDENCE_QUESTION =
+  /\b(currently based|currently located|currently living|currently reside|currently residing|are you based|are you located|do you live|do you reside|do you currently live)\b/;
+/** Work authorization is phrased as location but asks about legal status. */
+const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
+const RESIDENCE_ANSWER = /\b(based|located|reside|residing|lives?|living)\b/;
+
+/** Judged from the entry's own wording, never from the question it matched. */
+function statesWhereCandidateLives(entry: Profile["answers"][number]): boolean {
+  return RESIDENCE_ANSWER.test(entry.label.toLowerCase()) || RESIDENCE_ANSWER.test(entry.answer.toLowerCase());
 }
 
 /**
