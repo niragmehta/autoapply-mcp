@@ -620,3 +620,52 @@ describe("questions about where the candidate lives right now", () => {
     expect(answers[0]?.requiresHuman).toBe(false);
   });
 });
+
+describe("location questions that ask which place, not whether", () => {
+  const residence = {
+    key: "based-in-location",
+    label: "Currently based in",
+    patterns: ["do you currently live in", "are you located in"],
+    answer: "No - based in Vancouver, Canada and willing to relocate.",
+    allowAutoFill: true,
+  };
+  const PROVINCES = ["(USA) California", "(USA) New York", "(CAN) British Columbia", "(CAN) Ontario"];
+
+  it("answers with the province on file rather than a yes/no residence answer", () => {
+    const p = ProfileSchema.parse({
+      ...profile,
+      identity: { ...profile.identity, location: { city: "Vancouver", region: "British Columbia", country: "Canada" } },
+      answers: [residence],
+    });
+    const { answers } = draftAnswers(
+      [
+        question("Which state or province do you currently live in?", {
+          required: true,
+          type: "multi_value_single_select",
+          options: PROVINCES,
+        }),
+      ],
+      p,
+      campaign,
+    );
+    expect(answers[0]?.answer).toBe("(CAN) British Columbia");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("hands back a location list that does not offer where the candidate lives", () => {
+    const p = ProfileSchema.parse({ ...profile, answers: [residence] });
+    const { answers } = draftAnswers(
+      [
+        question("Which state do you currently live in?", {
+          required: true,
+          type: "multi_value_single_select",
+          options: ["(USA) California", "(USA) New York"],
+        }),
+      ],
+      p,
+      campaign,
+    );
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+});
