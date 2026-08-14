@@ -781,3 +781,22 @@ describe("bracketed conditional instructions inside a question", () => {
     expect(answers[0]?.category).not.toBe("contact");
   });
 });
+
+describe("work eligibility is never inferred from employment history", () => {
+  it("does not answer a work-eligibility question from an unfinished job", () => {
+    const p = ProfileSchema.parse(profile);
+    const asked = question("Are you currently eligible to work in the country in which this job is posted?", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["Yes", "No"],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.citation).not.toContain("experience[0].end");
+  });
+
+  it("still recognizes a genuine current-role checkbox", () => {
+    const p = ProfileSchema.parse(profile);
+    const { answers } = draftAnswers([question("I currently work here", { type: "boolean" })], p, campaign);
+    expect(answers[0]?.answer).toBe("Yes");
+  });
+});
