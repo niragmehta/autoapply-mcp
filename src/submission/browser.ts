@@ -666,8 +666,8 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
             reason: `verification code was entered but the submission was not confirmed${
               codeErrors.length ? `; page reported: ${codeErrors.join(" | ")}` : ""
             }${stillGated ? " The gate is still on screen after the wait, so the code was most likely refused and a new one has been emailed." : ""}${
-              gate ? ` Gate controls: ${gate}` : ""
-            }`,
+              ` Code entry: ${entered}.`
+            }${gate ? ` Gate controls: ${gate}` : ""}`,
             filledFields: filled,
             unmatchedRequired: [],
             unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
@@ -1117,12 +1117,25 @@ const VERIFICATION_INPUT_SELECTORS = [
  * Returns false when no code box can be found, so the caller reports the gate
  * rather than claiming an attempt that never happened.
  */
-async function enterVerificationCode(page: AnyPage, code: string): Promise<boolean> {
+/**
+ * Enters the code and sends it, returning a description of the action taken or
+ * null when nothing could be entered.
+ *
+ * The description is not decoration. A gate that is still on screen afterwards
+ * means either a refused code or a button that was never pressed, and those have
+ * opposite remedies. Every diagnosis costs a fresh code and another round trip
+ * to whoever reads the inbox, so the run records what it did rather than leaving
+ * the next attempt to guess.
+ */
+async function enterVerificationCode(page: AnyPage, code: string): Promise<string | null> {
   const trimmed = code.trim();
-  if (!trimmed) return false;
+  if (!trimmed) return null;
 
   const lastBox = await fillSegmentedCode(page, trimmed);
-  if (lastBox) return submitVerificationCode(page, lastBox);
+  if (lastBox) {
+    const action = await submitVerificationCode(page, lastBox);
+    return action ? `filled ${trimmed.length} segmented boxes, then ${action}` : null;
+  }
 
   for (const selector of VERIFICATION_INPUT_SELECTORS) {
     const locator = page.locator(selector).first();
@@ -1133,9 +1146,10 @@ async function enterVerificationCode(page: AnyPage, code: string): Promise<boole
     // Only report success once the box actually holds the code. A readonly or
     // shadowed input accepts fill() silently and would otherwise look filled.
     if (value !== undefined && value !== trimmed) continue;
-    return submitVerificationCode(page, locator);
+    const action = await submitVerificationCode(page, locator);
+    return action ? `filled ${selector}, then ${action}` : null;
   }
-  return false;
+  return null;
 }
 
 /**
@@ -1206,23 +1220,31 @@ const CLICK_CODE_SUBMIT = `(() => {
   return 'no-control';
 })()`;
 
-export async function submitVerificationCode(page: AnyPage, codeField: AnyLocator): Promise<boolean> {
+/**
+ * Sends the entered code, returning what it did: the label of the control it
+ * clicked, the selector it fell back to, or the key it pressed. Returns "" when
+ * nothing could be actioned.
+ */
+export async function submitVerificationCode(page: AnyPage, codeField: AnyLocator): Promise<string> {
   const nearby = await page.evaluate(CLICK_CODE_SUBMIT).catch(() => "");
-  if (typeof nearby === "string" && nearby.startsWith("clicked:")) return true;
+  if (typeof nearby === "string" && nearby.startsWith("clicked:")) return `clicked gate control ${nearby.slice(8)}`;
+  // Records why the proximity search declined, because "ambiguous:7" and
+  // "no-boxes" call for different fixes.
+  const declined = typeof nearby === "string" && nearby ? ` (proximity search returned ${nearby})` : "";
 
   for (const selector of VERIFICATION_SUBMIT_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count().catch(() => 0)) === 0) continue;
     if (!(await locator.isVisible().catch(() => false))) continue;
     await locator.click().catch(() => undefined);
-    return true;
+    return `clicked ${selector}${declined}`;
   }
   const pressed = await codeField
     .press?.("Enter")
     .then(() => true)
     .catch(() => false);
-  if (pressed) return true;
-  return clickSubmit(page);
+  if (pressed) return `pressed Enter in the code field${declined}`;
+  return (await clickSubmit(page)) ? `clicked the form's submit control${declined}` : "";
 }
 
 /**

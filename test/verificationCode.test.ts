@@ -136,7 +136,7 @@ describe("submitting the code", () => {
     const { page, clicked } = gatedPage();
     const box = { press: async () => undefined };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    expect(await submitVerificationCode(page as any, box as any)).toContain("form:has(input[maxlength=");
     expect(clicked).toEqual(["code-form-submit"]);
   });
 
@@ -152,7 +152,7 @@ describe("submitting the code", () => {
       },
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    expect(await submitVerificationCode(page as any, box as any)).toContain("pressed Enter");
     expect(clicked).toEqual(["Enter"]);
   });
 });
@@ -165,7 +165,7 @@ describe("clicking the gate's own control", () => {
       },
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await submitVerificationCode(page as any, {} as any)).toBe(true);
+    expect(await submitVerificationCode(page as any, {} as any)).toBe("clicked gate control unlabelled");
   });
 
   it("falls through when the surrounding container is too crowded to be the gate", async () => {
@@ -180,8 +180,11 @@ describe("clicking the gate's own control", () => {
       },
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(await submitVerificationCode(page as any, box as any)).toBe(true);
+    const action = await submitVerificationCode(page as any, box as any);
     expect(pressed).toEqual(["Enter"]);
+    // The reason the proximity search declined is carried into the report, so a
+    // crowded container can be told apart from a gate with no control at all.
+    expect(action).toContain("ambiguous:7");
   });
 });
 describe("waiting for the outcome of a code-verified submit", () => {
