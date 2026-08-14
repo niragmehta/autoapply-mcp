@@ -247,7 +247,20 @@ function answerOne(
   // otherwise blocked category. Checked before the block so the candidate's own
   // stored choice is honoured.
   const approvedEarly = matchApprovedAnswer(profile, asked.label);
-  if (approvedEarly && canAutoFill(approvedEarly)) {
+  // A stored answer that the form does not offer as a choice is unusable. When
+  // the question is also a contact field, the profile holds the literal value it
+  // wants, so preferring the stored answer blocks the application over a fact
+  // already on file. Instacart asks "Which state or province do you currently
+  // live in?" and lists "(CAN) British Columbia"; the stored residence answer
+  // ("No - based in Vancouver...") matched the question's wording, matched none
+  // of the 61 options, and so held up an otherwise complete application. A
+  // question asking *which* place wants a value, not a yes/no.
+  const factualFallback =
+    approvedEarly !== undefined &&
+    category === "contact" &&
+    resolveApprovedValue(approvedEarly, asked).unmatchedChoice &&
+    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(question.label));
+  if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback) {
     const resolved = resolveApprovedValue(approvedEarly, asked);
     // An optional choice question offering none of the stored preferences needs
     // no decision: leaving it blank is the honest outcome, and for a decline
@@ -404,7 +417,7 @@ function answerOne(
   }
 
   const approved = approvedEarly;
-  if (approved) {
+  if (approved && !factualFallback) {
     return {
       questionKey: question.key,
       label: question.label,
@@ -420,16 +433,25 @@ function answerOne(
   if (category === "contact") {
     const resolver = CONTACT_RESOLVERS.find(([pattern]) => pattern.test(question.label));
     if (resolver) {
-      const value = resolver[1](profile);
+      const plain = resolver[1](profile);
+      // Boards often render a location field as a closed list whose entries are
+      // decorated - Instacart lists "(CAN) British Columbia", not "British
+      // Columbia". Handing the bare value to a closed list submits something the
+      // form does not offer, so resolve it against the options when there are any.
+      const resolved = resolveApprovedValue({ answer: plain, alternatives: [] }, question);
+      const value = resolved.unmatchedChoice ? plain : resolved.value;
+      const unusable = resolved.unmatchedChoice && (question.options?.length ?? 0) > 0;
       return {
         questionKey: question.key,
         label: question.label,
-        answer: value,
+        answer: unusable ? "" : value,
         source: "profile",
         citation: resolver[2],
-        requiresHuman: value.trim().length === 0 && question.required,
+        requiresHuman: (value.trim().length === 0 || unusable) && question.required,
         category,
-        guidance: "",
+        guidance: unusable
+          ? `"${plain}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
+          : "",
       };
     }
   }
