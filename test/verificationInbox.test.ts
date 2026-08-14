@@ -59,6 +59,38 @@ describe("extracting the code from an email", () => {
   });
 });
 
+describe("the email Greenhouse actually sends", () => {
+  /**
+   * Trimmed from the message Abnormal Security's board sent on 2026-08-14. The
+   * code is long dead. Two details matter: the code follows a colon, and one
+   * sentence later the word "resubmit" sits directly after "code," - which an
+   * unanchored search returns as the code.
+   */
+  const GREENHOUSE = [
+    "Content-Type: text/html; charset=utf-8",
+    "Subject: Security code for your application to Abnormal",
+    "",
+    "<p>Hi Nirag,</p>",
+    "<p>Copy and paste this code into the security code field on your application: dkgqL1KS</p>",
+    "<p>After you enter the code, resubmit your application.</p>",
+    '<a href="https://us.greenhouse-mail.io/ss/c/WH3q1f0elHUbkUWmL8z2WsazVD">unsubscribe</a>',
+  ].join("\r\n");
+
+  it("reads the code and not the word that follows the next mention", () => {
+    expect(extractVerificationCode(decodeMessageText(Buffer.from(GREENHOUSE, "utf8")))).toBe("dkgqL1KS");
+  });
+
+  it("discards tracking hashes in link targets, which are shaped exactly like codes", () => {
+    const text = decodeMessageText(Buffer.from(GREENHOUSE, "utf8"));
+    expect(text).not.toContain("WH3q1f0elH");
+  });
+
+  it("discards the headers, so a subject line cannot supply a candidate", () => {
+    const text = decodeMessageText(Buffer.from(GREENHOUSE, "utf8"));
+    expect(text).not.toContain("Content-Type");
+  });
+});
+
 describe("choosing which email to trust", () => {
   const since = new Date("2026-08-13T20:00:00Z");
 

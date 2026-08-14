@@ -48,10 +48,18 @@ export function readVerificationInboxConfig(
 
 /**
  * Observed Greenhouse codes: eight alphanumerics carrying both cases, such as
- * `pvlqH9IO`, `KbZB13vY` and `ZUvwsFBq`. A digit is not guaranteed, so case
- * mixing is the only reliable signature.
+ * `dkgqL1KS`, `pvlqH9IO` and `ZUvwsFBq`. A digit is not guaranteed, so case
+ * mixing is the only reliable signature - and it is what separates a code from
+ * an ordinary word like `resubmit`, which sits one sentence away from the real
+ * code in Greenhouse's own email.
  */
-const CODE_SHAPE = /\b(?=[A-Za-z0-9]{8}\b)(?=[^\s]*[a-z])(?=(?:[^\s]*[A-Z]){2})[A-Za-z0-9]{8}\b/g;
+function looksLikeCode(token: string): boolean {
+  if (NOT_A_CODE.test(token)) return false;
+  if (/^\d{4,12}$/.test(token)) return true;
+  if (!/^[A-Za-z0-9]{6,12}$/.test(token)) return false;
+  if (!/[a-z]/.test(token)) return false;
+  return (token.match(/[A-Z]/g) ?? []).length >= 2;
+}
 
 /** Words that share the code's shape but are never the code. */
 const NOT_A_CODE = /^(LinkedIn|Greenhouse|Facebook|Snapchat|WhatsApp|Telegram)$/i;
@@ -73,25 +81,21 @@ export function extractVerificationCode(body: string): string | null {
 }
 
 /**
- * Codes introduced by the word "code" win outright, because that is the only
- * evidence in the message that a given token is the one being asked for.
+ * Greenhouse presents the code after a colon: "Copy and paste this code into
+ * the security code field on your application: dkgqL1KS".
+ *
+ * The colon is what makes this reliable. Taking whatever follows the word
+ * "code" instead picks up "After you enter the code, resubmit your
+ * application" and offers `resubmit` as the code.
  */
+const LABELLED_CODE = /\bcode\b[^:\r\n]{0,80}:\s*([A-Za-z0-9]{4,12})\b/gi;
+
 function labelledCandidates(body: string): string[] {
-  const found: string[] = [];
-  const label = /\bcode\b[^A-Za-z0-9]{0,40}/gi;
-  for (const match of body.matchAll(label)) {
-    const start = (match.index ?? 0) + match[0].length;
-    const token = body.slice(start, start + 8);
-    if (/^[A-Za-z0-9]{8}$/.test(token) && !NOT_A_CODE.test(token) && /[A-Za-z]/.test(token)) {
-      const next = body.charAt(start + 8);
-      if (!/[A-Za-z0-9]/.test(next)) found.push(token);
-    }
-  }
-  return found;
+  return [...body.matchAll(LABELLED_CODE)].map((match) => match[1] ?? "").filter(looksLikeCode);
 }
 
 function shapedCandidates(body: string): string[] {
-  return [...body.matchAll(CODE_SHAPE)].map((match) => match[0]).filter((token) => !NOT_A_CODE.test(token));
+  return [...body.matchAll(/\b[A-Za-z0-9]{6,12}\b/g)].map((match) => match[0]).filter(looksLikeCode);
 }
 
 type ImapMessage = { receivedAt: Date; body: string };
@@ -182,6 +186,11 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
 /**
  * Turns a raw message into searchable text. Quoted-printable is undone first
  * because it inserts soft line breaks that can fall in the middle of a code.
+ *
+ * Headers, stylesheets and link targets are then removed. A Greenhouse code
+ * email carries some fifty mixed-case tracking hashes inside its URLs, every
+ * one of them shaped exactly like a code, so leaving them in would make the
+ * real code impossible to pick out.
  */
 export function decodeMessageText(source: Buffer | undefined): string {
   if (!source) return "";
@@ -190,5 +199,12 @@ export function decodeMessageText(source: Buffer | undefined): string {
   const decoded = unfolded.replace(/=([0-9A-F]{2})/g, (_match, hex: string) =>
     String.fromCharCode(Number.parseInt(hex, 16)),
   );
-  return decoded.replace(/<[^>]+>/g, " ");
+  return decoded
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<head[\s\S]*?<\/head>/gi, " ")
+    // RFC822 and MIME headers. A body sentence never starts with a single
+    // unspaced word followed by a colon, so this cannot eat the code line.
+    .replace(/^[A-Za-z][A-Za-z0-9-]*:[ \t].*$/gm, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/<[^>]+>/g, " ");
 }
