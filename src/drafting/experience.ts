@@ -108,6 +108,14 @@ function component(part: "start" | "end", unit: "month" | "year"): (label: strin
  * with "here") or is one of the bare checkbox labels, and it never names the
  * attribute it is supposedly asking for.
  */
+/**
+ * Work eligibility, authorization and sponsorship are legally material and are
+ * decided from the candidate's stored answers, never inferred from whether a
+ * job on the CV has an end date.
+ */
+const WORK_ELIGIBILITY_TEXT =
+  /\b(eligible to work|authoriz|authoris|sponsor|visa|work permit|right to work|legally)\b/i;
+
 const NAMES_AN_ATTRIBUTE =
   /\b(title|name|company|employer|organisation|organization|salary|compensation|date|month|year|level|team|manager|location|description|duration|responsibilities)\b/;
 
@@ -115,6 +123,16 @@ function currentRoleBoolean(label: string): boolean {
   if (exact("current role", "current position", "current job", "currently work here", "i currently work here")(label)) {
     return true;
   }
+  // Whether the candidate may lawfully work is never a fact about their current
+  // employer. Abnormal Security asks "Are you currently eligible to work in the
+  // country in which this job is posted?" - "currently", "job" and a leading
+  // "Are" together read as "is this your current role?", so an unfinished
+  // Microsoft end date answered a work-eligibility question with Yes. It was the
+  // right answer for the wrong reason, and would have been the same Yes for any
+  // country named.
+  if (WORK_ELIGIBILITY_TEXT.test(label)) return false;
+  // "this job" is the vacancy being applied for, not the candidate's own.
+  if (/\b(this|the)\s+(job|role|position)\b/.test(label)) return false;
   if (!/\bcurrent(ly)?\b/.test(label) || !/\b(role|position|job|employer|here)\b/.test(label)) return false;
   if (NAMES_AN_ATTRIBUTE.test(label)) return false;
   return /\bhere\b/.test(label) || /^(is|are|do|does|have|has)\b/.test(label);
