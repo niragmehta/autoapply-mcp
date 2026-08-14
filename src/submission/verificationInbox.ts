@@ -101,6 +101,17 @@ function shapedCandidates(body: string): string[] {
 type ImapMessage = { receivedAt: Date; body: string };
 
 /**
+ * How far before the submit click an email may be dated and still be believed.
+ *
+ * IMAP reports arrival to the second, so a message that actually arrived at
+ * 07:23:11.800 is dated 07:23:11.000 - up to a second earlier than the click it
+ * answers. A few seconds also absorbs clock skew between this machine and the
+ * mail server. It stays far short of the minutes an attempt takes, so a code
+ * from a previous attempt still cannot be mistaken for this one's.
+ */
+const CLOCK_TOLERANCE_MS = 5_000;
+
+/**
  * Fetches the newest verification code emailed after `since`.
  *
  * `since` is the moment this run clicked submit. A code that arrived before it
@@ -113,8 +124,9 @@ export async function fetchVerificationCode(
   fetchMessages: (config: VerificationInboxConfig, since: Date) => Promise<ImapMessage[]> = readMailbox,
 ): Promise<string | null> {
   const messages = await fetchMessages(config, since);
+  const floor = since.getTime() - CLOCK_TOLERANCE_MS;
   const fresh = messages
-    .filter((message) => message.receivedAt.getTime() >= since.getTime())
+    .filter((message) => message.receivedAt.getTime() >= floor)
     .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
   for (const message of fresh) {
     const code = extractVerificationCode(message.body);

@@ -585,6 +585,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     page.on?.("response", onResponse as (payload: never) => void);
 
     const submitState = await describeSubmitControl(page);
+    // The board emails its code the moment this click lands, so this is the
+    // only honest measure of that code's age. Reading the clock later - after
+    // the page settles, the outcome is polled and a screenshot is taken - dates
+    // the code minutes into the future and rejects the very email being waited
+    // for.
+    const submitClickedAt = new Date();
     const clicked = await clickSubmit(page);
     if (!clicked) {
       page.off?.("response", onResponse as (payload: never) => void);
@@ -628,7 +634,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     if (!detectSubmissionConfirmation(postSubmitText, page.url())) {
       const verification = detectVerificationCodeGate(postSubmitText);
       const code = verification
-        ? options.verificationCode ?? (await awaitVerificationCode(options, page))
+        ? options.verificationCode ?? (await awaitVerificationCode(options, page, submitClickedAt))
         : undefined;
       if (verification && code) {
         const entered = await enterVerificationCode(page, code);
@@ -1048,6 +1054,7 @@ async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
 async function awaitVerificationCode(
   options: BrowserRunOptions,
   page: AnyPage,
+  emailedAt: Date,
 ): Promise<string | undefined> {
   const waitMs = options.codeWaitMs ?? 0;
   const path = options.codeFilePath;
@@ -1057,12 +1064,11 @@ async function awaitVerificationCode(
   // the inbox needs to know when this attempt's code was sent rather than
   // guessing which of several similar emails is current.
   const signalPath = `${path}.waiting`;
-  await writeFile(signalPath, new Date().toISOString(), "utf8").catch(() => undefined);
+  await writeFile(signalPath, emailedAt.toISOString(), "utf8").catch(() => undefined);
 
   try {
     const deadline = Date.now() + waitMs;
     const inbox = options.verificationInbox ?? readVerificationInboxConfig();
-    const emailedAt = new Date();
     while (Date.now() < deadline) {
       const code = await readFile(path, "utf8")
         .then((text) => text.trim())
