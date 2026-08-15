@@ -68,7 +68,7 @@ function demographicShape(
 }
 
 export function greenhouseQuestionsToForm(questions: readonly GreenhouseQuestion[]): FormQuestion[] {
-  return questions.map((question, index) => {
+  const converted = questions.map((question, index) => {
     const fields = asRecordArray(question.fields);
     const label = typeof question.label === "string" ? question.label : `Question ${index + 1}`;
     const demographic = fields.length === 0 ? demographicShape(question as Record<string, unknown>) : null;
@@ -94,7 +94,32 @@ export function greenhouseQuestionsToForm(questions: readonly GreenhouseQuestion
       options: values.map((value) => String(value.label ?? "")).filter((label) => label.length > 0),
     };
   });
+
+  const asksLocation = converted.some(
+    (question) => /\blocation\b|\bcity\b/i.test(question.label) || /location/i.test(question.key),
+  );
+  return asksLocation ? converted : [...converted, GREENHOUSE_LOCATION_QUESTION];
 }
+
+/**
+ * Greenhouse renders a required "Location (City)" geocoder that its own job
+ * board API does not publish: Scale AI's schema lists 13 questions and no
+ * location among them, while the live form refuses to submit without one.
+ * Nothing drafted an answer for a question nobody knew existed, so boards on
+ * the newer form filled completely and then aborted on the one field they had
+ * never been told about.
+ *
+ * Held optional deliberately. Whether the control is on the page is settled by
+ * reading the page, and a profile with no location recorded should not have
+ * every Greenhouse application blocked by a question added here. Where the
+ * board does render it, the page's own required flag still gates submission.
+ */
+const GREENHOUSE_LOCATION_QUESTION: FormQuestion = {
+  key: "location",
+  label: "Location (City)",
+  required: false,
+  type: "input_text",
+};
 
 /**
  * Baseline fields common to hosted application forms. Used for boards that do

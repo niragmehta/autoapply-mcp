@@ -38,6 +38,22 @@ const CONTACT_RESOLVERS: ReadonlyArray<readonly [RegExp, (profile: Profile) => s
   [/\blinkedin\b/i, (p) => p.identity.links.linkedin ?? "", "identity.links.linkedin"],
   [/\bgithub\b/i, (p) => p.identity.links.github ?? "", "identity.links.github"],
   [/\b(?:portfolio|website|personal site)\b/i, (p) => p.identity.links.website ?? "", "identity.links.website"],
+  // Greenhouse's geocoder is labelled "Location (City)" but is a single control
+  // standing for the whole location, and it offers "Vancouver, Washington,
+  // United States" beside "Vancouver, British Columbia, Canada". A bare city
+  // leaves the choice between them to whichever the geocoder happens to rank
+  // first, which is a coin toss that would silently place the candidate in the
+  // wrong country. The qualified form matches exactly, and the option search
+  // falls back to the bare city if a geocoder cannot parse it.
+  //
+  // Labels naming a component alongside the word "location" ("Location -
+  // State") are excluded, because those forms collect the parts separately and
+  // each box wants only its own part.
+  [
+    /\blocation\b(?!.*\b(?:state|province|region|country|zip|postal)\b)/i,
+    (p) => formatLocation(p),
+    "identity.location",
+  ],
   [/\bcity\b/i, (p) => p.identity.location.city, "identity.location.city"],
   [/\b(?:state|province|region)\b/i, (p) => p.identity.location.region, "identity.location.region"],
   [/\bcountry\b/i, (p) => p.identity.location.country, "identity.location.country"],
