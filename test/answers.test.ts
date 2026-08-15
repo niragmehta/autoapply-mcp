@@ -209,6 +209,53 @@ describe("draftAnswers", () => {
   });
 });
 
+describe("a location field that names the city as a hint", () => {
+  // The geocoder offers "Vancouver, Washington, United States" beside
+  // "Vancouver, British Columbia, Canada". Answering with a bare city leaves the
+  // choice to whichever the geocoder ranks first - a coin toss that can place
+  // the candidate in the wrong country on a live application.
+  it("answers with the whole location, not just the city", () => {
+    const { answers } = draftAnswers([question("Location (City)")], profile, campaign);
+    expect(answers[0]?.answer).toBe("Vancouver, BC, Canada");
+  });
+
+  it("still answers a plain City box with only the city", () => {
+    const { answers } = draftAnswers([question("City")], profile, campaign);
+    expect(answers[0]?.answer).toBe("Vancouver");
+  });
+
+  it("leaves a component box to its own component", () => {
+    const { answers } = draftAnswers([question("Location - State/Province")], profile, campaign);
+    expect(answers[0]?.answer).toBe("BC");
+  });
+});
+
+describe("the location field Greenhouse renders but does not publish", () => {
+  const schemaWithoutLocation = [
+    { label: "First Name", required: true, fields: [{ name: "first_name", type: "input_text" }] },
+    { label: "Email", required: true, fields: [{ name: "email", type: "input_text" }] },
+  ];
+
+  it("adds one, because the live form requires a field the schema omits", () => {
+    const questions = greenhouseQuestionsToForm(schemaWithoutLocation);
+    const location = questions.find((question) => question.key === "location");
+    expect(location?.label).toBe("Location (City)");
+  });
+
+  it("leaves it optional so a profile with no location still applies", () => {
+    const questions = greenhouseQuestionsToForm(schemaWithoutLocation);
+    expect(questions.find((question) => question.key === "location")?.required).toBe(false);
+  });
+
+  it("does not add a second one when the board publishes its own", () => {
+    const questions = greenhouseQuestionsToForm([
+      ...schemaWithoutLocation,
+      { label: "Where are you located?", required: true, fields: [{ name: "question_9", type: "input_text" }] },
+    ]);
+    expect(questions.filter((question) => /\blocation\b|\bcity\b/i.test(question.label))).toHaveLength(1);
+  });
+});
+
 describe("greenhouseQuestionsToForm", () => {
   it("prefers the file input for a resume question", () => {
     const [resume] = greenhouseQuestionsToForm([
