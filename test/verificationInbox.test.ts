@@ -12,7 +12,7 @@ const config: VerificationInboxConfig = {
   port: 993,
   user: "codes@example.com",
   password: "secret",
-  mailbox: "INBOX",
+  mailboxes: ["INBOX"],
 };
 
 describe("verification inbox configuration", () => {
@@ -26,7 +26,28 @@ describe("verification inbox configuration", () => {
       AUTOAPPLY_OTP_IMAP_USER: "codes@example.com",
       AUTOAPPLY_OTP_IMAP_PASSWORD: "secret",
     });
-    expect(resolved).toMatchObject({ host: "imap.gmail.com", port: 993, mailbox: "INBOX" });
+    expect(resolved).toMatchObject({ host: "imap.gmail.com", port: 993 });
+  });
+
+  it("looks beyond the inbox, because a forwarding filter can delete on arrival", () => {
+    // Observed: a Gmail filter with "delete it" ticked put every code straight
+    // into Trash, where an inbox-only reader found nothing while the codes were
+    // sitting there perfectly readable.
+    const resolved = readVerificationInboxConfig({
+      AUTOAPPLY_OTP_IMAP_USER: "codes@example.com",
+      AUTOAPPLY_OTP_IMAP_PASSWORD: "secret",
+    });
+    expect(resolved?.mailboxes).toContain("INBOX");
+    expect(resolved?.mailboxes).toContain("[Gmail]/Trash");
+  });
+
+  it("takes an explicit folder list over the defaults", () => {
+    const resolved = readVerificationInboxConfig({
+      AUTOAPPLY_OTP_IMAP_USER: "codes@example.com",
+      AUTOAPPLY_OTP_IMAP_PASSWORD: "secret",
+      AUTOAPPLY_OTP_MAILBOX: "Codes, Archive ",
+    });
+    expect(resolved?.mailboxes).toEqual(["Codes", "Archive"]);
   });
 });
 
