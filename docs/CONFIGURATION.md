@@ -212,7 +212,7 @@ whichever code arrives first is used.
 | `AUTOAPPLY_OTP_IMAP_PASSWORD` | - | App password for that mailbox. |
 | `AUTOAPPLY_OTP_IMAP_HOST` | `imap.gmail.com` | IMAP host. |
 | `AUTOAPPLY_OTP_IMAP_PORT` | `993` | IMAPS port. |
-| `AUTOAPPLY_OTP_MAILBOX` | `INBOX` | Folder to read. |
+| `AUTOAPPLY_OTP_MAILBOX` | `INBOX,[Gmail]/All Mail,[Gmail]/Trash` | Comma-separated folders to search, in order. Defaults cover a forwarding filter that archives or deletes on arrival. Missing folders are skipped. | Folder to read. |
 | `AUTOAPPLY_OTP_FROM` | - | Only consider senders containing this text. Greenhouse sends from `us.greenhouse-mail.io`, so use `greenhouse`, not `greenhouse.io`. |
 
 Point this at a mailbox that receives nothing but forwarded verification mail,

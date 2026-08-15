@@ -20,7 +20,13 @@ export type VerificationInboxConfig = {
   password: string;
   /** Only messages from a sender containing this text are considered. */
   from?: string;
-  mailbox: string;
+  /**
+   * Folders to search, in order. More than one because a forwarding rule can
+   * put the message somewhere other than the inbox - a Gmail filter with
+   * "delete it" ticked sends it straight to Trash, where a code is perfectly
+   * readable but an inbox-only reader will never look.
+   */
+  mailboxes: string[];
 };
 
 /**
@@ -42,8 +48,25 @@ export function readVerificationInboxConfig(
     user,
     password,
     from: env.AUTOAPPLY_OTP_FROM?.trim() || undefined,
-    mailbox: env.AUTOAPPLY_OTP_MAILBOX?.trim() || "INBOX",
+    mailboxes: parseMailboxes(env.AUTOAPPLY_OTP_MAILBOX),
   };
+}
+
+/**
+ * Gmail's own folders are the default because that is where a forwarded code
+ * actually turns up. All Mail catches anything archived or relabelled, and
+ * Trash catches the common case of a forwarding filter that also deletes.
+ * Searching a folder that does not exist is not an error - it is skipped - so
+ * this stays correct on providers that name their folders differently.
+ */
+const DEFAULT_MAILBOXES = ["INBOX", "[Gmail]/All Mail", "[Gmail]/Trash"];
+
+function parseMailboxes(raw: string | undefined): string[] {
+  const named = (raw ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  return named.length > 0 ? named : [...DEFAULT_MAILBOXES];
 }
 
 /**
@@ -173,18 +196,27 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
   const messages: ImapMessage[] = [];
   await client.connect();
   try {
-    const lock = await client.getMailboxLock(config.mailbox);
-    try {
-      for await (const message of client.fetch({ since }, { envelope: true, source: true })) {
-        const sender = message.envelope?.from?.[0]?.address ?? "";
-        if (config.from && !sender.toLowerCase().includes(config.from.toLowerCase())) continue;
-        messages.push({
-          receivedAt: message.envelope?.date ?? new Date(0),
-          body: decodeMessageText(message.source),
-        });
+    for (const mailbox of config.mailboxes) {
+      let lock: { release: () => void };
+      try {
+        lock = await client.getMailboxLock(mailbox);
+      } catch {
+        // Providers name their folders differently and Gmail's are localised,
+        // so a folder that is not there is a normal condition, not a failure.
+        continue;
       }
-    } finally {
-      lock.release();
+      try {
+        for await (const message of client.fetch({ since }, { envelope: true, source: true })) {
+          const sender = message.envelope?.from?.[0]?.address ?? "";
+          if (config.from && !sender.toLowerCase().includes(config.from.toLowerCase())) continue;
+          messages.push({
+            receivedAt: message.envelope?.date ?? new Date(0),
+            body: decodeMessageText(message.source),
+          });
+        }
+      } finally {
+        lock.release();
+      }
     }
   } finally {
     await client.logout().catch(() => undefined);
