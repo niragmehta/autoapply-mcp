@@ -79,6 +79,17 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.address.street",
   },
   {
+    // Anchored, so Greenhouse's "Location (City)" geocoder still takes the
+    // identity location. A bare "City" sits inside an address block beside the
+    // stored street and postal code and must agree with them - his decision,
+    // 2026-08-16: a city that contradicts the postal code beside it misstates
+    // the address.
+    pattern: /^\s*(?:city|town)\b(?!.*\b(?:state|province|region|country)\b)/i,
+    category: "contact",
+    resolve: (personal) => ({ value: personal.address.city, autoFill: personal.addressAutoFill }),
+    citation: "personal.address.city",
+  },
+  {
     // "State" here is the address block's region. Guarded so a question about
     // United States authorization can never take a province name.
     pattern: /^(?!.*\bunited states\b)(?!.*\bauthoriz)(?=.*\b(?:province|territory|state|region)\b)/i,

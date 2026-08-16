@@ -54,11 +54,13 @@ describe("resolvePersonal", () => {
     expect(resolvePersonal("Street Address", profile)?.answer).toContain("1 Main St");
   });
 
-  it("keeps a bare City question on the identity location, not the postal address", () => {
-    // City and Location fields are answered from identity, so a candidate can
-    // present a metro area while still giving an exact address when asked.
-    expect(resolvePersonal("City", profile)).toBeNull();
+  it("keeps a Current Location question on the identity location", () => {
+    // A geocoded location control takes the metro area from identity. A bare
+    // "City" does not: it belongs to an address block, and his decision of
+    // 2026-08-16 is that it must agree with the street and postal code beside
+    // it rather than contradict them.
     expect(resolvePersonal("Current Location", profile)).toBeNull();
+    expect(resolvePersonal("City", profile)?.citation).toBe("personal.address.city");
   });
 
   it("does not treat an email field as a postal address", () => {
