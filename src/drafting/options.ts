@@ -77,8 +77,11 @@ export function selectBestOption(preferences: readonly string[], options?: reado
   return { value: "", matchedOption: false };
 }
 
-/** A stored answer that says nothing beyond its polarity. */
+/** A value that says nothing beyond its polarity. */
 const BARE_POLARITY = /^(?:yes|no|true|false)$/;
+
+/** The polarity a value opens with, however much follows it. */
+const LEADING_POLARITY = /^(yes|no|true|false)\b/;
 
 /**
  * Employers routinely spell a yes or a no out as a full sentence: Coinbase
@@ -88,21 +91,42 @@ const BARE_POLARITY = /^(?:yes|no|true|false)$/;
  * on file was handed back to a person - on every board that writes its options
  * this way.
  *
- * A leading yes or no is the option restating the question's polarity, so it
- * may be taken for a bare answer of the same polarity. This applies only when
- * exactly one option opens with that polarity: Datadog offers both "Yes, no
- * restriction." and "Yes, but I will need sponsorship in the future.", and
- * choosing between two substantively different claims is a decision, not a
- * match. Where the polarity is ambiguous the older containment rules still
- * decide, so nothing that matched before stops matching.
+ * The same mismatch occurs in reverse, and did: a stored answer of "No - based
+ * in Vancouver, Canada and willing to relocate." against a bare "Yes"/"No" pair
+ * matched nothing, because the answer is not bare and "no" is below the
+ * substring floor. An answered question blocked a whole application.
+ *
+ * So each side may supply the sentence, but only one of them at a time. A bare
+ * answer may take a sentence option, because the option is the question's own
+ * wording restated. A qualified answer may only take a bare option, because a
+ * bare option adds no claim: collapsing "No - based in Vancouver" onto "No, I
+ * am not a current or former Government Official" would assert something the
+ * stored answer never said. Where both sides are qualified the containment
+ * rules still decide.
+ *
+ * Either way this applies only when exactly one option carries the polarity:
+ * Datadog offers both "Yes, no restriction." and "Yes, but I will need
+ * sponsorship in the future.", and choosing between two substantively different
+ * claims is a decision, not a match.
  */
 function leadingPolarityMatch(
   options: readonly { raw: string; normalized: string }[],
   target: string,
 ): string | undefined {
-  if (!BARE_POLARITY.test(target)) return undefined;
-  const polarity = target === "true" ? "yes" : target === "false" ? "no" : target;
+  const stated = LEADING_POLARITY.exec(target)?.[1];
+  if (!stated) return undefined;
+  const polarity = stated === "true" ? "yes" : stated === "false" ? "no" : stated;
   const leading = new RegExp(`^${polarity}\\b`);
-  const matches = options.filter((option) => leading.test(option.normalized));
-  return matches.length === 1 ? matches[0]!.raw : undefined;
+
+  const qualifiedAnswer = !BARE_POLARITY.test(target);
+  const eligible = options.filter(
+    (option) => leading.test(option.normalized) && !(qualifiedAnswer && !BARE_POLARITY.test(option.normalized)),
+  );
+  if (eligible.length !== 1) return undefined;
+
+  // An ambiguity anywhere in the option set is still an ambiguity: two options
+  // of this polarity mean the employer is asking which, even if only one of
+  // them was eligible to be taken.
+  const samePolarity = options.filter((option) => leading.test(option.normalized));
+  return samePolarity.length === 1 ? eligible[0]!.raw : undefined;
 }
