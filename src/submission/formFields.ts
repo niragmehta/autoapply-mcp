@@ -215,6 +215,18 @@ function namesDifferentPeriodEnd(fieldLabel: string, answerLabel: string): boole
 }
 
 /**
+ * The number ending a label such as "Address Line 2" or "Employer 3".
+ *
+ * Only a trailing number counts. A number inside the text ("Top 10 skills",
+ * "COVID-19") does not name a slot, and a year would be misread as one.
+ */
+function trailingOrdinal(normalizedLabel: string): number | null {
+  const match = /\b(\d{1,2})$/.exec(normalizedLabel);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+/**
  * A form with one "Name" box wants the whole name. Left to plain similarity a
  * fragment such as "First Name" scores just as highly and silently submits half
  * a name, so fragments are ruled out for those fields entirely.
@@ -243,10 +255,25 @@ function namesDifferentPeriodEnd(fieldLabel: string, answerLabel: string): boole
  * the experience answer to win the age question and declare an experienced
  * engineer a minor. An answer about length of experience can never answer a
  * question about age.
+ *
+ * "Address Line 1" and "Address Line 2" differ by a single character, so
+ * similarity binds the street to both and the form repeats it. A trailing
+ * ordinal names a distinct slot, so a numbered field never takes a differently
+ * numbered answer.
  */
 function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   const fieldLabel = normalizeLabel(field.label);
   const answerLabel = normalizeLabel(answer.label);
+  // "Address Line 1" and "Address Line 2" differ by a single character, so the
+  // similarity score binds the street to both and the form repeats it. A
+  // trailing ordinal names a distinct slot: line 2 holds the unit line 1 does
+  // not, and employer 2 is a different employer. Only an equal ordinal may
+  // match, so a numbered field never takes another number's answer.
+  const fieldOrdinal = trailingOrdinal(fieldLabel);
+  const answerOrdinal = trailingOrdinal(answerLabel);
+  if (fieldOrdinal !== null && answerOrdinal !== null && fieldOrdinal !== answerOrdinal) {
+    return true;
+  }
   if (BARE_NAME_FIELD.test(fieldLabel) && PARTIAL_NAME_ANSWER.test(answerLabel)) {
     return true;
   }
