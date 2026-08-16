@@ -11,6 +11,7 @@ import {
   buildFillPlan,
   detectCaptcha,
   detectSubmissionConfirmation,
+  detectSubmissionRejection,
   fallbackAnswersForFields,
   isAffirmativeAnswer,
   looksLikeApplicationForm,
@@ -701,6 +702,20 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       const detail = pageErrors.length ? ` page reported: ${pageErrors.join(" | ")}` : "";
       const network = failedCalls.length ? ` submit request failed: ${failedCalls.join("; ")}` : "";
       const control = submitState ? ` ${submitState}` : "";
+      const finalText = await readBodyText(page);
+      if (detectSubmissionRejection(finalText) || detectSubmissionRejection(postSubmitText)) {
+        return {
+          status: "aborted",
+          reason: `the employer refused the submission, so nothing was sent - do not treat this as possibly submitted. Submit this one by hand.${detail}${network}`,
+          filledFields: filled,
+          unmatchedRequired: [],
+          unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+          screenshotPath: confirmationShot,
+          finalUrl: page.url(),
+          confirmationText: "",
+          captchaDetected: false,
+        };
+      }
       return {
         status: "aborted",
         reason: `submit control clicked but no submission confirmation was detected; verify this application manually.${control}${detail}${network}`,
