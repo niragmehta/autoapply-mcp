@@ -26,6 +26,7 @@ import { applicationCountsByCompany, getEvaluation, getJob, listQueue } from "..
 import { prepareApplicationFor } from "../drafting/prepare.js";
 import { autoFillableFields } from "../drafting/personal.js";
 import { runApplicationForm } from "../submission/browser.js";
+import { mergeDiscoveredQuestions } from "../submission/discoveredQuestions.js";
 import { checkSubmissionAllowed, startOfDayIso } from "../submission/guards.js";
 import { computePacketHash, type SubmissionPacket } from "../submission/packet.js";
 import { AppError, toErrorMessage } from "../util/errors.js";
@@ -471,6 +472,7 @@ export function registerBatchTools(server: McpServer): void {
               ...application,
               packetHash: currentHash,
               status: "needs_human",
+              answers: mergeDiscoveredQuestions(application.answers, run.unmatchedRequired),
               notes: `${application.notes}\n[${nowIso()}] ${run.reason}`.trim(),
               artifactPath: run.screenshotPath,
             });
