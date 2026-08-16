@@ -598,6 +598,17 @@ function answerOne(
 const SOLE_CONSENT_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
 
 /**
+ * The same formality written as a first-person sentence that puts the verb
+ * after a preamble: Vercel's sole option reads "I have reviewed and confirmed
+ * that all the information provided is accurate and complete". Requiring the
+ * verb is what separates a formality from a claim - a lone option stating a
+ * fact about the candidate ("I have 6+ years of experience") has no consent
+ * verb and is still blocked for a human.
+ */
+const ATTESTATION_SENTENCE =
+  /^i\b.{0,40}\b(?:acknowledged?|agreed?|accepted|consented?|certified|confirmed?|understood)\b/;
+
+/**
  * Whether the candidate has declined the demographic questions he has stored an
  * answer for. Used to decide whether an unrecognised voluntary self-ID question
  * may be answered with the employer's own decline option: doing so is only
@@ -645,7 +656,7 @@ function soleConsentOption(question: FormQuestion): string | undefined {
   if (options.length !== 1) return undefined;
   const only = options[0] ?? "";
   const normalized = only.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  return SOLE_CONSENT_OPTION.test(normalized) ? only : undefined;
+  return SOLE_CONSENT_OPTION.test(normalized) || ATTESTATION_SENTENCE.test(normalized) ? only : undefined;
 }
 
 /** Questions still missing an answer that the form requires. */
