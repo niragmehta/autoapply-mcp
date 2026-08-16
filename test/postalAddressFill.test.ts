@@ -70,8 +70,11 @@ describe("filling a postal address block", () => {
     expect(sponsorship?.citation).not.toBe("personal.address.region");
   });
 
-  it("leaves a geocoded location control to the location answer", () => {
-    expect(resolve("Location (City)")).toBeNull();
+  it("fills a geocoded location control from the identity location", () => {
+    // It used to be left to a drafted location answer, but most Greenhouse
+    // boards omit this core field from their published question schema, so no
+    // such answer exists and the control aborted the submission instead.
+    expect(resolve("Location (City)")?.citation).toBe("identity.location");
   });
 
   it("still fills the postal code", () => {
