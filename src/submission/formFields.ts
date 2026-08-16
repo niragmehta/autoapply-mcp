@@ -716,7 +716,7 @@ export function pickOptionIndex(
   }
   const band = pickNumericBandIndex(optionTexts, candidates);
   if (band >= 0) return band;
-  if (optionTexts.length === 1 && SOLE_OPT_IN_OPTION.test(normalizeOptionText(optionTexts[0] ?? ""))) {    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
+  if (optionTexts.length === 1 && isSoleOptIn(normalizeOptionText(optionTexts[0] ?? ""))) {    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
       return 0;
     }
     // A required choice offering exactly one consent option carries no
@@ -863,7 +863,22 @@ function bestCoverageMatch(optionTexts: readonly string[], candidate: string): n
   return best;
 }
 
-const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;const AFFIRMATIVE_CANDIDATE = /^(?:yes|true|agreed?|i agree|acknowledged?|i acknowledge|accept|i accept|consent|i consent)\b/;
+const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+/**
+ * The same formality written as a first-person sentence that puts the verb
+ * after a preamble: Vercel's sole option reads "I have reviewed and confirmed
+ * that all the information provided is accurate and complete". Without this the
+ * drafter resolves the field and the fill stage then refuses it, aborting a
+ * fully prepared application over a box with only one possible value.
+ */
+const OPT_IN_ATTESTATION =
+  /^i\b.{0,40}\b(?:acknowledged?|agreed?|accepted|consented?|certified|confirmed?|understood)\b/;
+const AFFIRMATIVE_CANDIDATE = /^(?:yes|true|agreed?|i agree|acknowledged?|i acknowledge|accept|i accept|consent|i consent)\b/;
+
+/** Whether a lone option is pure agreement, in either of the two wordings. */
+function isSoleOptIn(normalizedOption: string): boolean {
+  return SOLE_OPT_IN_OPTION.test(normalizedOption) || OPT_IN_ATTESTATION.test(normalizedOption);
+}
 const NEGATIVE_CANDIDATE = /^(?:no|false|i do not|i don t|not |never|disagree|i disagree|decline|i decline)\b/;
 
 function normalizeOptionText(input: string): string {
