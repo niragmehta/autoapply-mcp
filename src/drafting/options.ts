@@ -50,6 +50,12 @@ export function selectBestOption(preferences: readonly string[], options?: reado
     const exact = normalizedOptions.find((option) => option.normalized === target);
     if (exact) return { value: exact.raw, matchedOption: true };
 
+    // Runs ahead of containment because it is the stricter test: it only fires
+    // when exactly one option opens with the answer's polarity, which is a
+    // better reading than the first option that happens to contain the word.
+    const polarity = leadingPolarityMatch(normalizedOptions, target);
+    if (polarity) return { value: polarity, matchedOption: true };
+
     if (target.length < 3) continue;
 
     const contains = normalizedOptions.find((option) => option.normalized.includes(target));
@@ -69,4 +75,34 @@ export function selectBestOption(preferences: readonly string[], options?: reado
   // Options were published and none matched: submitting an unlisted value
   // would fail, so this is handed back rather than guessed.
   return { value: "", matchedOption: false };
+}
+
+/** A stored answer that says nothing beyond its polarity. */
+const BARE_POLARITY = /^(?:yes|no|true|false)$/;
+
+/**
+ * Employers routinely spell a yes or a no out as a full sentence: Coinbase
+ * offers "No, I am not a current or former Government Official" where the
+ * stored answer is simply "No". Neither string contains the other, and "no" is
+ * too short to be matched as a substring safely, so a question already answered
+ * on file was handed back to a person - on every board that writes its options
+ * this way.
+ *
+ * A leading yes or no is the option restating the question's polarity, so it
+ * may be taken for a bare answer of the same polarity. This applies only when
+ * exactly one option opens with that polarity: Datadog offers both "Yes, no
+ * restriction." and "Yes, but I will need sponsorship in the future.", and
+ * choosing between two substantively different claims is a decision, not a
+ * match. Where the polarity is ambiguous the older containment rules still
+ * decide, so nothing that matched before stops matching.
+ */
+function leadingPolarityMatch(
+  options: readonly { raw: string; normalized: string }[],
+  target: string,
+): string | undefined {
+  if (!BARE_POLARITY.test(target)) return undefined;
+  const polarity = target === "true" ? "yes" : target === "false" ? "no" : target;
+  const leading = new RegExp(`^${polarity}\\b`);
+  const matches = options.filter((option) => leading.test(option.normalized));
+  return matches.length === 1 ? matches[0]!.raw : undefined;
 }

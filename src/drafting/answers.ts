@@ -595,7 +595,14 @@ function answerOne(
   return blocked(question, category, "no verified profile value or pre-approved answer matches this question");
 }
 
-const SOLE_CONSENT_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+/**
+ * A lone option written as a bare formality. Inflected forms count: Coinbase's
+ * sole option reads "Confirmed", which is the same formality as "Confirm" and
+ * was blocking every Coinbase application over a field with nothing else to
+ * select.
+ */
+const SOLE_CONSENT_OPTION =
+  /^(?:i )?(?:acknowledged?|agreed?|accepts?|accepted|consented?|certif(?:y|ied)|confirmed?|understands?|understood)\b/;
 
 /**
  * The same formality written as a first-person sentence that puts the verb

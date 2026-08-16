@@ -716,7 +716,8 @@ export function pickOptionIndex(
   }
   const band = pickNumericBandIndex(optionTexts, candidates);
   if (band >= 0) return band;
-  if (optionTexts.length === 1 && isSoleOptIn(normalizeOptionText(optionTexts[0] ?? ""))) {    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
+  if (optionTexts.length === 1 && isSoleOptIn(normalizeOptionText(optionTexts[0] ?? ""))) {
+    if (candidates.some((candidate) => AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(candidate)))) {
       return 0;
     }
     // A required choice offering exactly one consent option carries no
@@ -889,7 +890,8 @@ function negationDiffers(optionText: string, candidate: string): boolean {
   return NEGATION.test(normalizeOptionText(optionText)) !== NEGATION.test(normalizeOptionText(candidate));
 }
 
-function bestCoverageMatch(optionTexts: readonly string[], candidate: string): number {  const wanted = answerContentWords(candidate);
+function bestCoverageMatch(optionTexts: readonly string[], candidate: string): number {
+  const wanted = answerContentWords(candidate);
   if (wanted.length < MIN_OVERLAP_WORDS) return -1;
   let best = -1;
   let bestCoverage = MIN_OVERLAP_WORDS - 1;
@@ -912,7 +914,8 @@ function bestCoverageMatch(optionTexts: readonly string[], candidate: string): n
   return best;
 }
 
-const SOLE_OPT_IN_OPTION = /^(?:i )?(?:acknowledge|agree|accept|consent|certify|confirm|understand)\b/;
+const SOLE_OPT_IN_OPTION =
+  /^(?:i )?(?:acknowledged?|agreed?|accepts?|accepted|consented?|certif(?:y|ied)|confirmed?|understands?|understood)\b/;
 /**
  * The same formality written as a first-person sentence that puts the verb
  * after a preamble: Vercel's sole option reads "I have reviewed and confirmed
