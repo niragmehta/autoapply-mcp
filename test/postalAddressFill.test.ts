@@ -46,12 +46,12 @@ describe("filling a postal address block", () => {
     }
   });
 
-  it("leaves a bare City to the identity location rather than the postal address", () => {
-    // A deliberate campaign decision: City and Location are answered from
-    // identity, so the candidate can present a metro area and still give an
-    // exact address when a form asks for one. Changing which city appears on
-    // an application is his call, not the resolver's.
-    expect(resolve("City*")).toBeNull();
+  it("fills the city the stored address belongs to", () => {
+    // His decision, 2026-08-16: where a form asks for the street and postal
+    // code, the city must match them.
+    const answer = resolve("City*");
+    expect(answer?.answer).toBe("Burnaby");
+    expect(answer?.citation).toBe("personal.address.city");
   });
 
   it("fills the province beside it", () => {
