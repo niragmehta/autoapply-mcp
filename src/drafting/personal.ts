@@ -62,12 +62,29 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.dateOfBirth",
   },
   {
+    // A second address line holds a unit or suite. The profile stores no such
+    // value - the street already carries "301-...", so resolving this to the
+    // street simply repeats line 1 on the form. Deliberately left blank.
+    pattern: /\baddress(?: line)?\s*[2-9]\b|\b(apt|apartment|suite|unit)\b/i,
+    category: "contact",
+    resolve: () => ({ value: "", autoFill: false }),
+    citation: "personal.address.line2",
+  },
+  {
     // Forms with numbered address lines have separate city and postal fields,
     // so only the street belongs here.
     pattern: /\baddress line\b|\bstreet$/i,
     category: "contact",
     resolve: (personal) => ({ value: personal.address.street, autoFill: personal.addressAutoFill }),
     citation: "personal.address.street",
+  },
+  {
+    // "State" here is the address block's region. Guarded so a question about
+    // United States authorization can never take a province name.
+    pattern: /^(?!.*\bunited states\b)(?!.*\bauthoriz)(?=.*\b(?:province|territory|state|region)\b)/i,
+    category: "contact",
+    resolve: (personal) => ({ value: personal.address.region, autoFill: personal.addressAutoFill }),
+    citation: "personal.address.region",
   },
   {
     // Bare "Address" fields, guarded so "Email Address" does not match.
