@@ -7,6 +7,11 @@ import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
 import { resolveExperience } from "./experience.js";
+import {
+  CURRENT_RESIDENCE_QUESTION as SHARED_RESIDENCE_QUESTION,
+  WORK_AUTHORITY_TEXT as SHARED_WORK_AUTHORITY_TEXT,
+  namesCandidateLocation,
+} from "./residence.js";
 
 /**
  * Answer policy engine.
@@ -84,9 +89,17 @@ function contactResolverFor(label: string) {
 function matchApprovedAnswer(profile: Profile, label: string) {
   const haystack = label.toLowerCase();
   const residenceAsked = CURRENT_RESIDENCE_QUESTION.test(haystack) && !WORK_AUTHORITY_TEXT.test(haystack);
+  const asksAboutHome = residenceAsked && namesCandidateLocation(haystack, profile);
   let best: { entry: Profile["answers"][number]; length: number } | null = null;
   for (const entry of profile.answers) {
     if (residenceAsked && !statesWhereCandidateLives(entry)) continue;
+    // "Are you located in <somewhere he is not>" is stored once, as a blanket
+    // "No - based in Vancouver, Canada". That is true of everywhere except the
+    // one place he actually lives, so when the question names Canada, British
+    // Columbia or Vancouver the stored answer states the opposite of the truth.
+    // Tailscale asked exactly that. A denial cannot answer a question about his
+    // own location; resolvePersonal supplies the affirmative instead.
+    if (asksAboutHome && deniesResidence(entry)) continue;
     for (const pattern of entry.patterns) {
       const needle = pattern.toLowerCase();
       if (!haystack.includes(needle)) continue;
@@ -94,6 +107,11 @@ function matchApprovedAnswer(profile: Profile, label: string) {
     }
   }
   return best?.entry;
+}
+
+/** True when the answer opens by denying it, however it then qualifies itself. */
+function deniesResidence(entry: Profile["answers"][number]): boolean {
+  return /^\s*no\b/i.test(entry.answer.trim());
 }
 
 /**
@@ -110,10 +128,9 @@ function matchApprovedAnswer(profile: Profile, label: string) {
  * then the answer carries the question's own label and so looks like a
  * residence answer to any test applied to it.
  */
-const CURRENT_RESIDENCE_QUESTION =
-  /\b(currently based|currently located|currently living|currently reside|currently residing|are you based|are you located|do you live|do you reside|do you currently live)\b/;
+const CURRENT_RESIDENCE_QUESTION = SHARED_RESIDENCE_QUESTION;
 /** Work authorization is phrased as location but asks about legal status. */
-const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
+const WORK_AUTHORITY_TEXT = SHARED_WORK_AUTHORITY_TEXT;
 const RESIDENCE_ANSWER = /\b(based|located|reside|residing|lives?|living)\b/;
 
 /** Judged from the entry's own wording, never from the question it matched. */

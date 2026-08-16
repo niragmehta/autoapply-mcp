@@ -1,5 +1,6 @@
 import type { Personal, Profile, StoredAnswer } from "../domain/profile.js";
 import { normalizeQuestionLabel } from "./blockedQuestions.js";
+import { asksAboutOwnResidence } from "./residence.js";
 
 /**
  * Resolvers for personal and demographic form fields.
@@ -233,6 +234,12 @@ const RESOLVERS: readonly Resolver[] = [
  */
 export function resolvePersonal(label: string, profile: Profile): (PersonalResolution & { category: string }) | null {
   const normalized = normalizeQuestionLabel(label);
+  // "Are you located in or willing to relocate to Canada?" is a question about
+  // where he lives, and the profile says he lives there. Handled ahead of the
+  // table because the decision needs the label, not just a static pattern.
+  if (asksAboutOwnResidence(label.toLowerCase(), profile) || asksAboutOwnResidence(normalized, profile)) {
+    return { answer: "Yes", citation: "identity.location", authorized: true, category: "contact" };
+  }
   for (const resolver of RESOLVERS) {
     if (!resolver.pattern.test(label) && !resolver.pattern.test(normalized)) continue;
     const raw = resolver.resolve(profile.personal, profile);
