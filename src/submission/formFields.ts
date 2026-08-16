@@ -1246,12 +1246,42 @@ export function isConfirmationUrl(url: string): boolean {
 }
 
 /**
+ * An ATS that refuses a submission says so plainly, but it says it in a page
+ * banner rather than a field error, so readValidationErrors does not see it and
+ * the run fell back to "no confirmation was detected; verify this application
+ * manually". Those two outcomes call for opposite responses. An unconfirmed
+ * submission might have gone through, so the safe move is to check before
+ * resubmitting and risk a duplicate. An explicit refusal means nothing was
+ * submitted at all and the application still needs sending by hand. Ashby
+ * rejects headless runs with "Your application submission was flagged as
+ * possible spam", which read as the former and was in fact the latter.
+ */
+const SUBMISSION_REJECTED_MARKERS = [
+  "couldn't submit your application",
+  "could not submit your application",
+  "unable to submit your application",
+  "flagged as possible spam",
+  "your application was not submitted",
+  "we were unable to process your application",
+];
+
+/** True when the page states outright that it refused the submission. */
+export function detectSubmissionRejection(pageText: string): boolean {
+  const haystack = pageText.toLowerCase();
+  return SUBMISSION_REJECTED_MARKERS.some((marker) => haystack.includes(marker));
+}
+
+/**
  * Requires positive evidence before a run is recorded as submitted: either the
  * employer's own confirmation copy, or the ATS routing to its confirmation
  * page. Absence of both is still reported honestly as unverified.
  */
 export function detectSubmissionConfirmation(pageText: string, finalUrl = ""): boolean {
   const haystack = pageText.toLowerCase();
+  // A page that says it refused the submission cannot also be confirming one.
+  // Ashby's rejection banner sits on the job page, whose URL can still look
+  // like a confirmation route, so the refusal has to win over every signal.
+  if (detectSubmissionRejection(haystack)) return false;
   if (SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker))) return true;
   if (SUBMISSION_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(haystack))) return true;
   return isConfirmationUrl(finalUrl);
