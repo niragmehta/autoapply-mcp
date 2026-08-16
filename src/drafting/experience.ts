@@ -75,7 +75,7 @@ type Resolver = {
   test: (label: string) => boolean;
   category: string;
   citation: string;
-  resolve: (entry: Experience) => string;
+  resolve: (entry: Experience, profile: Profile, label: string) => string;
 };
 
 /**
@@ -221,7 +221,79 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "experience[0].end",
     resolve: (entry) => (isCurrent(entry) ? "Yes" : "No"),
   },
+  {
+    test: (label) => yearsThresholdIn(label) !== null,
+    category: "employment-history",
+    citation: "experience[].start",
+    resolve: (_entry, profile, label) => answerYearsThreshold(label, profile),
+  },
 ];
+
+/**
+ * "Do you have over 5 years of professional software engineering experience?"
+ *
+ * The profile already states every start and end date, so the answer is
+ * arithmetic on facts the attached resume gives anyway. Boards ask this at
+ * every threshold from 3 to 10, and GitLab asks two different ones on the same
+ * form, so a stored yes or no is wrong at some of them: the number has to be
+ * read from the question and compared.
+ *
+ * Internships are excluded. They are real experience but they are not what a
+ * board means by professional or full-time years, and counting them decides the
+ * answer either way around the six-year mark.
+ */
+const YEARS_THRESHOLD = /\b(\d{1,2})\s*\+?\s*years?\b/;
+const STRICTLY_MORE = /\b(?:over|more than|greater than|beyond)\s*$/;
+
+/**
+ * The question must be about experience in general. "5 years of experience with
+ * Kubernetes" asks about one technology, which the profile does not track, so
+ * it stays with a person.
+ */
+const GENERAL_EXPERIENCE =
+  /\b(?:professional|software engineering|software development|engineering|industry|full[-\s]?time|work|working|relevant|technical)\b/;
+const NAMES_A_SUBJECT = /\bexperience\s+(?:with|in|using|building|developing|working|programming)\b/;
+
+function yearsThresholdIn(label: string): number | null {
+  const experienceAt = label.indexOf("experience");
+  if (experienceAt < 0) return null;
+  if (NAMES_A_SUBJECT.test(label)) return null;
+  const match = YEARS_THRESHOLD.exec(label);
+  if (!match || match.index > experienceAt) return null;
+  const between = label.slice(match.index + match[0].length, experienceAt);
+  const filler = between.replace(/\b(?:of|over|in|the|a|an)\b/g, "").trim();
+  if (filler.length > 0 && !GENERAL_EXPERIENCE.test(between)) return null;
+  const years = Number(match[1]);
+  return Number.isFinite(years) ? years : null;
+}
+
+/** Whole months of non-internship experience, expressed in years. */
+function fullTimeYears(profile: Profile): number {
+  const asDate = (period: string): Date | null => {
+    const match = /^(\d{4})-(\d{1,2})$/.exec(period.trim());
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1) : null;
+  };
+  let months = 0;
+  for (const entry of profile.experience) {
+    if (/\bintern(ship)?\b/i.test(entry.title)) continue;
+    const from = asDate(entry.start);
+    if (!from) continue;
+    const to = isCurrent(entry) ? new Date() : asDate(entry.end);
+    if (!to) continue;
+    const span = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+    if (span > 0) months += span;
+  }
+  return months / 12;
+}
+
+function answerYearsThreshold(label: string, profile: Profile): string {
+  const threshold = yearsThresholdIn(label);
+  if (threshold === null) return "";
+  const match = YEARS_THRESHOLD.exec(label);
+  const strict = match ? STRICTLY_MORE.test(label.slice(0, match.index)) : false;
+  const held = fullTimeYears(profile);
+  return (strict ? held > threshold : held >= threshold) ? "Yes" : "No";
+}
 
 /**
  * Returns the employment-history value for a live field label, or null when the
@@ -233,7 +305,7 @@ export function resolveExperience(label: string, profile: Profile): ExperienceRe
   const normalized = normalizeLabel(label);
   for (const resolver of RESOLVERS) {
     if (!resolver.test(normalized)) continue;
-    const answer = resolver.resolve(entry);
+    const answer = resolver.resolve(entry, profile, normalized);
     if (answer.trim().length === 0) return null;
     return { answer, citation: resolver.citation, category: resolver.category, authorized: true };
   }
