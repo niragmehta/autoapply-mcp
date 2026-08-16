@@ -12,6 +12,7 @@ import {
 } from "../db/repositories/applications.js";
 import { appendEvent } from "../db/repositories/events.js";
 import { applicationCountsByCompany, getEvaluation, getJob } from "../db/repositories/jobs.js";import { runApplicationForm } from "../submission/browser.js";
+import { mergeDiscoveredQuestions } from "../submission/discoveredQuestions.js";
 import { checkSubmissionAllowed, startOfDayIso } from "../submission/guards.js";
 import { computePacketHash, renderPacketPreview, type SubmissionPacket } from "../submission/packet.js";
 import { AppError } from "../util/errors.js";
@@ -213,6 +214,7 @@ export function registerSubmissionTools(server: McpServer): void {
           ...application,
           packetHash: currentHash,
           status: "needs_human",
+          answers: mergeDiscoveredQuestions(application.answers, result.unmatchedRequired),
           notes: `${application.notes}\n[${nowIso()}] aborted: ${result.reason}`.trim(),
           artifactPath: result.screenshotPath,
         });
