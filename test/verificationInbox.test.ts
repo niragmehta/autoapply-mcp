@@ -142,6 +142,46 @@ describe("choosing which email to trust", () => {
   });
 });
 
+describe("the window the mailbox is searched over", () => {
+  /**
+   * IMAP SINCE matches whole days against INTERNALDATE as the mail server
+   * reckons it. A code emailed at 06:30 UTC is stamped 23:30 the previous day
+   * in Pacific time, so searching from the moment of the click drops it - and
+   * only in the evening, which is why this worked at 00:23 local and then
+   * missed every code emailed later the same day.
+   */
+  const clickedAt = new Date("2026-08-15T06:30:00Z");
+
+  it("searches from well before the click so a day boundary cannot hide the code", async () => {
+    let asked: Date | undefined;
+    await fetchVerificationCode(config, clickedAt, async (_config, since) => {
+      asked = since;
+      return [];
+    });
+    const hoursEarlier = (clickedAt.getTime() - (asked?.getTime() ?? 0)) / 3_600_000;
+    expect(hoursEarlier).toBeGreaterThanOrEqual(24);
+  });
+
+  it("finds a code the server dated on the previous local day", async () => {
+    const emailed = { receivedAt: new Date("2026-08-15T06:30:02Z"), body: "code 7elHZjj6" };
+    const found = await fetchVerificationCode(config, clickedAt, async (_config, since) => {
+      // Stands in for the mismatch that actually loses the code: the search
+      // date goes out as a whole UTC day, while the server buckets the message
+      // by its own local day. At UTC-7 this message is stamped 14-Aug, so a
+      // search sent as 15-Aug never reaches it.
+      const utcDay = Math.floor(since.getTime() / 86_400_000);
+      const serverDay = Math.floor((emailed.receivedAt.getTime() - 7 * 3_600_000) / 86_400_000);
+      return serverDay >= utcDay ? [emailed] : [];
+    });
+    expect(found).toBe("7elHZjj6");
+  });
+
+  it("widening the search still does not admit a code from an earlier attempt", async () => {
+    const yesterday = [{ receivedAt: new Date("2026-08-14T22:00:00Z"), body: "code dkgqL1KS" }];
+    await expect(fetchVerificationCode(config, clickedAt, async () => yesterday)).resolves.toBeNull();
+  });
+});
+
 describe("decoding a raw message", () => {
   it("rejoins a code split by a quoted-printable soft break", () => {
     const source = Buffer.from("Your code is pvlq=\r\nH9IO now", "utf8");
