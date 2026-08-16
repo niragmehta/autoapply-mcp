@@ -135,6 +135,22 @@ type ImapMessage = { receivedAt: Date; body: string };
 const CLOCK_TOLERANCE_MS = 5_000;
 
 /**
+ * How far to widen the mailbox search behind the moment we care about.
+ *
+ * IMAP SINCE matches whole days and compares against INTERNALDATE as the mail
+ * server reckons it, not UTC. A code emailed at 06:30 UTC is stamped 23:30 the
+ * previous day in Pacific time, so a search dated from the UTC day skips it
+ * entirely - and does so only between late afternoon and midnight local, which
+ * is why this read the inbox correctly at 00:23 local and then missed every
+ * code emailed that same evening.
+ *
+ * 36 hours clears the widest real timezone offset plus a day boundary. It only
+ * widens what is fetched: the `floor` below still discards anything dated
+ * before the submit click, so no stale code can be admitted by this.
+ */
+const SEARCH_BACKDATE_MS = 36 * 60 * 60 * 1000;
+
+/**
  * Fetches the newest verification code emailed after `since`.
  *
  * `since` is the moment this run clicked submit. A code that arrived before it
@@ -146,7 +162,7 @@ export async function fetchVerificationCode(
   since: Date,
   fetchMessages: (config: VerificationInboxConfig, since: Date) => Promise<ImapMessage[]> = readMailbox,
 ): Promise<string | null> {
-  const messages = await fetchMessages(config, since);
+  const messages = await fetchMessages(config, new Date(since.getTime() - SEARCH_BACKDATE_MS));
   const floor = since.getTime() - CLOCK_TOLERANCE_MS;
   const fresh = messages
     .filter((message) => message.receivedAt.getTime() >= floor)
@@ -184,6 +200,10 @@ type ImapFlowLike = {
   ) => AsyncIterable<{ envelope?: { date?: Date; from?: Array<{ address?: string }> }; source?: Buffer }>;
 };
 
+/**
+ * How far to widen the mailbox search behind the moment we care about.
+ * Defined next to the search itself; see fetchVerificationCode.
+ */
 async function readMailbox(config: VerificationInboxConfig, since: Date): Promise<ImapMessage[]> {
   const ImapFlow = await loadImapFlow();
   const client = new ImapFlow({
