@@ -28,6 +28,12 @@ function formatAddress(personal: Personal): string {
   return [street, city, region, postalCode, country].filter((part) => part.length > 0).join(", ");
 }
 
+/** The identity location, which is where the candidate is based rather than a mailing address. */
+function formatLocation(profile: Profile): string {
+  const { city, region, country } = profile.identity.location;
+  return [city, region, country].filter((part) => part.length > 0).join(", ");
+}
+
 /**
  * The most recently completed qualification, which is what boards mean by "most
  * recent school" or "highest degree".
@@ -109,6 +115,27 @@ const RESOLVERS: readonly Resolver[] = [
     category: "contact",
     resolve: (personal) => ({ value: personal.address.postalCode, autoFill: personal.addressAutoFill }),
     citation: "personal.address.postalCode",
+  },
+  {
+    // Greenhouse renders "Location (City)" as a core field that most boards
+    // leave out of their published question schema, so nothing drafts it and
+    // this fallback is the only thing that can fill it. The rule the anchored
+    // city rule above defers to was never written, so the field resolved to
+    // nothing and aborted otherwise complete applications (Scale AI, 2026-08-16).
+    //
+    // Anchored to a label that *is* the location field. A question merely
+    // mentioning the word - "willing to relocate to the role's location",
+    // "authorized to work in the location of this role" - is a question about
+    // intent or status and must keep going to the answer bank.
+    //
+    // The whole "city, region, country" string is used because this control is
+    // a geocoder combobox: searching it returns "Vancouver, British Columbia,
+    // Canada" as an exact option, whereas the bare city also offers Vancouver,
+    // Washington. The city alone remains the fallback search term.
+    pattern: /^\s*(?:current(?:ly)?\s+)?location\b(?!.*\b(?:state|province|region|country|zip|postal)\b)/i,
+    category: "contact",
+    resolve: (_personal, profile) => ({ value: formatLocation(profile), autoFill: true }),
+    citation: "identity.location",
   },
   {
     pattern: /\bpronouns?\b/i,

@@ -59,7 +59,7 @@ describe("resolvePersonal", () => {
     // "City" does not: it belongs to an address block, and his decision of
     // 2026-08-16 is that it must agree with the street and postal code beside
     // it rather than contradict them.
-    expect(resolvePersonal("Current Location", profile)).toBeNull();
+    expect(resolvePersonal("Current Location", profile)?.citation).toBe("identity.location");
     expect(resolvePersonal("City", profile)?.citation).toBe("personal.address.city");
   });
 
@@ -246,5 +246,38 @@ describe("voluntary self-identification wording", () => {
     expect(resolvePersonal("What is your sexual orientation?", profile)?.citation).toBe(
       "personal.demographics.sexualOrientation",
     );
+  });
+});
+
+/**
+ * Greenhouse renders "Location (City)" as a core field that most boards omit
+ * from their published question schema, so only this fallback can fill it.
+ * Nothing resolved it, and otherwise complete applications aborted.
+ */
+describe("the location field Greenhouse renders but does not publish", () => {
+  const profile = withPersonal({
+    address: { street: "1 Main St", city: "Burnaby", region: "BC", postalCode: "V5H 0A1", country: "Canada" },
+    addressAutoFill: true,
+  });
+
+  it("fills it with the whole identity location, not the mailing city", () => {
+    const result = resolvePersonal("Location (City)*", profile);
+    expect(result?.answer).toBe("Vancouver, BC, Canada");
+    expect(result?.citation).toBe("identity.location");
+    expect(result?.authorized).toBe(true);
+  });
+
+  it("leaves a bare City box on the address it belongs to", () => {
+    expect(resolvePersonal("City", profile)?.answer).toBe("Burnaby");
+  });
+
+  it("does not claim a question that merely mentions a location", () => {
+    expect(resolvePersonal("Are you willing to relocate to the location of this role?", profile)).toBeNull();
+    expect(resolvePersonal("Are you authorized to work in the location of this role?", profile)).toBeNull();
+  });
+
+  it("still leaves component boxes to the rules written for them", () => {
+    expect(resolvePersonal("Location - State", profile)?.citation).toBe("personal.address.region");
+    expect(resolvePersonal("Location Postal Code", profile)?.citation).toBe("personal.address.postalCode");
   });
 });
