@@ -60,3 +60,50 @@ describe("a bare yes or no against sentence-form options", () => {
     expect(match.value).toBe("Careers page");
   });
 });
+
+/**
+ * The mirror of the case above, and a live failure: the stored residence answer
+ * "No - based in Vancouver, Canada and willing to relocate." matched nothing at
+ * all against a bare "Yes"/"No" pair, because the answer is not bare and "no"
+ * is below the substring floor. Dialpad's "Are you currently based in Buenos
+ * Aires, Argentina?" was therefore handed back to a person even though it was
+ * answered on file, blocking the whole application.
+ */
+describe("a qualified yes or no against bare options", () => {
+  const relocation = "No - based in Vancouver, Canada and willing to relocate.";
+
+  it("takes the bare option matching the answer's leading polarity", () => {
+    const match = selectBestOption([relocation], ["Yes", "No"]);
+    expect(match.matchedOption).toBe(true);
+    expect(match.value).toBe("No");
+  });
+
+  it("reads the polarity of a qualified yes", () => {
+    expect(selectBestOption(["Yes, I have used it extensively"], ["Yes", "No"]).value).toBe("Yes");
+  });
+
+  it("refuses to adopt a claim the answer never made", () => {
+    // The option is not bare, so taking it would assert something about
+    // government office on the strength of an answer about where he lives.
+    expect(
+      selectBestOption([relocation], ["Yes, I am a Government Official", "No, I am not a Government Official"])
+        .matchedOption,
+    ).toBe(false);
+  });
+
+  it("declines when two options carry the answer's polarity", () => {
+    expect(selectBestOption([relocation], ["Yes", "No", "No, with conditions"]).matchedOption).toBe(false);
+  });
+
+  it("does not read a leading word that merely starts with a polarity", () => {
+    // "None of the above" and "Nothing" open with the letters of "no" but not
+    // the word, so they state no polarity.
+    expect(selectBestOption(["Nothing to declare"], ["Yes", "No"]).matchedOption).toBe(false);
+  });
+
+  it("still refuses an answer that states no polarity at all", () => {
+    // The bug this guards: a location answer was winning a sponsorship
+    // question and silently filling nothing useful.
+    expect(selectBestOption(["Canada"], ["Yes", "No"]).matchedOption).toBe(false);
+  });
+});
