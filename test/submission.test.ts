@@ -85,6 +85,20 @@ describe("checkSubmissionAllowed", () => {
     expect(result.code).toBe("not_approved");
   });
 
+  it("refuses a company on the exclusion list, however it was approved", () => {
+    // The exclusion list used to be consulted only when gating newly discovered
+    // jobs, so an application approved before the exclusion was added stayed
+    // submittable. Submission cannot be undone, so the list has to hold here.
+    const result = checkSubmissionAllowed({
+      ...baseInput,
+      campaign: {
+        ...campaign,
+        exclusions: { ...campaign.exclusions, companies: [job.companyName.toUpperCase()] },
+      },
+    });
+    expect(result.code).toBe("company_excluded");
+  });
+
   it("refuses when content changed after approval", () => {
     const result = checkSubmissionAllowed({
       ...baseInput,

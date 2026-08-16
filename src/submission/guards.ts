@@ -88,6 +88,21 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
     return deny("destination_not_allowed", destination.reason);
   }
 
+  // Excluding a company is a standing instruction not to apply there, but the
+  // exclusion list was only ever consulted while gating newly discovered jobs.
+  // An application drafted and approved before the exclusion was added stayed
+  // perfectly submittable, and submission is the one step that cannot be taken
+  // back. Checked here so the list means the same thing at every stage.
+  const excluded = campaign.exclusions.companies.find(
+    (name) => name.trim().toLowerCase() === job.companyName.trim().toLowerCase(),
+  );
+  if (excluded) {
+    return deny(
+      "company_excluded",
+      `${job.companyName} is on the campaign exclusion list; withdraw this application or remove the exclusion`,
+    );
+  }
+
   if (policy.allowedCompanies.length > 0 && requestedMode === "auto") {
     const permitted = policy.allowedCompanies.some(
       (name) => name.toLowerCase() === job.companyName.toLowerCase(),
