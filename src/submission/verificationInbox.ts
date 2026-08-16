@@ -70,18 +70,30 @@ function parseMailboxes(raw: string | undefined): string[] {
 }
 
 /**
- * Observed Greenhouse codes: eight alphanumerics carrying both cases, such as
- * `dkgqL1KS`, `pvlqH9IO` and `ZUvwsFBq`. A digit is not guaranteed, so case
- * mixing is the only reliable signature - and it is what separates a code from
- * an ordinary word like `resubmit`, which sits one sentence away from the real
- * code in Greenhouse's own email.
+ * Observed Greenhouse codes: eight alphanumerics such as `dkgqL1KS`, `pvlqH9IO`
+ * and `a7rbekvS`. Nothing about the shape is guaranteed - not a digit, and not
+ * a second capital.
+ *
+ * So the test depends on whether a label vouched for the token. An unlabelled
+ * token is found by scanning the whole email, which includes DKIM and ARC
+ * signature blobs offering well over a hundred base64 fragments of exactly this
+ * shape, so it has to be strict: two capitals is what separates a code from
+ * both those fragments and an ordinary word like `resubmit`. A labelled token
+ * was introduced by Greenhouse's own sentence and needs only to be unwordlike,
+ * which a digit or any capital establishes.
+ *
+ * Demanding two capitals of a labelled code discards roughly one code in
+ * eleven, and the failure is silent: the run waits out its whole timeout on a
+ * code sitting unread in the inbox.
  */
-function looksLikeCode(token: string): boolean {
+function looksLikeCode(token: string, labelled = false): boolean {
   if (NOT_A_CODE.test(token)) return false;
   if (/^\d{4,12}$/.test(token)) return true;
   if (!/^[A-Za-z0-9]{6,12}$/.test(token)) return false;
   if (!/[a-z]/.test(token)) return false;
-  return (token.match(/[A-Z]/g) ?? []).length >= 2;
+  const capitals = (token.match(/[A-Z]/g) ?? []).length;
+  if (labelled) return capitals >= 1 || /\d/.test(token);
+  return capitals >= 2;
 }
 
 /** Words that share the code's shape but are never the code. */
@@ -114,11 +126,18 @@ export function extractVerificationCode(body: string): string | null {
 const LABELLED_CODE = /\bcode\b[^:\r\n]{0,80}:\s*([A-Za-z0-9]{4,12})\b/gi;
 
 function labelledCandidates(body: string): string[] {
-  return [...body.matchAll(LABELLED_CODE)].map((match) => match[1] ?? "").filter(looksLikeCode);
+  return [...body.matchAll(LABELLED_CODE)]
+    .map((match) => match[1] ?? "")
+    .filter((token) => looksLikeCode(token, true));
 }
 
 function shapedCandidates(body: string): string[] {
-  return [...body.matchAll(/\b[A-Za-z0-9]{6,12}\b/g)].map((match) => match[0]).filter(looksLikeCode);
+  // Wrapped rather than passed by reference: filter supplies the index as a
+  // second argument, which would arrive as `labelled` and quietly relax the
+  // test for every token after the first.
+  return [...body.matchAll(/\b[A-Za-z0-9]{6,12}\b/g)]
+    .map((match) => match[0])
+    .filter((token) => looksLikeCode(token));
 }
 
 type ImapMessage = { receivedAt: Date; body: string };

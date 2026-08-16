@@ -65,6 +65,33 @@ describe("extracting the code from an email", () => {
     expect(extractVerificationCode("Nirag,\r\n\r\nKbZB13vY\r\n\r\nGreenhouse Software")).toBe("KbZB13vY");
   });
 
+  /**
+   * Brex's code on 2026-08-16 was `a7rbekvS` - one capital. It was matched by
+   * the label and then discarded by a shape test written from a handful of
+   * codes that happened to carry two, so the run waited out its whole timeout
+   * on a code already sitting in the inbox.
+   */
+  it("reads a labelled code carrying only one capital", () => {
+    const body = "Copy and paste this code into the security code field on your application:\r\n\r\na7rbekvS\r\n";
+    expect(extractVerificationCode(body)).toBe("a7rbekvS");
+  });
+
+  it("reads a labelled code carrying no capital at all", () => {
+    expect(extractVerificationCode("Your security code is: a7rbekv4")).toBe("a7rbekv4");
+  });
+
+  it("still refuses the ordinary word sitting beside the code", () => {
+    // "After you enter the code, resubmit your application." is one sentence
+    // away in Greenhouse's own email, and carries neither digit nor capital.
+    expect(extractVerificationCode("Enter the code: resubmit your application")).toBeNull();
+  });
+
+  it("does not loosen the unlabelled scan, which reads signature blobs too", () => {
+    // A DKIM blob offers well over a hundred fragments of this exact shape.
+    // Unlabelled, one capital is not enough to call something a code.
+    expect(extractVerificationCode("Nirag,\r\n\r\na7rbekvS\r\n\r\nGreenhouse")).toBeNull();
+  });
+
   it("is not fooled by a mixed-case brand name of the same length", () => {
     expect(extractVerificationCode("Sent via LinkedIn to Nirag Mehta")).toBeNull();
   });
