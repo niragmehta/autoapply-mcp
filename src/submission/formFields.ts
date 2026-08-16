@@ -732,7 +732,56 @@ export function pickOptionIndex(
     });
     if (!refused) return 0;
   }
+  const outsideUs = outsideUsOptionIndex(optionTexts, candidates);
+  if (outsideUs >= 0) return outsideUs;
   return -1;
+}
+
+/**
+ * US state lists used to check a residence question against a known member, so
+ * a list of American states can be told apart from any other set of choices.
+ * Only enough states to be certain are listed; the check needs a quorum, not a
+ * complete gazetteer.
+ */
+const US_STATES = [
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+  "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+  "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+  "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new york",
+  "ohio", "oklahoma", "oregon", "pennsylvania", "tennessee", "texas", "utah", "vermont",
+  "virginia", "washington", "wisconsin", "wyoming",
+];
+
+/** An option meaning "I do not live in a US state". */
+const OUTSIDE_US_OPTION =
+  /^(?:not (?:in|based in|located in|a resident of) the us(?:a)?|not in the united states|outside (?:the )?(?:us|usa|united states)|non us|international|i do not reside in the us)\b/;
+
+/**
+ * Faire asks for a state of residence and offers "Not in the US" for everyone
+ * else. The stored province is "British Columbia", which is a real answer to
+ * the question asked but matches no option, so the fill stage refused a
+ * complete application over the one field whose answer was already known.
+ *
+ * Failing to match any US state is itself the fact the question is asking
+ * about, so the escape option is taken. The list has to look like US states
+ * for this to mean anything, and a candidate who does live in a state matches
+ * it directly long before reaching here.
+ */
+function outsideUsOptionIndex(optionTexts: readonly string[], candidates: readonly string[]): number {
+  const normalized = optionTexts.map((text) => normalizeOptionText(text));
+  const stateCount = normalized.filter((text) => US_STATES.includes(text)).length;
+  if (stateCount < 10) return -1;
+  const escape = normalized.findIndex((text) => OUTSIDE_US_OPTION.test(text));
+  if (escape < 0) return -1;
+  // Only a candidate that names a place may take the escape. A yes/no or a
+  // decline reaching here means the answer was never about where he lives.
+  const namesAPlace = candidates.some((candidate) => {
+    const value = normalizeOptionText(candidate);
+    if (value.length === 0) return false;
+    if (BOOLEAN_ANSWER.test(value) || isDeclinePhrase(value)) return false;
+    return /^[a-z][a-z .'-]*$/.test(value) && value.split(" ").length <= 4;
+  });
+  return namesAPlace ? escape : -1;
 }
 
 /**
