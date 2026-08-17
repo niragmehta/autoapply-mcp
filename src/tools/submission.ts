@@ -19,6 +19,7 @@ import { AppError } from "../util/errors.js";
 import { personalResolverFor } from "../submission/personalResolver.js";
 import { experienceResolverFor } from "../submission/experienceResolver.js";
 import { narrativeResolverFor } from "../submission/narrativeResolver.js";
+import { isWorkdayUrl } from "../submission/workdayFlow.js";
 import { newId, nowIso } from "../util/hash.js";
 import { handler, ok, okText } from "./helpers.js";
 
@@ -187,7 +188,9 @@ export function registerSubmissionTools(server: McpServer): void {
         accountEmail: workspace.profile.identity.email,
         // Registering on an employer's tenant is a bigger step than filling a
         // public form, so it is only done when a person is watching the window.
-        allowAccountCreation: mode === "assisted",
+        // Workday is the exception: it has no anonymous apply path at all, so
+        // refusing to register there is refusing to apply.
+        allowAccountCreation: mode === "assisted" || isWorkdayUrl(job.applyUrl),
         keepOpenMs: mode === "assisted" ? (args.keepOpenSeconds ?? 240) * 1000 : 0,
         verificationCode: args.verificationCode,
         codeWaitMs: (args.waitForCodeSeconds ?? 0) * 1000,

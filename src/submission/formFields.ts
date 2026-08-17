@@ -244,6 +244,8 @@ function namesDifferentLinkService(fieldLabel: string, answerLabel: string): boo
 }
 const DATE_COMPONENT_QUESTION = /\b(?:start|end|from|to)\s+date\s+(?:month|year|day)\b|^(?:start|end)\s+(?:month|year)\b/;
 const DURATION_ANSWER = /\b(?:weeks?|months?|days?)\b.*\b(?:notice|offer|acceptance|start)\b|\bnotice period\b/;
+/** A date control needs a real date: at least a month, a day and a year. */
+const DATE_ANSWER = /^\D*\d{1,4}\D+\d{1,2}\D+\d{1,4}\D*$/;
 
 /**
  * Which end of a period a date component belongs to, or null when the label is
@@ -351,6 +353,13 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // A notice period ("Approximately four weeks from offer acceptance") is about
   // a start date too, and won both selects on word overlap alone.
   if (DATE_COMPONENT_QUESTION.test(fieldLabel) && DURATION_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
+  // A date control accepts nothing but a date. Adobe's education block asks for
+  // "From" and "To", which took the notice period and a bare "Yes" on word
+  // overlap; the browser refused to type them, so the field stayed empty, the
+  // step would not advance, and the run burned its whole step budget retrying.
+  if (field.type === "date" && !DATE_ANSWER.test(answer.answer.trim())) {
     return true;
   }
   if (namesDifferentPeriodEnd(fieldLabel, answerLabel)) {

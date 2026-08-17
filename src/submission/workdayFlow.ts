@@ -23,7 +23,10 @@ type Page = {
   waitForLoadState: (state: string, options?: unknown) => Promise<void>;
   evaluate: (fn: unknown, arg?: unknown) => Promise<unknown>;
   reload: (options?: unknown) => Promise<unknown>;
-  keyboard: { press: (key: string) => Promise<void> };
+  keyboard: {
+    press: (key: string) => Promise<void>;
+    type: (text: string, options?: unknown) => Promise<void>;
+  };
 };
 type Locator = {
   first: () => Locator;
@@ -210,6 +213,97 @@ function expand(candidate: string): string[] {
   return [candidate, ...group.filter((word) => !lower.includes(word))];
 }
 
+/**
+ * Types into a prompt's search box so long taxonomies can be reached.
+ *
+ * Adobe's "Field of Study" offers thousands of majors and renders only the
+ * first handful, alphabetically: the visible options stopped at
+ * "Agricultural/Biological Engineering", so "Computer Science" appeared to be
+ * on offer nowhere and a required field was reported unfillable. Workday
+ * filters the list server-side as soon as anything is typed.
+ */
+async function searchMenu(page: Page, field: Locator, candidate: string): Promise<boolean> {
+  // Workday's search box carries no type attribute and is rendered into the
+  // popup rather than the field, so a field-scoped `input[type=text]` selector
+  // finds nothing at all — but a scoped selector that is loose enough to catch
+  // it also catches the widget's own hidden inputs, and typing into one of those
+  // filters nothing. Every plausible box is therefore tried in turn.
+  const SEARCH_BOX = 'input[placeholder="Search" i], input[role="combobox"], input:not([type]), input[type="text"]';
+  const boxes: { box: Locator; where: string }[] = [];
+  // The popup renders at the end of the document, and the board's own job search
+  // sits at the top, so the menu's box is the last visible one. It is tried
+  // first: typing into a widget's own hidden input filters nothing but does
+  // leave the field dirty.
+  const loose = page.locator('input[placeholder="Search" i]:visible');
+  const looseCount = Math.min(await loose.count(), 4);
+  for (let index = looseCount - 1; index >= 0; index -= 1) {
+    boxes.push({ box: loose.nth(index), where: `page[${index}/${looseCount}]` });
+  }
+  const scoped = field.locator(SEARCH_BOX);
+  const scopedCount = Math.min(await scoped.count(), 3);
+  for (let index = 0; index < scopedCount; index += 1) {
+    boxes.push({ box: scoped.nth(index), where: `field[${index}]` });
+  }
+  if (boxes.length === 0) {
+    lastSearchDetail = "no search box";
+    return false;
+  }
+
+  const before = await page.locator(WD_MENU_ITEM).count();
+  const attempts: string[] = [];
+  // A taxonomy names things its own way: Adobe's list of majors has no plain
+  // "Computer Science" entry, so the full phrase returns "No Items." while its
+  // first word reaches "Computer Science, General" and its neighbours.
+  const terms = [candidate, candidate.split(/[\s,/]+/)[0] ?? candidate].filter(
+    (term, index, all) => term.length >= 3 && all.indexOf(term) === index,
+  );
+  for (const { box, where } of boxes) {
+    for (const term of terms) {
+      let typed = true;
+      // `fill` sets the value in one shot without emitting key events, and
+      // Workday's filter is driven by keystrokes: a filled box left the list
+      // untouched. Focusing the box and typing for real is what narrows it.
+      await box.click({ timeout: 5_000 }).catch(() => {
+        typed = false;
+      });
+      await box.fill("").catch(() => undefined);
+      await page.keyboard.type(term, { delay: 60 }).catch(() => {
+        typed = false;
+      });
+      await page.waitForTimeout(2_000);
+      const after = await page.locator(WD_MENU_ITEM).count();
+      const narrowed = (await page.locator(WD_MENU_ITEM).allInnerTexts().catch(() => [] as string[]))
+        .map((text) => text.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      const empty = narrowed.length === 0 || narrowed.every((text) => /^no items\.?$/i.test(text));
+      attempts.push(`${where} "${term}" typed=${typed} ${before}->${after}${empty ? " (empty)" : ""}`);
+      if (!empty && after !== before) {
+        lastSearchDetail = `${attempts.join("; ")}; narrowed to ${JSON.stringify(narrowed.slice(0, 6))}`;
+        return true;
+      }
+    }
+  }
+  lastSearchDetail = `${attempts.join("; ")}; ${await describeInputs(page)}`;
+  return false;
+}
+
+/** Describes the page's visible inputs so a failed search explains itself. */
+async function describeInputs(page: Page): Promise<string> {
+  const script = `(() => {
+    const seen = [];
+    for (const el of Array.from(document.querySelectorAll("input"))) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      seen.push([el.getAttribute("type") || "-", el.getAttribute("placeholder") || "-", el.getAttribute("data-automation-id") || "-"].join("/"));
+    }
+    return seen.slice(0, 12).join(" | ");
+  })()`;
+  return (await page.evaluate(script).catch(() => "")) as string;
+}
+
+/** What the last search attempt did, so a mismatch explains itself. */
+let lastSearchDetail = "not attempted";
+
 async function clickMatch(page: Page, candidate: string): Promise<boolean> {
   const items = page.locator(WD_MENU_ITEM);
   const texts = await items.allInnerTexts().catch(() => [] as string[]);
@@ -250,6 +344,15 @@ export async function fillWorkdayPrompt(
     if (await clickMatch(page, candidate)) {
       const after = await chosenValues(field);
       if (after.length > before.length) return { filled: true, detail: `selected ${after.join(", ")}` };
+    }
+
+    // Not among the options rendered so far, which for a long taxonomy is only
+    // the first page of an alphabetical list. Typing narrows it to the answer.
+    if (await searchMenu(page, field, candidate)) {
+      if (await clickMatch(page, candidate)) {
+        const after = await chosenValues(field);
+        if (after.length > before.length) return { filled: true, detail: `searched and selected ${after.join(", ")}` };
+      }
     }
 
     // Only a picker nests its options. A plain dropdown is flat, and "opening"
@@ -302,7 +405,7 @@ export async function fillWorkdayPrompt(
   await closeMenu(page);
   return {
     filled: false,
-    detail: `no Workday option matched ${JSON.stringify(candidates)}; offered ${JSON.stringify(offered)}`,
+    detail: `no Workday option matched ${JSON.stringify(candidates)}; offered ${JSON.stringify(offered)}; search: ${lastSearchDetail}`,
   };
 }
 
