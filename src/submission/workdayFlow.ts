@@ -280,13 +280,26 @@ async function createAccount(page: Page, credentials: AtsCredentials): Promise<{
  * Workday splits an application across My Information, My Experience,
  * Application Questions, Voluntary Disclosures and Review. Each page must be
  * saved before the next one exists, so fields cannot all be collected up front.
+ *
+ * The advance control is named differently across Workday versions - a live
+ * NVIDIA tenant labels it "Save and Continue" under `pageFooterNextButton` and
+ * has no `bottom-navigation-next-button` at all - so each known id is tried in
+ * turn rather than assuming one.
  */
 export async function advanceWorkdayStep(page: Page): Promise<boolean> {
-  const advanced = await clickIfPresent(page, '[data-automation-id="bottom-navigation-next-button"]', 8000);
-  if (!advanced) return false;
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-  return true;
+  for (const selector of NEXT_BUTTONS) {
+    const advanced = await clickIfPresent(page, selector, 8000);
+    if (!advanced) continue;
+    await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+    return true;
+  }
+  return false;
 }
+
+const NEXT_BUTTONS = [
+  '[data-automation-id="pageFooterNextButton"]',
+  '[data-automation-id="bottom-navigation-next-button"]',
+] as const;
 
 /** Reads the wizard's current step label, used to report progress honestly. */
 export async function workdayStepName(page: Page): Promise<string> {
