@@ -599,6 +599,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const priorFilled: Array<{ label: string; source: string }> = [];
     const priorFailedRequired: string[] = [];
     let workdayRetries = 0;
+    let resumeAttached = false;
     if (isWorkdayUrl(page.url())) {
       const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
         allowAccountCreation: options.allowAccountCreation ?? false,
@@ -623,8 +624,27 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         const name = await workdayStepName(page);
         // The resume upload lives on My Experience rather than the first page,
         // so it is offered on every step and lands on whichever one accepts it.
-        await attachResume(page, packet.resumePath);
+        // The upload is asynchronous and does sometimes drop, so it is retried
+        // until the board shows the file name back.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (resumeAttached) break;
+          // Checked before attaching: Workday keeps the file on the saved
+          // profile, so uploading again adds a second identical copy rather
+          // than replacing the first.
+          if (await resumeIsAttached(page, packet.resumePath)) {
+            resumeAttached = true;
+            break;
+          }
+          await attachResume(page, packet.resumePath);
+          await page.waitForTimeout(1200);
+          if (await resumeIsAttached(page, packet.resumePath)) {
+            resumeAttached = true;
+            break;
+          }
+        }
+        if (resumeAttached) await dedupeResumeAttachments(page);
         const stepFill = await fillFormPage(page, packet, options, true);
+        await clearPhoneExtension(page);
         // The transient fault can also arrive part-way through a step, after
         // the recovery above has already run. The step then collects nothing
         // and the run ends up reporting a live posting as removed, so the same
@@ -662,6 +682,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         if (/review/i.test(name)) break;
         if (!(await advanceWorkdayStep(page))) break;
         await page.waitForTimeout(1500);
+      }
+      // Workday does not mark Resume/CV required, so a dropped upload reaches
+      // Review as "No Response" without a word of complaint. Reporting it is
+      // what stops an application being submitted with no resume at all.
+      if (!resumeAttached) {
+        priorFailedRequired.push("Resume/CV (upload did not take)");
       }
     }
 
@@ -1296,7 +1322,58 @@ async function fillNativeSelect(locator: AnyLocator, candidates: readonly string
   await locator.selectOption({ label: optionTexts[index]!.trim() });
 }
 
-async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
+/**
+ * Removes a phone number that an earlier run wrote into the extension field.
+ *
+ * Workday saves the candidate profile per tenant, so a value written once is
+ * offered back on every later application to that employer. The matcher no
+ * longer writes it, which does nothing for the ones already stored, and the
+ * result is an undialable "+1 (604) 6536919 x604-653-6919" on the review page.
+ * A real extension is a handful of digits, so anything phone-length is wrong.
+ */
+async function clearPhoneExtension(page: AnyPage): Promise<void> {
+  try {
+    await page.evaluate(`(() => {
+      const inputs = Array.prototype.slice.call(document.querySelectorAll('input'));
+      for (const input of inputs) {
+        const id = input.getAttribute('data-automation-id') || '';
+        const name = input.getAttribute('name') || '';
+        const aria = input.getAttribute('aria-label') || '';
+        if (!/extension/i.test(id + ' ' + name + ' ' + aria)) continue;
+        const digits = (input.value || '').replace(/\\D/g, '');
+        if (digits.length < 7) continue;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    })()`);
+  } catch {
+    // Best effort: a page without an extension field must not fail the run.
+  }
+}
+
+/**
+ * Removes duplicate resume uploads.
+ *
+ * Workday stores attachments on the saved candidate profile, so every run that
+ * uploaded again left another identical copy behind - three of them by the time
+ * this was found. Extra copies are deleted so a submitted application carries
+ * exactly one resume.
+ */
+async function dedupeResumeAttachments(page: AnyPage): Promise<void> {
+  const items = page.locator('[data-automation-id="file-upload-item"]');
+  for (let guard = 0; guard < 5; guard += 1) {
+    const count = await items.count();
+    if (count <= 1) return;
+    const remove = items.nth(count - 1).locator('button[data-automation-id="delete-file"]');
+    if ((await remove.count()) === 0) return;
+    await remove.click({ timeout: 5000 }).catch(() => undefined);
+    await page.waitForTimeout(1200);
+  }
+}
+
+async function attachResume(page: AnyPage, resumePath: string): Promise<boolean> {
   const check = validateResumeFile(resumePath);
   if (!check.ok) {
     throw new AppError("resume_unusable", check.reason, { path: resumePath });
@@ -1304,7 +1381,7 @@ async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
   const fileInput = page.locator('input[type="file"]').first();
   if ((await fileInput.count()) === 0) {
     logger.warn("no file input found on the application form", { url: page.url() });
-    return;
+    return false;
   }
   // A failed upload must abort: submitting without the resume is worse than
   // failing loudly and handing the application back to a person.
@@ -1313,6 +1390,20 @@ async function attachResume(page: AnyPage, resumePath: string): Promise<void> {
   } catch (error) {
     throw new AppError("resume_upload_failed", `could not attach resume: ${String(error)}`, { path: resumePath });
   }
+  return true;
+}
+
+/**
+ * Confirms the board is actually holding the file.
+ *
+ * Workday accepts the upload asynchronously and does not mark Resume/CV
+ * required, so a dropped upload reached the review page as "No Response" and
+ * the run still reported success - an application submitted with no resume.
+ */
+async function resumeIsAttached(page: AnyPage, resumePath: string): Promise<boolean> {
+  const name = resumePath.split(/[\\/]/).pop() ?? "";
+  if (!name) return false;
+  return (await page.locator(`text=${name}`).count()) > 0;
 }
 
 /**
