@@ -46,6 +46,8 @@ const SEL = {
   apply: '[data-automation-id="adventureButton"]',
   applyManually: '[data-automation-id="applyManually"]',
   useMyLastApplication: '[data-automation-id="useMyLastApplication"]',
+  signInWithEmail: '[data-automation-id="SignInWithEmailButton"]',
+  googleSignIn: '[data-automation-id="GoogleSignInButton"]',
   email: '[data-automation-id="email"]',
   password: '[data-automation-id="password"]',
   verifyPassword: '[data-automation-id="verifyPassword"]',
@@ -146,6 +148,21 @@ async function visibleText(page: Page, selector: string): Promise<string> {
 }
 
 /**
+ * Reports whether the page is still showing a sign-in gate.
+ *
+ * Used to tell "signed in already" apart from "the credential form has not
+ * opened yet". Both states lack a password field, so absence alone cannot
+ * distinguish them and the provider chooser has to be looked for directly.
+ */
+async function atSignInWall(page: Page): Promise<boolean> {
+  for (const selector of [SEL.signInWithEmail, SEL.googleSignIn, SEL.email]) {
+    const visible = await page.locator(selector).first().isVisible().catch(() => false);
+    if (visible) return true;
+  }
+  return false;
+}
+
+/**
  * Walks from a Workday job advert to its application form, signing in or
  * registering as needed.
  *
@@ -166,8 +183,23 @@ export async function enterWorkdayApplication(
   await clickIfPresent(page, SEL.applyManually, 8000);
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
 
+  // Newer tenants gate the credential form behind a provider chooser offering
+  // "Sign in with Google" or "Sign in with email". That page carries no email or
+  // password field at all, so the form has to be opened before it can be found.
+  await clickIfPresent(page, SEL.signInWithEmail, 6000);
+
   const onAccountPage = await page.locator(SEL.password).first().isVisible().catch(() => false);
   if (!onAccountPage) {
+    // An absent password field is not evidence of being signed in - it is also
+    // what a provider chooser looks like. Claiming "form reached" there sends the
+    // caller off to fill a form that does not exist, so the wall is named instead.
+    if (await atSignInWall(page)) {
+      return {
+        reached: "sign-in",
+        detail: "stopped at the sign-in wall; the credential form did not open",
+        createdAccount: false,
+      };
+    }
     return { reached: "form", detail: "already signed in; application form reached", createdAccount: false };
   }
 
