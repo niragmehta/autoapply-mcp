@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { enterWorkdayApplication } from "../src/submission/workdayFlow.js";
+import { advanceWorkdayStep, enterWorkdayApplication } from "../src/submission/workdayFlow.js";
 
 /**
  * A Workday tenant reduced to the part the entry walk depends on: which
@@ -140,5 +140,30 @@ describe("enterWorkdayApplication", () => {
     expect(result.reached).toBe("sign-in");
     expect(result.createdAccount).toBe(false);
     expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+  });
+});
+
+describe("advanceWorkdayStep", () => {
+  it("advances a tenant whose control is pageFooterNextButton", async () => {
+    // The live NVIDIA wizard labels this "Save and Continue" and carries no
+    // bottom-navigation-next-button, so only this id can move the page on.
+    const tenant = new FakeTenant(["pageFooterNextButton"], { pageFooterNextButton: ["formField-source"] });
+
+    expect(await advanceWorkdayStep(tenant.asPage())).toBe(true);
+    expect(tenant.clicks).toEqual(["pageFooterNextButton"]);
+  });
+
+  it("advances a tenant using the older bottom navigation control", async () => {
+    const tenant = new FakeTenant(["bottom-navigation-next-button"], {
+      "bottom-navigation-next-button": ["formField-source"],
+    });
+
+    expect(await advanceWorkdayStep(tenant.asPage())).toBe(true);
+  });
+
+  it("reports no advance when the final page offers neither control", async () => {
+    const tenant = new FakeTenant(["submitButton"], {});
+
+    expect(await advanceWorkdayStep(tenant.asPage())).toBe(false);
   });
 });
