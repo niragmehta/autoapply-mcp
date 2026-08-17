@@ -66,6 +66,18 @@ const SEL = {
   errorBanner: '[data-automation-id="errorMessage"]',
 } as const;
 
+/**
+ * Controls that only exist once the application wizard is open. The step label
+ * is the primary signal - live Salesforce, NVIDIA and Adobe tenants all render
+ * it - with the wizard's own navigation and form fields as fallbacks for a
+ * tenant that omits the progress bar.
+ */
+const FORM_EVIDENCE = [
+  '[data-automation-id="progressBarActiveStep"]',
+  '[data-automation-id="bottom-navigation-next-button"]',
+  '[data-automation-id^="formField-"]',
+] as const;
+
 export type WorkdayEntryResult = {
   reached: "form" | "sign-in" | "blocked";
   detail: string;
@@ -527,6 +539,23 @@ async function atSignInWall(page: Page): Promise<boolean> {
 }
 
 /**
+ * Reports whether the application wizard is actually on screen.
+ *
+ * Needed for the same reason as the sign-in wall check, taken one step further:
+ * a missing password field and a missing provider chooser still do not prove the
+ * form was reached. A closed posting renders a "page does not exist" shell that
+ * has neither, so inferring success from those two absences reports a form that
+ * was never opened - and postings in this campaign close constantly.
+ */
+async function atApplicationForm(page: Page): Promise<boolean> {
+  for (const selector of FORM_EVIDENCE) {
+    const visible = await page.locator(selector).first().isVisible().catch(() => false);
+    if (visible) return true;
+  }
+  return false;
+}
+
+/**
  * Walks from a Workday job advert to its application form, signing in or
  * registering as needed.
  *
@@ -561,6 +590,14 @@ export async function enterWorkdayApplication(
       return {
         reached: "sign-in",
         detail: "stopped at the sign-in wall; the credential form did not open",
+        createdAccount: false,
+      };
+    }
+    if (!(await atApplicationForm(page))) {
+      return {
+        reached: "blocked",
+        detail:
+          "no application form on screen and no sign-in gate; the posting is probably closed or the wizard never opened",
         createdAccount: false,
       };
     }

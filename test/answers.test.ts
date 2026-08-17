@@ -41,6 +41,34 @@ describe("classifyQuestion", () => {
   it("recognizes free-text prompts", () => {
     expect(classifyQuestion("Why do you want to work here?")).toBe("essay");
   });
+
+  it("does not take a category from a passing mention inside a condition", () => {
+    // Block's interview-expectations agreement. Accommodations appear only
+    // inside conditional clauses, so a conduct acknowledgement was classified
+    // as a disability question and blocked every Block application.
+    const block =
+      "How we interview: Our hiring process prioritizes authenticity and fairness, and we ask all candidates to " +
+      "adhere to a few key expectations. Recording any part of the interview without consent is prohibited. " +
+      "However, if you need recording as an accommodation, please notify your recruiter before your scheduled " +
+      "interview. During virtual interviews, keep your video on to foster meaningful engagement; if you require " +
+      "accommodations, please inform our team in advance.";
+    expect(classifyQuestion(block)).toBe("legal-attestation");
+  });
+
+  it("still classifies a question that is itself about accommodations", () => {
+    expect(classifyQuestion("Do you require an accommodation to participate in the interview process?")).toBe(
+      "disability",
+    );
+    expect(classifyQuestion("If you need an accommodation, what accommodation would you like to request?")).toBe(
+      "disability",
+    );
+  });
+
+  it("keeps a category the label states outside its conditions", () => {
+    expect(
+      classifyQuestion("If you are selected for this role, will you require visa sponsorship to continue working?"),
+    ).toBe("sponsorship");
+  });
 });
 
 describe("optional questions do not gate approval", () => {
