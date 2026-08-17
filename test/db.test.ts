@@ -267,6 +267,33 @@ describe("applications repository", () => {
     recordOutcome(db, "app_1", "rejected", "");
     expect(listOutcomes(db, "app_1").map((entry) => entry.status)).toEqual(["recruiter_screen", "rejected"]);
   });
+  it("retires an unsubmitted application when it is withdrawn", () => {
+    // A dead posting withdrawn while still approved used to keep that status and
+    // was re-selected by the next submission wave, so the same closed postings
+    // were withdrawn again in later sessions.
+    const job = makeJob();
+    upsertJobs(db, [job]);
+    saveApplication(db, application(job.id, { status: "approved" }));
+
+    recordOutcome(db, "app_1", "withdrawn", "posting returns 404");
+
+    expect(getApplicationByJob(db, job.id)?.status).toBe("skipped");
+    expect(listApplications(db, "approved")).toHaveLength(0);
+  });
+
+  it("leaves a submitted application submitted when the candidate withdraws", () => {
+    // Withdrawing from a live process must not erase the submission that drives
+    // the daily limit and the campaign total.
+    const job = makeJob();
+    upsertJobs(db, [job]);
+    const submittedAt = new Date().toISOString();
+    saveApplication(db, application(job.id, { status: "submitted", submittedAt }));
+
+    recordOutcome(db, "app_1", "withdrawn", "candidate withdrew after the screen");
+
+    expect(getApplicationByJob(db, job.id)?.status).toBe("submitted");
+    expect(countSubmittedSince(db, new Date(Date.now() - 3600_000).toISOString())).toBe(1);
+  });
 });
 
 describe("audit log", () => {
