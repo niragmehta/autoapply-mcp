@@ -1835,3 +1835,34 @@ describe("a form the candidate signs", () => {
     expect(fallbackAnswersForFields([dateField("startDate", "start date")], [], [])).toHaveLength(0);
   });
 });
+
+describe("a date control only takes a date", () => {
+  // Adobe's education block asks "From" and "To" as date controls. The stored
+  // notice period ("Approximately four weeks from offer acceptance") shares
+  // "from" with the label and won it, and a bare "Yes" won "To". The browser
+  // refused to type either, so both required fields stayed empty, the step
+  // would not advance, and the run spent its whole step budget retrying.
+  it("refuses a notice period on a date field", () => {
+    const matches = matchFields(
+      [field("From", { type: "date", required: true })],
+      [answer("Notice period", "Approximately four weeks from offer acceptance.")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("refuses a bare yes on a date field", () => {
+    const matches = matchFields(
+      [field("To", { type: "date", required: true })],
+      [answer("To", "Yes")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still fills a date field with a date", () => {
+    const matches = matchFields(
+      [field("Date", { type: "date", required: true })],
+      [answer("Date", "08/16/2026")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("08/16/2026");
+  });
+});

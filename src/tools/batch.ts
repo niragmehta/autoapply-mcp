@@ -35,6 +35,7 @@ import { logger } from "../util/logger.js";
 import { personalResolverFor } from "../submission/personalResolver.js";
 import { experienceResolverFor } from "../submission/experienceResolver.js";
 import { narrativeResolverFor } from "../submission/narrativeResolver.js";
+import { isWorkdayUrl } from "../submission/workdayFlow.js";
 import { handler, ok } from "./helpers.js";
 
 /**
@@ -450,7 +451,9 @@ export function registerBatchTools(server: McpServer): void {
             experienceResolver: experienceResolverFor(workspace.profile),
         narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
             accountEmail: workspace.profile.identity.email,
-            allowAccountCreation: mode === "assisted",
+            // Workday has no anonymous apply path, so refusing to register a
+            // candidate account there is refusing to apply at all.
+            allowAccountCreation: mode === "assisted" || isWorkdayUrl(job.applyUrl),
           });
 
           if (run.status === "submitted") {

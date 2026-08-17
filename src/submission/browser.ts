@@ -619,9 +619,30 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       // Identify, Review - and each has to be saved before the next exists. Walk
       // to the last page here so the code below sees a form it can finish, the
       // same way it does on a single-page board.
+      let stalledOn = "";
+      let stalls = 0;
       for (let step = 0; step < WORKDAY_MAX_STEPS; step += 1) {
         await recoverWorkdayError(page as never);
         const name = await workdayStepName(page);
+        // A step that refuses to advance - Adobe's Education block rejects the
+        // form until every one of its prompts is answered - otherwise burns the
+        // whole step budget re-filling the same page and then reports whatever
+        // the last iteration happened to see. Three attempts is enough to tell a
+        // slow save from a blocked one.
+        if (name && name === stalledOn) {
+          stalls += 1;
+          if (stalls >= 3) {
+            logger.warn("workday step will not advance", { step: name });
+            // Reported, not just logged: a wizard that never reached Review has
+            // not filled the application, and without this the run ends
+            // "unmatched required: []" and looks ready to submit.
+            priorFailedRequired.push(`${name.replace(/\s+/g, " ").trim()} would not advance`);
+            break;
+          }
+        } else {
+          stalledOn = name;
+          stalls = 0;
+        }
         // The resume upload lives on My Experience rather than the first page,
         // so it is offered on every step and lands on whichever one accepts it.
         // The upload is asynchronous and does sometimes drop, so it is retried
