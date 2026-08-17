@@ -80,6 +80,27 @@ export function questionCore(label: string): string {
   return remainder;
 }
 
+/**
+ * Strips conditional clauses so matching sees what a label is about rather than
+ * the circumstances it mentions in passing.
+ *
+ * Block's interview-expectations agreement names accommodations only inside
+ * "However, if you need recording as an accommodation, please notify your
+ * recruiter" and "if you require accommodations, please inform our team". Those
+ * asides made a conduct acknowledgement classify as a disability question - a
+ * category that deliberately refuses to auto-fill - so every Block application
+ * stopped on a field whose only option was "I agree to these expectations".
+ *
+ * The clause is bounded by its own sentence so one "if" cannot swallow the rest
+ * of a paragraph, and the trailing comma is required, matching the leading-
+ * clause rule above.
+ */
+const CONDITIONAL_CLAUSE = /\b(?:if|unless|should|where|when)\b[^.;?!]{0,160}?,\s*/gi;
+
+export function withoutConditionals(label: string): string {
+  return label.replace(CONDITIONAL_CLAUSE, " ").replace(/\s+/g, " ").trim();
+}
+
 export function classifyQuestion(label: string): string {
   const raw = withoutAsides(label).trim();
   if (raw.length === 0) return "general";
@@ -87,7 +108,14 @@ export function classifyQuestion(label: string): string {
   // labels but would break single-token names such as "LinkedIn".
   const normalized = normalizeQuestionLabel(raw);
   for (const [category, pattern] of CATEGORY_PATTERNS) {
-    if (pattern.test(raw) || pattern.test(normalized)) return category;
+    if (!pattern.test(raw) && !pattern.test(normalized)) continue;
+    // A category may only come from a conditional clause when the clause is all
+    // the label offers. Anything the label says outside its conditions is the
+    // real subject, so classification restarts on that text alone.
+    const unconditional = withoutConditionals(raw);
+    if (unconditional.length < 20 || unconditional === raw) return category;
+    if (pattern.test(unconditional) || pattern.test(normalizeQuestionLabel(unconditional))) return category;
+    return classifyQuestion(unconditional);
   }
   return "general";
 }

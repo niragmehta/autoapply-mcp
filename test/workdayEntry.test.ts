@@ -124,6 +124,24 @@ describe("enterWorkdayApplication", () => {
     expect(result.detail).toMatch(/already signed in/i);
   });
 
+  it("refuses to call a closed posting a reached form", async () => {
+    // Observed live: a Salesforce posting that had closed rendered "the page you
+    // are looking for doesn't exist" with only a Sign In link. There is no
+    // password field and no provider chooser, so both absence checks pass - yet
+    // no application form exists. Entry previously reported "form reached" here.
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: ADVERT,
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+    });
+
+    expect(result.reached).toBe("blocked");
+    expect(result.detail).toMatch(/posting is probably closed|never opened/i);
+    expect(result.createdAccount).toBe(false);
+  });
+
   it("does not create an account unless account creation is permitted", async () => {
     const tenant = new FakeTenant(ADVERT, {
       adventureButton: MODAL,
