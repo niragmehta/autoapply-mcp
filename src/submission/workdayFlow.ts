@@ -22,14 +22,19 @@ type Page = {
   waitForTimeout: (ms: number) => Promise<void>;
   waitForLoadState: (state: string, options?: unknown) => Promise<void>;
   evaluate: (fn: unknown, arg?: unknown) => Promise<unknown>;
+  reload: (options?: unknown) => Promise<unknown>;
+  keyboard: { press: (key: string) => Promise<void> };
 };
 type Locator = {
   first: () => Locator;
+  nth: (index: number) => Locator;
   count: () => Promise<number>;
   click: (options?: unknown) => Promise<void>;
   fill: (value: string, options?: unknown) => Promise<void>;
   isVisible: () => Promise<boolean>;
   waitFor: (options?: unknown) => Promise<void>;
+  locator: (selector: string) => Locator;
+  allInnerTexts: () => Promise<string[]>;
 };
 
 export const WORKDAY_HOST_PATTERN = /(^|\.)myworkdayjobs\.com$/i;
@@ -64,7 +69,263 @@ export type WorkdayEntryResult = {
   createdAccount: boolean;
 };
 
+/**
+ * Workday's dropdowns are not inputs, so a plain fill writes nowhere.
+ *
+ * The markup is a `multiSelectContainer` (or a `button[aria-haspopup=listbox]`)
+ * with a hidden text input beside it. The field collector only ever sees that
+ * input: filling it changes nothing the form reads, the run reports the field
+ * as filled, and Workday then refuses to save the page because the field is
+ * still empty. Every one of these has to be opened and an option clicked.
+ *
+ * Two traps are specific to this widget and both are load-bearing here:
+ *
+ * - An already-chosen value renders as a `selectedItem` pill that also carries
+ *   `role="option"`. It is a delete control, not a choice, so a page-wide
+ *   option query offers up other fields' answers and "choosing" one erases
+ *   them. Pills are excluded everywhere.
+ * - Long lists are nested one level ("Linkedin Jobs" under "Job Board") and
+ *   typing does not search into the categories, so a leaf is only reachable by
+ *   opening its parent. The menu has no back control that is safe to click -
+ *   the only back-looking button on the page is `backToJobPosting`, which
+ *   leaves the application - so each category is tried from a freshly reopened
+ *   menu instead.
+ */
+const WD_PILL = '[data-automation-id="selectedItem"]';
+const WD_MENU_ITEM = `[role="option"]:visible:not(${WD_PILL})`;
+const WD_MAX_CATEGORIES = 8;
+
+export type WorkdayPromptResult = { filled: boolean; detail: string };
+
+function promptContainer(field: Locator): Locator {
+  return field.locator(
+    '[data-automation-id="multiSelectContainer"], button[aria-haspopup="listbox"]',
+  );
+}
+
+/** True when this field is one of Workday's prompt widgets rather than a text input. */
+export async function isWorkdayPrompt(field: Locator): Promise<boolean> {
+  return (await promptContainer(field).count()) > 0;
+}
+
+/** A picker nests its options one level; a plain dropdown is flat. */
+async function isPicker(field: Locator): Promise<boolean> {
+  return (await field.locator('[data-automation-id="multiSelectContainer"]').count()) > 0;
+}
+
+async function closeMenu(page: Page): Promise<void> {
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForTimeout(300);
+}
+
+async function openMenu(page: Page, field: Locator): Promise<boolean> {
+  // A click that lands while a previously open menu is still closing is
+  // swallowed, which reads as "this widget offers nothing" and hides the real
+  // reason a required field stayed blank. One retry settles it.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await promptContainer(field)
+      .first()
+      .click({ timeout: 10_000 })
+      .catch(() => undefined);
+    await page.waitForTimeout(1_200);
+    if ((await page.locator(WD_MENU_ITEM).count()) > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * The values already chosen.
+ *
+ * A picker shows them as pills; a plain dropdown has none and shows the choice
+ * as the button's own text, so both have to be read or a successful selection
+ * on a dropdown is misreported as a failure.
+ */
+const WD_PLACEHOLDER = /^(select one|select\.{0,3}|search|)$/i;
+
+async function chosenValues(field: Locator): Promise<string[]> {
+  const clean = (text: string): string => text.replace(/\s+/g, " ").trim();
+  const pills = field.locator(WD_PILL);
+  if ((await pills.count()) > 0) {
+    return (await pills.allInnerTexts()).map(clean).filter(Boolean);
+  }
+  const button = field.locator('button[aria-haspopup="listbox"]');
+  if ((await button.count()) > 0) {
+    return (await button.allInnerTexts()).map(clean).filter((text) => !WD_PLACEHOLDER.test(text));
+  }
+  return [];
+}
+
+/**
+ * Yes and no are too short to match on substrings: "no" appears inside "NOT",
+ * and "Yes, no restriction" contains both. A bare polarity answer therefore
+ * only takes an option that leads with the same word - the rule the option
+ * matcher already applies everywhere else.
+ */
+const WD_POLARITY = /^(yes|no)$/;
+
+/** Substring matching alone lets "no" hide inside "not" and answer the opposite. */
+function containsWord(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(haystack);
+}
+
+function matches(optionText: string, candidate: string): boolean {
+  const option = optionText.replace(/\s+/g, " ").trim().toLowerCase();
+  const wanted = candidate.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!option || !wanted) return false;
+  if (WD_PLACEHOLDER.test(option)) return false;
+  if (isRefusal(option) && isRefusal(wanted)) return true;
+  if (WD_POLARITY.test(wanted)) return new RegExp(`^${wanted}\\b`, "i").test(option);
+  return option === wanted || containsWord(option, wanted) || containsWord(wanted, option);
+}
+
+/**
+ * Employers name the same choice differently, and a Workday prompt offers no
+ * free text to fall back on, so a stored answer has to be tried under the
+ * tenant's own vocabulary. NVIDIA lists a mobile number as "Home Cellular".
+ */
+const WD_SYNONYMS: readonly (readonly string[])[] = [["mobile", "cell", "cellular"]];
+
+/**
+ * A refusal to answer, however it is spelled.
+ *
+ * NVIDIA alone offers three spellings on one step - "Decline to State" for
+ * ethnicity and gender, "I DO NOT WISH TO SELF-IDENTIFY" for veteran status -
+ * and the stored answer says "decline to self-identify". Chasing that with a
+ * list of literals is a losing game, so both sides are recognised as refusals
+ * instead. Both must be refusals for this to apply, so a real answer can never
+ * be turned into a decline.
+ */
+const WD_REFUSAL =
+  /(decline to|prefer not to|do not wish to|don't wish to|do not want to|choose not to|rather not|wish not to|not to disclose|not to self.?identify|no response)/;
+
+function isRefusal(text: string): boolean {
+  return WD_REFUSAL.test(text);
+}
+
+function expand(candidate: string): string[] {
+  const lower = candidate.toLowerCase();
+  const group = WD_SYNONYMS.find((words) => words.some((word) => lower.includes(word)));
+  if (!group) return [candidate];
+  return [candidate, ...group.filter((word) => !lower.includes(word))];
+}
+
+async function clickMatch(page: Page, candidate: string): Promise<boolean> {
+  const items = page.locator(WD_MENU_ITEM);
+  const texts = await items.allInnerTexts().catch(() => [] as string[]);
+  const hits = texts
+    .map((text, index) => ({ text, index }))
+    .filter((entry) => matches(entry.text, candidate));
+  if (hits.length === 0) return false;
+  // The least qualified match wins, the same rule the option matcher uses
+  // elsewhere: given "Cellular" and "Work Cellular", the bare one is meant.
+  hits.sort((a, b) => a.text.length - b.text.length);
+  await items.nth(hits[0]!.index).click({ timeout: 10_000 });
+  await page.waitForTimeout(1_000);
+  return true;
+}
+
+/**
+ * Chooses a value in a Workday prompt, reporting honestly when it cannot.
+ *
+ * The caller must be able to tell a real selection from a no-op, so success is
+ * confirmed by re-reading the widget's pills rather than by the click resolving.
+ */
+export async function fillWorkdayPrompt(
+  page: Page,
+  field: Locator,
+  candidates: readonly string[],
+): Promise<WorkdayPromptResult> {
+  const before = await chosenValues(field);
+  const already = before.find((value) => candidates.some((candidate) => matches(value, candidate)));
+  if (already) return { filled: true, detail: `already set to ${already}` };
+  // A prompt that takes one value rejects a second, so anything already chosen
+  // by a previous pass of the wizard loop is left alone.
+  if (before.length > 0) return { filled: true, detail: `already set to ${before.join(", ")}` };
+
+  for (const candidate of candidates.flatMap(expand)) {
+    await closeMenu(page);
+    if (!(await openMenu(page, field))) continue;
+
+    if (await clickMatch(page, candidate)) {
+      const after = await chosenValues(field);
+      if (after.length > before.length) return { filled: true, detail: `selected ${after.join(", ")}` };
+    }
+
+    // Only a picker nests its options. A plain dropdown is flat, and "opening"
+    // one of its entries would select it, so probing there would quietly answer
+    // the question with whatever was tried first.
+    if (!(await isPicker(field))) continue;
+
+    // Not offered at the top level: try each category from a fresh menu.
+    await closeMenu(page);
+    if (!(await openMenu(page, field))) continue;
+    const categories = (await page.locator(WD_MENU_ITEM).allInnerTexts().catch(() => [] as string[]))
+      .map((text) => text.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, WD_MAX_CATEGORIES);
+
+    for (const category of categories) {
+      await closeMenu(page);
+      if (!(await openMenu(page, field))) break;
+      if (!(await clickMatch(page, category))) continue;
+
+      // An entry that turned out to be a value rather than a category has just
+      // answered the question. Undo it: the pill is its own delete control.
+      const opened = await chosenValues(field);
+      if (opened.length > before.length) {
+        if (opened.some((value) => matches(value, candidate))) {
+          return { filled: true, detail: `selected ${opened.join(", ")}` };
+        }
+        await field.locator(WD_PILL).first().click({ timeout: 5_000 }).catch(() => undefined);
+        await page.waitForTimeout(500);
+        continue;
+      }
+
+      if (!(await clickMatch(page, candidate))) continue;
+      const after = await chosenValues(field);
+      if (after.length > before.length) {
+        return { filled: true, detail: `selected ${after.join(", ")} under ${category}` };
+      }
+    }
+  }
+
+  // Say what was actually on offer. Without it every mismatch needs a bespoke
+  // browser probe to diagnose, because the wanted values are all the log shows.
+  let offered: string[] = [];
+  if (await openMenu(page, field)) {
+    offered = (await page.locator(WD_MENU_ITEM).allInnerTexts().catch(() => [] as string[]))
+      .map((text) => text.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, WD_MAX_CATEGORIES);
+  }
+  await closeMenu(page);
+  return {
+    filled: false,
+    detail: `no Workday option matched ${JSON.stringify(candidates)}; offered ${JSON.stringify(offered)}`,
+  };
+}
+
 const CLICK_FILTER = '[data-automation-id="click_filter"]';
+
+/**
+ * Workday intermittently replaces a wizard step with "Something went wrong.
+ * Please refresh the page and then try again." The page keeps its stepper and
+ * its chrome but loses every control, so a run that hits this collected no
+ * fields and reported the posting as dead - a confident, wrong diagnosis of a
+ * fault the page itself says is transient. Doing what it asks recovers it.
+ */
+const WD_TRANSIENT_ERROR = /something went wrong/i;
+
+export async function recoverWorkdayError(page: Page, attempts = 2): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!WD_TRANSIENT_ERROR.test(await visibleText(page, "body"))) return true;
+    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    await page.waitForTimeout(2_500);
+  }
+  return !WD_TRANSIENT_ERROR.test(await visibleText(page, "body"));
+}
 
 /**
  * Builds the in-page script that clicks a Workday control.

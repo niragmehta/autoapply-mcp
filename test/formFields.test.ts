@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   buildFillPlan,
   answerValueForField,
@@ -423,7 +423,7 @@ describe("optionSearchCandidates", () => {
 
   it("offers relocation wording when a board replaces Yes/No with prose", () => {
     const candidates = optionSearchCandidates(
-      field("Do you currently live or are you willing to relocate to the job’s location?*", { role: "combobox" }),
+      field("Do you currently live or are you willing to relocate to the jobâ€™s location?*", { role: "combobox" }),
       answer("Open to relocation", "Yes"),
     );
     expect(candidates).toContain("am willing to relocate");
@@ -441,7 +441,7 @@ describe("optionSearchCandidates", () => {
 
   it("never claims willingness when the answer is no", () => {
     const candidates = optionSearchCandidates(
-      field("Are you willing to relocate to the job’s location?*", { role: "combobox" }),
+      field("Are you willing to relocate to the jobâ€™s location?*", { role: "combobox" }),
       answer("Open to relocation", "No"),
     );
     expect(
@@ -1644,5 +1644,178 @@ describe("contact fields judged by the shape of the value", () => {
       [answer("Email preference", "I do not wish to be emailed")],
     );
     expect(matches[0]?.answer).toBeNull();
+  });
+});
+describe("a contact detail may not answer a question about its kind", () => {
+  // Workday renders "Phone Number" and "Phone Device Type" side by side. Both
+  // carry the word "phone", so the stored number won the type question and the
+  // filler searched a Home/Home Cellular menu for a telephone number. Step one
+  // of the wizard then refused to save, and every Workday application stalled.
+  const phoneType = field("Phone Device Type", { type: "select", required: true });
+
+  it("does not let the phone number fill the device type", () => {
+    const matches = matchFields([phoneType], [answer("Phone", "+1 604 555 0134")]);
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still lets a device-type answer fill it", () => {
+    const matches = matchFields([phoneType], [answer("Phone Device Type", "Mobile")]);
+    expect(matches[0]?.answer?.answer).toBe("Mobile");
+  });
+
+  it("prefers the device type when both answers are offered", () => {
+    const matches = matchFields(
+      [phoneType],
+      [answer("Phone", "+1 604 555 0134"), answer("Phone Device Type", "Mobile")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("Mobile");
+  });
+
+  it("leaves the phone number field itself alone", () => {
+    const matches = matchFields(
+      [field("Phone Number", { required: true })],
+      [answer("Phone", "+1 604 555 0134"), answer("Phone Device Type", "Mobile")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("+1 604 555 0134");
+  });
+});
+
+
+describe("a place name may not answer a work authorization question", () => {
+  // NVIDIA asks "Are you legally authorized to work in the country where this
+  // position is located?". It shares the word "country" with the stored country
+  // answer, which outscored the work-authorization answer, so the filler offered
+  // "Canada" to a Yes/No menu. Nothing matched and the wizard stalled - but on a
+  // menu that did list countries it would have answered a legal question with a
+  // place name and never noticed.
+  const authField = field("Are you legally authorized to work in the country where this position is located?", {
+    type: "select",
+    required: true,
+    options: ["Select One", "Yes", "No"],
+  });
+
+  it("does not let a country answer fill it", () => {
+    const matches = matchFields([authField], [answer("Country", "Canada")]);
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("prefers the work authorization answer when both are offered", () => {
+    const matches = matchFields(
+      [authField],
+      [
+        answer("Country", "Canada"),
+        answer("Are you legally authorized to work in the country of this role?", "Yes"),
+      ],
+    );
+    expect(matches[0]?.answer?.answer).toBe("Yes");
+  });
+
+  it("keeps a sponsorship question away from the country answer too", () => {
+    const sponsorField = field(
+      "Will you require employer support to obtain or maintain authorization to work in that country? e.g. (work permit)",
+      { type: "select", required: true, options: ["Select One", "Yes", "No"] },
+    );
+    const matches = matchFields([sponsorField], [answer("Country", "Canada")]);
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still fills a plain country field", () => {
+    const matches = matchFields([field("Country", { required: true })], [answer("Country", "Canada")]);
+    expect(matches[0]?.answer?.answer).toBe("Canada");
+  });
+});
+
+describe("sponsorship asked without the word", () => {
+  // NVIDIA: "Will you require employer support to obtain or maintain
+  // authorization to work in that country? e.g. (work permit)". Thirteen stored
+  // patterns cover this question and none of them matches this wording, so a
+  // decision already on file was left blank and the Workday wizard stalled.
+  const bank = [
+    {
+      key: "visa-sponsorship",
+      label: "Will you now or in the future require visa sponsorship?",
+      answer: "No",
+      patterns: ["require visa sponsorship", "need sponsorship"],
+      allowAutoFill: true,
+    },
+  ];
+  const ask = (label: string) =>
+    fallbackAnswersForFields(
+      [field(label, { type: "select", required: true, options: ["Yes", "No"] })],
+      [],
+      bank as never,
+    );
+
+  it("routes the stored answer to the paraphrase", () => {
+    const derived = ask("Will you require employer support to obtain or maintain authorization to work in that country? e.g. (work permit)");
+    expect(derived[0]?.answer).toBe("No");
+    expect(derived[0]?.citation).toBe("profile.answers.visa-sponsorship");
+  });
+
+  it("still matches the ordinary wording", () => {
+    expect(ask("Will you now or in the future require visa sponsorship?")[0]?.answer).toBe("No");
+  });
+
+  it("refuses a form that defines sponsorship by naming TN", () => {
+    // TN needs no petition but does need a letter of support, so the generic No
+    // is the wrong answer to this question. It belongs to a person.
+    const derived = ask("Will you require sponsorship (for example TN, H-1B or E-3) to work in the United States?");
+    expect(derived).toHaveLength(0);
+  });
+
+  it("does not answer an unrelated support question", () => {
+    expect(ask("Do you require any accommodations during the interview process?")).toHaveLength(0);
+  });
+});
+
+describe("a field that arrives already answered", () => {
+  it("is not reported as an unanswered required field", () => {
+    // NVIDIA's disability form ships with Language set to English. Reporting it
+    // as unanswered stalled the wizard on a question already answered.
+    const plan = buildFillPlan(
+      [{ ...field("Language", { type: "select", required: true }), value: "English" }],
+      [],
+      [],
+    );
+    expect(plan.unmatchedRequired).toHaveLength(0);
+  });
+
+  it("still reports one holding only a placeholder", () => {
+    const plan = buildFillPlan(
+      [{ ...field("Language", { type: "select", required: true }), value: "Select One" }],
+      [],
+      [],
+    );
+    expect(plan.unmatchedRequired).toHaveLength(1);
+  });
+
+  it("still reports a segmented date showing its parts as separate lines", () => {
+    const plan = buildFillPlan(
+      [{ ...field("Date", { type: "date", required: true }), value: "MM\n/\nDD\n/\nYYYY" }],
+      [],
+      [],
+    );
+    expect(plan.unmatchedRequired).toHaveLength(1);
+  });
+});
+
+describe("a form the candidate signs", () => {
+  const dateField = (name: string, questionLabel?: string) => ({
+    ...field("Date", { type: "date", required: true }),
+    name,
+    questionLabel,
+  });
+
+  it("dates the signature today", () => {
+    const derived = fallbackAnswersForFields([dateField("dateSignedOn", "date signed on")], [], []);
+    const now = new Date();
+    const expected = `${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}/${now.getFullYear()}`;
+    expect(derived[0]?.answer).toBe(expected);
+    expect(derived[0]?.citation).toBe("system.today");
+  });
+
+  it("leaves a remembered date to the profile", () => {
+    // "Start date" is employment history, not a signature.
+    expect(fallbackAnswersForFields([dateField("startDate", "start date")], [], [])).toHaveLength(0);
   });
 });

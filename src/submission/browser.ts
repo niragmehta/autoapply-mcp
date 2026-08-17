@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+﻿import { mkdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SubmissionPolicy } from "../domain/campaign.js";
@@ -20,12 +20,30 @@ import {
   pickOptionIndex,
   type ApprovedAnswerEntry,
   type FieldDescriptor,
+  type FillPlan,
   type PersonalResolver,
   type NarrativeResolver,
 } from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
 import { redactSecrets } from "./credentials.js";
-import { enterWorkdayApplication, isWorkdayUrl } from "./workdayFlow.js";
+import {
+  advanceWorkdayStep,
+  recoverWorkdayError,
+  enterWorkdayApplication,
+  fillWorkdayPrompt,
+  isWorkdayPrompt,
+  isWorkdayUrl,
+  workdayStepName,
+} from "./workdayFlow.js";
+
+/**
+ * Ceiling on wizard pages walked, so a tenant that keeps offering a next button
+ * cannot loop forever. Workday's own flow is six pages; this leaves headroom
+ * for tenants that add their own without letting a broken page spin.
+ */
+const WORKDAY_MAX_STEPS = 12;
+/** How many times a step may be reloaded after Workday's transient fault. */
+const WORKDAY_MAX_RETRIES = 3;
 import {
   fetchVerificationCode,
   readVerificationInboxConfig,
@@ -44,6 +62,7 @@ import type { SubmissionPacket } from "./packet.js";
 
 type AnyPage = {
   goto: (url: string, options?: unknown) => Promise<unknown>;
+  reload: (options?: unknown) => Promise<unknown>;
   content: () => Promise<string>;
   evaluate: (fn: unknown, arg?: unknown) => Promise<unknown>;
   locator: (selector: string) => AnyLocator;
@@ -52,7 +71,7 @@ type AnyPage = {
   waitForTimeout: (ms: number) => Promise<void>;
   waitForLoadState: (state: string, options?: unknown) => Promise<void>;
   title: () => Promise<string>;
-  keyboard: { press: (key: string) => Promise<void> };
+  keyboard: { press: (key: string) => Promise<void>; type: (text: string, options?: unknown) => Promise<void> };
   // Optional so the test doubles do not have to model the event emitter.
   on?: (event: string, handler: (payload: never) => void) => void;
   off?: (event: string, handler: (payload: never) => void) => void;
@@ -170,7 +189,15 @@ export type BrowserRunResult = {
 
 /** Runs in the page: tags every form control and returns its descriptor. */
 export const COLLECT_FIELDS = `(() => {
-  const controls = Array.from(document.querySelectorAll('input, textarea, select'));
+  // Workday renders a dropdown as a button, not an input, so a query for form
+  // controls alone cannot see it. Those buttons are required fields, and the
+  // page will not save without them, so they are collected too. The attribute
+  // is specific enough that no other board's controls are pulled in.
+  const controls = Array.from(
+    document.querySelectorAll(
+      'input, textarea, select, button[aria-haspopup="listbox"], [data-automation-id="dateInputWrapper"]',
+    ),
+  );
   // Some boards plant a decoy input to catch bots that fill every field. Workday
   // ships one on its account pages: 1px tall, name="website", labelled "This
   // input is for robots only, do not enter if you're human." It is display:block
@@ -274,6 +301,14 @@ export const COLLECT_FIELDS = `(() => {
     if (el.type !== 'checkbox') return undefined;
     const entry = ashbyEntry(el);
     if (entry && entry.querySelectorAll('input[type="checkbox"]').length >= 2) return entry;
+    // Workday names the group outright. Its options are rendered in a virtual
+    // list beside hidden companion inputs, so the structural walk below bails
+    // out and every option arrives as its own required field labelled with the
+    // option text - which is how the disability form stayed blank.
+    const workdayGroup = el.closest('[data-automation-id$="-CheckboxGroup"]');
+    if (workdayGroup && workdayGroup.querySelectorAll('input[type="checkbox"]').length >= 2) {
+      return workdayGroup;
+    }
     let node = el.parentElement;
     while (node && node !== document.body) {
       const boxes = node.querySelectorAll('input[type="checkbox"]').length;
@@ -303,13 +338,58 @@ export const COLLECT_FIELDS = `(() => {
       .split(NL)
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
-    return lines[0] || '';
+    // Workday renders the options inside a bare fieldset and keeps the question
+    // outside it, so the container carries no text of its own. Without this the
+    // group has no label, every option becomes a standalone required field
+    // labelled with its own text, and nothing can answer it.
+    return lines[0] || workdayLabel(el) || workdayName(el);
   };
   const out = [];
+  // A Workday dropdown button carries no usable label of its own - its text is
+  // the placeholder - so the label and the required marker come from the field
+  // wrapper that encloses it.
+  const workdayField = (el) => el.closest('[data-automation-id^="formField-"]');
+  // The wrapper labels its control two different ways. My Information uses a
+  // <label for>; the questionnaire steps use <fieldset><legend>, where the
+  // question is rich text. Reading only <label> left every questionnaire field
+  // nameless, so nothing matched it and nothing reported it as required.
+  const workdayLabel = (el) => {
+    const wrapper = workdayField(el);
+    if (!wrapper) return '';
+    const holder = wrapper.querySelector('label, legend');
+    return holder ? holder.innerText.replace(/\\*/g, '').replace(/\\s+/g, ' ').trim() : '';
+  };
+  const workdayRequired = (el) => {
+    const wrapper = workdayField(el);
+    if (!wrapper) return false;
+    if (wrapper.querySelector('label abbr, legend abbr')) return true;
+    // NVIDIA marks the questionnaire dropdowns only on the control itself.
+    return /\\brequired\\b/i.test(el.getAttribute('aria-label') || '');
+  };
+  // Workday names every field in its automation id, and that name is often the
+  // only usable description of what a control asks. The disability checkboxes
+  // are legended "Please check one of the boxes below:", which describes no
+  // subject at all, while the wrapper is plainly "formField-disabilityStatus".
+  const workdayName = (el) => {
+    const wrapper = workdayField(el);
+    if (!wrapper) return '';
+    return (wrapper.getAttribute('data-automation-id') || '')
+      .replace(/^formField-/, '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[-_]+/g, ' ')
+      .trim();
+  };
   controls.filter(visible).forEach((el) => {
+    const isListbox = el.tagName.toLowerCase() === 'button';
+    const isDateGroup = el.getAttribute('data-automation-id') === 'dateInputWrapper';
     const isRadio = el.type === 'radio';
-    const container = checkboxGroup(el);
-    const optionLabel = (isRadio || container ? optionLabelFor(el) : labelFor(el)).slice(0, 200);
+    const container = isListbox || isDateGroup ? null : checkboxGroup(el);
+    const optionLabel = (isListbox || isDateGroup
+      ? workdayLabel(el) || labelFor(el)
+      : isRadio || container
+        ? optionLabelFor(el)
+        : labelFor(el)
+    ).slice(0, 200);
     const group = isRadio
       ? groupLabel(el).slice(0, 200)
       : container
@@ -319,7 +399,7 @@ export const COLLECT_FIELDS = `(() => {
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
     const ashbyLabel = ashbyTitle(el);
-    const questionTitle = ashbyLabel ? ashbyLabel.innerText.trim().slice(0, 200) : '';
+    const questionTitle = (ashbyLabel ? ashbyLabel.innerText.trim() : workdayName(el)).slice(0, 200);
     if (!label && !name && !el.id && role !== 'combobox') return;
     const index = out.length;
     el.setAttribute('data-autoapply-idx', String(index));
@@ -329,14 +409,33 @@ export const COLLECT_FIELDS = `(() => {
       optionLabel: group ? optionLabel : undefined,
       questionLabel: questionTitle && questionTitle !== label ? questionTitle : undefined,
       groupKey: container ? (group || undefined) : undefined,
-      type: (el.tagName.toLowerCase() === 'select' ? 'select' : (el.type || 'text')).toLowerCase(),
+      type: (isDateGroup
+        ? 'date'
+        : isListbox
+          ? 'select'
+          : el.tagName.toLowerCase() === 'select'
+            ? 'select'
+            : el.type || 'text'
+      ).toLowerCase(),
       name,
       domId: el.id || undefined,
       required:
         el.hasAttribute('required') ||
         el.getAttribute('aria-required') === 'true' ||
+        Boolean((isListbox || isDateGroup) && workdayRequired(el)) ||
         Boolean(ashbyLabel && String(ashbyLabel.className).includes('_required_')),
       role,
+      value: (isListbox || isDateGroup
+        ? el.innerText || ''
+        : el.type === 'checkbox' || el.type === 'radio'
+          ? el.checked
+            ? 'checked'
+            : ''
+          : el.value || ''
+      )
+        .replace(/\\s+/g, ' ')
+        .trim()
+        .slice(0, 120),
     });
   });
   return out;
@@ -368,6 +467,92 @@ const ACTIVE_CAPTCHA_SELECTORS = [
  * Opens an application form, fills what the packet supports, and captures a
  * screenshot. Submits only when `submit` is true.
  */
+/**
+ * Fills every field currently on screen and reports what happened.
+ *
+ * Split out of the single-page run so the Workday wizard can reuse it: that
+ * flow spreads one application across six pages, each of which must be filled
+ * and saved before the next exists, and every page needs exactly this handling.
+ *
+ * Reports `hasForm: false` rather than throwing when the page holds no form, so
+ * the single-page path can abort with its own diagnosis while the wizard treats
+ * it as the end of the walk.
+ */
+async function fillFormPage(
+  page: AnyPage,
+  packet: SubmissionPacket,
+  options: BrowserRunOptions,
+  /**
+   * Inside a wizard the page is already known to belong to the application, so
+   * the "does this look like a form?" heuristic must not run. It asks for a
+   * name, an email or a file upload, and a later step of a Workday application
+   * has none of those: NVIDIA's "Application Questions" step is two work
+   * authorization dropdowns and nothing else, which the heuristic read as a
+   * non-form and skipped, leaving both required questions blank forever.
+   */
+  knownApplicationPage = false,
+): Promise<{
+  hasForm: boolean;
+  plan: FillPlan;
+  filled: Array<{ label: string; source: string }>;
+  failedRequired: string[];
+  choiceLog: ChoiceSelection[];
+  answeredGroups: Set<string>;
+}> {
+  const fields = (await page.evaluate(COLLECT_FIELDS)) as FieldDescriptor[];
+  const empty = {
+    plan: { toFill: [], unfilled: [], unmatchedRequired: [], unusedAnswers: [] } as unknown as FillPlan,
+    filled: [] as Array<{ label: string; source: string }>,
+    failedRequired: [] as string[],
+    choiceLog: [] as ChoiceSelection[],
+    answeredGroups: new Set<string>(),
+  };
+  if (!knownApplicationPage && !looksLikeApplicationForm(fields)) return { hasForm: false, ...empty };
+  // A wizard step with no controls at all really is the end of the walk.
+  if (knownApplicationPage && fields.length === 0) return { hasForm: false, ...empty };
+
+  const packetAnswers = augmentAnswersForBrowser(packet.answers, options.candidateCountry);
+  const plan = buildFillPlan(fields, [
+    ...packetAnswers,
+    ...fallbackAnswersForFields(
+      fields,
+      packetAnswers,
+      options.answerBank ?? [],
+      options.personalResolver,
+      options.narrativeResolver,
+      options.experienceResolver,
+    ),
+  ]);
+  const filled: Array<{ label: string; source: string }> = [];
+  const failedRequired: string[] = [];
+  const choiceLog: ChoiceSelection[] = [];
+  const answeredGroups = new Set<string>();
+
+  for (const match of orderFieldsForBrowser(plan.toFill)) {
+    const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
+    const value = answerValueForField(match.field, match.answer!);
+    const candidates = optionSearchCandidates(match.field, match.answer!);
+    try {
+      await fillControl(page, locator, match.field, value, candidates, choiceLog);
+      filled.push({ label: match.field.label, source: match.answer!.source });
+      if (match.field.groupKey) answeredGroups.add(match.field.groupKey);
+    } catch (error) {
+      logger.warn("field fill failed", { label: match.field.label, error: String(error) });
+      if (match.field.required) failedRequired.push(match.field.label);
+    }
+  }
+
+  const lostChoices = await reassertChoices(page, choiceLog);
+  for (const label of lostChoices) {
+    logger.warn("choice would not hold", { label });
+    const index = filled.findIndex((entry) => entry.label === label);
+    if (index >= 0) filled.splice(index, 1);
+    failedRequired.push(label);
+  }
+
+  return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups };
+}
+
 export async function runApplicationForm(packet: SubmissionPacket, options: BrowserRunOptions): Promise<BrowserRunResult> {
   assertUrlAllowed(packet.applyUrl, options.policy);
   const playwright = await loadPlaywright();
@@ -411,6 +596,9 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
     // Workday hides the form behind an advert, a modal and a sign-in wall, so it
     // needs a walk-in step before there is anything to fill.
+    const priorFilled: Array<{ label: string; source: string }> = [];
+    const priorFailedRequired: string[] = [];
+    let workdayRetries = 0;
     if (isWorkdayUrl(page.url())) {
       const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
         allowAccountCreation: options.allowAccountCreation ?? false,
@@ -424,6 +612,57 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       }
       logger.info("workday application entered", { detail: entry.detail, createdAccount: entry.createdAccount });
       await page.waitForTimeout(1500);
+
+      // Workday spreads one application over roughly six pages - My Information,
+      // My Experience, Application Questions, Voluntary Disclosures, Self
+      // Identify, Review - and each has to be saved before the next exists. Walk
+      // to the last page here so the code below sees a form it can finish, the
+      // same way it does on a single-page board.
+      for (let step = 0; step < WORKDAY_MAX_STEPS; step += 1) {
+        await recoverWorkdayError(page as never);
+        const name = await workdayStepName(page);
+        // The resume upload lives on My Experience rather than the first page,
+        // so it is offered on every step and lands on whichever one accepts it.
+        await attachResume(page, packet.resumePath);
+        const stepFill = await fillFormPage(page, packet, options, true);
+        // The transient fault can also arrive part-way through a step, after
+        // the recovery above has already run. The step then collects nothing
+        // and the run ends up reporting a live posting as removed, so the same
+        // step is reloaded and retried before that conclusion is drawn.
+        const collected = stepFill.plan.toFill.length + stepFill.plan.unfilled.length;
+        if (collected === 0 && workdayRetries < WORKDAY_MAX_RETRIES) {
+          workdayRetries += 1;
+          logger.warn("workday step collected nothing, retrying", { step: name || `step ${step + 1}` });
+          await recoverWorkdayError(page as never);
+          step -= 1;
+          continue;
+        }
+        priorFilled.push(...stepFill.filled);
+        priorFailedRequired.push(...stepFill.failedRequired);
+        // A required question left unmatched on an earlier wizard page is just
+        // as blocking as one on the last page, but only the last page's plan
+        // reaches the report. Without this the run ends "unmatched required: []"
+        // while a saved step still refuses to advance - the exact silent success
+        // this whole path was built to stop.
+        const stepUnmatched = stepFill.plan.unmatchedRequired
+          .filter((entry) => !(entry.groupKey && stepFill.answeredGroups.has(entry.groupKey)))
+          .map((entry) => entry.label);
+        priorFailedRequired.push(...stepUnmatched);
+        logger.info("workday step filled", {
+          step: name || `step ${step + 1}`,
+          filled: stepFill.filled.length,
+          collected: stepFill.plan.toFill.length + stepFill.plan.unfilled.length,
+          failedRequired: stepFill.failedRequired.length,
+          unmatchedRequired: stepUnmatched,
+        });
+        // The last step is Review, and its footer button is Submit, not Save
+        // and Continue. Advancing past it sends the application - which a
+        // fill-only run must never do, and a submitting run must only do
+        // through the guarded submit path below. So the walk stops here.
+        if (/review/i.test(name)) break;
+        if (!(await advanceWorkdayStep(page))) break;
+        await page.waitForTimeout(1500);
+      }
     }
 
     await attachResume(page, packet.resumePath);
@@ -437,8 +676,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     }
     await page.waitForTimeout(1000);
 
-    const fields = (await page.evaluate(COLLECT_FIELDS)) as FieldDescriptor[];
-    if (!looksLikeApplicationForm(fields)) {
+    const pageFill = await fillFormPage(page, packet, options);
+    // A page with no inputs is normally a dead posting. After a wizard has
+    // already filled and saved earlier pages it is instead the Review page,
+    // which has nothing to fill and everything to submit.
+    if (!pageFill.hasForm && priorFilled.length === 0) {
       const shot = await capture(page, options.artifactsDir, packet.applicationId, "no-form");
       return {
         status: "aborted",
@@ -453,44 +695,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         captchaDetected: false,
       };
     }
-    const packetAnswers = augmentAnswersForBrowser(packet.answers, options.candidateCountry);
-    const plan = buildFillPlan(fields, [
-      ...packetAnswers,
-      ...fallbackAnswersForFields(
-        fields,
-        packetAnswers,
-        options.answerBank ?? [],
-        options.personalResolver,
-        options.narrativeResolver,
-        options.experienceResolver,
-      ),
-    ]);
-    const filled: Array<{ label: string; source: string }> = [];
-    const failedRequired: string[] = [];
-    const choiceLog: ChoiceSelection[] = [];
-    const answeredGroups = new Set<string>();
-
-    for (const match of orderFieldsForBrowser(plan.toFill)) {
-      const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
-      const value = answerValueForField(match.field, match.answer!);
-      const candidates = optionSearchCandidates(match.field, match.answer!);
-      try {
-        await fillControl(page, locator, match.field, value, candidates, choiceLog);
-        filled.push({ label: match.field.label, source: match.answer!.source });
-        if (match.field.groupKey) answeredGroups.add(match.field.groupKey);
-      } catch (error) {
-        logger.warn("field fill failed", { label: match.field.label, error: String(error) });
-        if (match.field.required) failedRequired.push(match.field.label);
-      }
-    }
-
-    const lostChoices = await reassertChoices(page, choiceLog);
-    for (const label of lostChoices) {
-      logger.warn("choice would not hold", { label });
-      const index = filled.findIndex((entry) => entry.label === label);
-      if (index >= 0) filled.splice(index, 1);
-      failedRequired.push(label);
-    }
+    const { plan, choiceLog, answeredGroups } = pageFill;
+    // Pages saved earlier in a multi-step wizard are part of this application,
+    // so what they filled has to survive into the final report.
+    const filled = [...priorFilled, ...pageFill.filled];
+    const failedRequired = [...priorFailedRequired, ...pageFill.failedRequired];
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
     const inertIndexes = await inertControlIndexes(
@@ -848,6 +1057,55 @@ async function fillControl(
   candidates: readonly string[] = [value],
   choiceLog?: ChoiceSelection[],
 ): Promise<void> {
+  // Checked before the generic branches: Workday renders dropdowns as a widget
+  // beside a hidden text input, and the collector only sees that input, so
+  // every one of them would otherwise be filled invisibly and reported filled.
+  if (field.type !== "checkbox" && field.type !== "radio" && field.type !== "file" && isWorkdayUrl(page.url())) {
+    // A Workday date is three keyboard-driven sections in a div, not an input.
+    // Typing all eight digits at one focus point puts them into whichever
+    // section happens to hold it - the year ended up "8162" - so each section
+    // is filled on its own.
+    if (field.type === "date") {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 8) throw new Error(`cannot type "${value}" into a date field`);
+      const iso = /^\d{4}\D/.test(value);
+      const month = iso ? digits.slice(4, 6) : digits.slice(0, 2);
+      const day = iso ? digits.slice(6, 8) : digits.slice(2, 4);
+      const year = iso ? digits.slice(0, 4) : digits.slice(4, 8);
+      const parts: Array<[string, string]> = [
+        ["Month", month],
+        ["Day", day],
+        ["Year", year],
+      ];
+      // The section inputs are visually hidden spinbuttons behind their own
+      // display divs, so Playwright refuses to click them. Focusing through the
+      // DOM is what actually reaches them.
+      const groupId = await locator.getAttribute("id");
+      for (const [section, part] of parts) {
+        const sectionId = groupId ? `${groupId}-dateSection${section}-input` : "";
+        const focused = sectionId
+          ? await page.evaluate(
+              `(() => { const el = document.getElementById(${JSON.stringify(sectionId)}); if (!el) return false; el.focus(); return document.activeElement === el; })()`,
+            )
+          : false;
+        if (!focused) {
+          const display = locator.locator(`[data-automation-id="dateSection${section}-display"]`).first();
+          if ((await display.count()) === 0) throw new Error(`no ${section} section in the date field`);
+          await display.click({ timeout: 10_000 });
+        }
+        await page.keyboard.type(part, { delay: 80 });
+        await page.waitForTimeout(200);
+      }
+      await page.waitForTimeout(400);
+      return;
+    }
+    const wrapper = locator.locator('xpath=ancestor::div[starts-with(@data-automation-id,"formField-")][1]');
+    if ((await wrapper.count()) > 0 && (await isWorkdayPrompt(wrapper as never))) {
+      const result = await fillWorkdayPrompt(page as never, wrapper as never, candidates);
+      if (!result.filled) throw new Error(result.detail);
+      return;
+    }
+  }
   if (field.role === "combobox") {
     await fillCombobox(page, locator, candidates);
     return;
@@ -978,7 +1236,7 @@ async function checkOption(locator: AnyLocator): Promise<void> {
  * Candidates are tried in order because boards word the same choice
  * differently; the trailing empty filter lists everything as a last resort.
  *
- * The flyout is always dismissed on the way out — an open listbox overlays the
+ * The flyout is always dismissed on the way out â€” an open listbox overlays the
  * fields below it and makes every later click time out.
  */
 export async function fillCombobox(
@@ -1415,3 +1673,4 @@ async function capture(page: AnyPage, dir: string, applicationId: string, stage:
   await page.screenshot({ path, fullPage: true }).catch(() => undefined);
   return path;
 }
+
