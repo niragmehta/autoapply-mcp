@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+﻿import { beforeEach, describe, expect, it } from "vitest";
 
-import { advanceWorkdayStep, enterWorkdayApplication } from "../src/submission/workdayFlow.js";
+import { advanceWorkdayStep, enterWorkdayApplication, recoverWorkdayError } from "../src/submission/workdayFlow.js";
 
 /**
  * A Workday tenant reduced to the part the entry walk depends on: which
@@ -167,3 +167,59 @@ describe("advanceWorkdayStep", () => {
     expect(await advanceWorkdayStep(tenant.asPage())).toBe(false);
   });
 });
+
+describe("recoverWorkdayError", () => {
+  // Workday drops a wizard step and shows "Something went wrong. Please refresh
+  // the page and then try again." The stepper stays, every control vanishes, and
+  // the run reported the posting as dead instead of doing what the page asked.
+  function pageShowing(sequence: readonly string[]) {
+    let index = 0;
+    let reloads = 0;
+    const page = {
+      goto: async () => undefined,
+      url: () => "https://nvidia.wd5.myworkdayjobs.com/x",
+      waitForTimeout: async () => undefined,
+      waitForLoadState: async () => undefined,
+      evaluate: async () => sequence[index]!,
+      keyboard: { press: async () => undefined },
+      reload: async () => {
+        reloads += 1;
+        if (index < sequence.length - 1) index += 1;
+        return undefined;
+      },
+      locator: () => ({
+        first: () => page.locator(),
+        nth: () => page.locator(),
+        count: async () => 1,
+        click: async () => undefined,
+        fill: async () => undefined,
+        isVisible: async () => true,
+        waitFor: async () => undefined,
+        locator: () => page.locator(),
+        allInnerTexts: async () => [sequence[index]!],
+        innerText: async () => sequence[index]!,
+      }),
+    } as never;
+    return { page, reloads: () => reloads };
+  }
+
+  it("refreshes until the step comes back", async () => {
+    const { page, reloads } = pageShowing(["Something went wrong", "My Information"]);
+    expect(await recoverWorkdayError(page)).toBe(true);
+    expect(reloads()).toBe(1);
+  });
+
+  it("does not refresh a healthy step", async () => {
+    const { page, reloads } = pageShowing(["My Information"]);
+    expect(await recoverWorkdayError(page)).toBe(true);
+    expect(reloads()).toBe(0);
+  });
+
+  it("reports failure when refreshing does not help", async () => {
+    const { page, reloads } = pageShowing(["Something went wrong"]);
+    expect(await recoverWorkdayError(page)).toBe(false);
+    expect(reloads()).toBe(2);
+  });
+});
+
+

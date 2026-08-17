@@ -29,6 +29,13 @@ export type FieldDescriptor = {
    */
   domId?: string;
   required: boolean;
+  /**
+   * What the control already holds. A step the candidate has visited before, or
+   * one an employer pre-fills, arrives with values in place: NVIDIA's disability
+   * form ships with Language set to English. Reporting those as unanswered
+   * stalls a wizard on a question that is already answered.
+   */
+  value?: string;
   role?: string;
   /**
    * For radios, the text of this single option. The `label` then carries the
@@ -143,6 +150,41 @@ const AFFIRMATIVE_ANSWER =
 export function isAffirmativeAnswer(value: string): boolean {
   return AFFIRMATIVE_ANSWER.test(value.trim());
 }
+/**
+ * Workday puts the phone number and its "Phone Device Type" side by side. Both
+ * labels carry the word "phone", so the stored number won the type question and
+ * the filler went looking for "+1 604..." in a Home/Home Cellular menu. Asking
+ * which *kind* of contact detail this is is a different question from asking for
+ * the detail, so only an answer that is itself about the kind may fill one.
+ */
+/**
+ * The mirror of the residence guard. "Are you legally authorized to work in the
+ * country where this position is located?" shares the word "country" with the
+ * stored country answer, which outscored the work-authorization answer and put
+ * "Canada" forward as the reply. On NVIDIA's Yes/No menu nothing matched and
+ * the step simply failed; on a menu that happened to list countries it would
+ * have answered a legal question with a place name. Only an answer that is
+ * itself about authorization may fill one of these.
+ */
+const LOCATION_ANSWER_LABEL = /\b(country|location|city|province|state|address|region)\b/;
+
+function workAuthorityTakesLocation(fieldLabel: string, answerLabel: string): boolean {
+  return (
+    WORK_AUTHORITY_TEXT.test(fieldLabel) &&
+    LOCATION_ANSWER_LABEL.test(answerLabel) &&
+    !WORK_AUTHORITY_TEXT.test(answerLabel)
+  );
+}
+
+const CONTACT_KIND_QUESTION =
+  /\b(device type|phone type|number type|contact type|email type|address type|type of (?:phone|number|contact))\b/;
+const CONTACT_KIND_ANSWER = /\b(type|kind|mobile|cell|cellular|landline|home|work)\b/;
+
+/** Rejects an answer that is a contact value where the field wants its kind. */
+function contactKindMismatch(fieldLabel: string, answerLabel: string): boolean {
+  return CONTACT_KIND_QUESTION.test(fieldLabel) && !CONTACT_KIND_ANSWER.test(answerLabel);
+}
+
 const RESIDENCE_QUESTION = /\b(located|located in|reside|residing|live|living|based)\b/;
 /**
  * A question about where the candidate is *right now* is a claim of fact, not a
@@ -300,6 +342,12 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (namesDifferentPeriodEnd(fieldLabel, answerLabel)) {
+    return true;
+  }
+  if (workAuthorityTakesLocation(fieldLabel, answerLabel)) {
+    return true;
+  }
+  if (contactKindMismatch(fieldLabel, answerLabel)) {
     return true;
   }
   if (
@@ -1034,8 +1082,26 @@ export function educationDateLabels(fields: readonly FieldDescriptor[]): Map<num
   return overrides;
 }
 
-export function fallbackAnswersForFields(
-  fields: readonly FieldDescriptor[],
+/**
+ * A date the candidate signs, as opposed to one they remember.
+ *
+ * Only the field's own machine name decides this. "Start date" and "End date"
+ * are history and belong to the profile; a signature date is today by
+ * definition, and no stored answer can ever supply it.
+ */
+function signatureDateField(field: FieldDescriptor): boolean {
+  if (field.type !== "date") return false;
+  const hints = `${field.name} ${field.questionLabel ?? ""}`.toLowerCase();
+  return /sign/.test(hints);
+}
+
+function todayForSignature(): string {
+  const now = new Date();
+  const pad = (part: number): string => String(part).padStart(2, "0");
+  return `${pad(now.getMonth() + 1)}/${pad(now.getDate())}/${now.getFullYear()}`;
+}
+
+export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
   answers: readonly DraftAnswer[],
   bank: readonly ApprovedAnswerEntry[],
   resolvePersonalAnswer?: PersonalResolver,
@@ -1043,7 +1109,16 @@ export function fallbackAnswersForFields(
   resolveExperienceAnswer?: PersonalResolver,
 ): DraftAnswer[] {
   const eligible = bank.filter((entry) => entry.allowAutoFill && entry.answer.trim().length > 0);
-  if (eligible.length === 0 && !resolvePersonalAnswer && !resolveNarrativeAnswer && !resolveExperienceAnswer) return [];
+  // A signature date needs no bank entry - it is today by definition - so the
+  // shortcut below must not skip a form that has one.
+  if (
+    eligible.length === 0 &&
+    !resolvePersonalAnswer &&
+    !resolveNarrativeAnswer &&
+    !resolveExperienceAnswer &&
+    !fields.some(signatureDateField)
+  )
+    return [];
 
   const alreadyAnswered = new Set(answers.map((entry) => entry.questionKey));
   const matched = matchFields(fields, answers);
@@ -1091,8 +1166,25 @@ export function fallbackAnswersForFields(
       continue;
     }
 
-    const entry = bestBankEntry(match.field, eligible);
-    if (entry) {
+    // A form the candidate signs carries the date it was signed, which is today
+    // and nothing else. No stored answer can supply it, and leaving it blank
+    // stops the disability form from saving.
+    if (signatureDateField(match.field)) {
+      derived.push({
+        questionKey: `signature-date#${match.field.selectorIndex}`,
+        label: match.field.label,
+        answer: todayForSignature(),
+        source: "profile",
+        citation: "system.today",
+        requiresHuman: false,
+        required: match.field.required ?? true,
+        category: "general",
+        guidance: "",
+      });
+      continue;
+    }
+
+    const entry = bestBankEntry(match.field, eligible);    if (entry) {
       // The derived answer carries the live field label so it binds to this
       // field, which also means the compatibility rules can no longer see where
       // the answer came from. Check the entry's own label first: a bank pattern
@@ -1170,6 +1262,41 @@ export function fallbackAnswersForFields(
   return derived;
 }
 
+/**
+ * Employers ask the sponsorship question without ever writing the word. NVIDIA
+ * asks "Will you require employer support to obtain or maintain authorization
+ * to work in that country? e.g. (work permit)" - the same question thirteen
+ * stored patterns cover, phrased so none of them matches. A decision already on
+ * file went unasked and the wizard stalled on a blank required field.
+ *
+ * This only routes the stored answer to a question that means the same thing;
+ * it never invents one. A form that defines sponsorship by naming an
+ * immigration class is deliberately excluded, because this candidate answers
+ * that one the other way: TN needs no petition but does need a support letter.
+ */
+const NAMED_IMMIGRATION_CLASS_IN_FIELD =
+  /\b(h-?1-?b|e-?3|tn|o-?1|l-?1|f-?1|j-?1|usmca|nafta|opt|cpt|green card|permanent residen)/;
+
+function asksForSponsorship(label: string): boolean {
+  if (NAMED_IMMIGRATION_CLASS_IN_FIELD.test(label)) return false;
+  if (/\b(employer|immigration|visa)[- ]?(related )?support\b/.test(label)) return true;
+  if (/\bwork permit\b/.test(label)) return true;
+  return /\bsupport\b/.test(label) && /\b(obtain|maintain)\b/.test(label) && /authoriz/.test(label);
+}
+
+/** The candidate's standing yes/no sponsorship answer, if one is on file. */
+function sponsorshipBankEntry(
+  bank: readonly ApprovedAnswerEntry[],
+): ApprovedAnswerEntry | undefined {
+  return bank.find(
+    (entry) =>
+      /sponsor/.test(normalizeLabel(entry.key)) &&
+      BOOLEAN_ANSWER.test(entry.answer.trim()) &&
+      !NAMED_IMMIGRATION_CLASS_IN_FIELD.test(normalizeLabel(entry.label)) &&
+      !entry.patterns.some((pattern) => NAMED_IMMIGRATION_CLASS_IN_FIELD.test(normalizeLabel(pattern))),
+  );
+}
+
 function bestBankEntry(
   field: FieldDescriptor,
   bank: readonly ApprovedAnswerEntry[],
@@ -1199,6 +1326,9 @@ function bestBankEntry(
       if (!hit) continue;
       if (!best || needle.length > best.length) best = { entry, length: needle.length };
     }
+  }
+  if (!best && candidates.some((value) => asksForSponsorship(value))) {
+    return sponsorshipBankEntry(bank);
   }
   return best?.entry;
 }
@@ -1396,8 +1526,27 @@ export function looksLikeApplicationForm(fields: readonly FieldDescriptor[]): bo
   );
 }
 
-export type FillPlan = {
-  toFill: FieldMatch[];
+/**
+ * True when the control already holds a real answer.
+ *
+ * A required field that arrives filled needs nothing from us, and demanding an
+ * answer for it stops a wizard on a question the employer already answered.
+ * Placeholder text is not an answer.
+ */
+const FIELD_PLACEHOLDER_VALUE = /^(select(\.{0,3}| one)?|choose(\.{0,3}| one)?|search|none|-+|[my]{2}\/[dm]{2}\/[dy]{4}|[dy]{4}\/[md]{2}\/[dm]{2})$/i;
+
+function alreadyAnswered(field: FieldDescriptor): boolean {
+  // A segmented date control reports its parts on separate lines ("MM\n/\nDD"),
+  // so the value is collapsed before it is compared against placeholder text.
+  const value = (field.value ?? "")
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (value.length === 0) return false;
+  return !FIELD_PLACEHOLDER_VALUE.test(value);
+}
+
+export type FillPlan = {  toFill: FieldMatch[];
   unmatchedRequired: FieldDescriptor[];
   /** Every visible field nothing filled, so a reviewer knows what is left. */
   unfilled: FieldDescriptor[];
@@ -1513,6 +1662,7 @@ export function buildFillPlan(fields: readonly FieldDescriptor[], answers: reado
     // unfillable aborted an application that was in fact complete.
     unmatchedRequired: unfilled
       .filter((match) => match.field.required && match.answer?.notApplicable !== true)
+      .filter((match) => !alreadyAnswered(match.field))
       .map((match) => match.field),
     unfilled: unfilled.map((match) => match.field),
     unusedAnswers: answers.filter((answer) => !used.has(answer.questionKey)),
