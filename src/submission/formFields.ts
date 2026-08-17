@@ -180,6 +180,18 @@ const CONTACT_KIND_QUESTION =
   /\b(device type|phone type|number type|contact type|email type|address type|type of (?:phone|number|contact))\b/;
 const CONTACT_KIND_ANSWER = /\b(type|kind|mobile|cell|cellular|landline|home|work)\b/;
 
+/**
+ * A phone extension is a few digits dialled after the number, not the number.
+ * Workday puts the two fields side by side, "extension" contains "phone" often
+ * enough to match, and the review page then reads
+ * "+1 (604) 6536919 x604-653-6919" - a number no employer can call.
+ */
+const PHONE_EXTENSION_QUESTION = /\b(extension|ext\.?)\b/;
+
+function phoneExtensionTakesNumber(fieldLabel: string, answerLabel: string): boolean {
+  return PHONE_EXTENSION_QUESTION.test(fieldLabel) && !PHONE_EXTENSION_QUESTION.test(answerLabel);
+}
+
 /** Rejects an answer that is a contact value where the field wants its kind. */
 function contactKindMismatch(fieldLabel: string, answerLabel: string): boolean {
   return CONTACT_KIND_QUESTION.test(fieldLabel) && !CONTACT_KIND_ANSWER.test(answerLabel);
@@ -348,6 +360,9 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (contactKindMismatch(fieldLabel, answerLabel)) {
+    return true;
+  }
+  if (phoneExtensionTakesNumber(fieldLabel, answerLabel)) {
     return true;
   }
   if (

@@ -1678,6 +1678,22 @@ describe("a contact detail may not answer a question about its kind", () => {
     );
     expect(matches[0]?.answer?.answer).toBe("+1 604 555 0134");
   });
+
+  // NVIDIA's review page read "+1 (604) 6536919 x604-653-6919": the number had
+  // also been typed into the extension beside it, giving a number that cannot
+  // be dialled. No stored answer is an extension, so none may fill one.
+  it("does not let the phone number fill the extension", () => {
+    const matches = matchFields(
+      [field("Phone Extension", { required: false })],
+      [answer("Phone", "+1 604 555 0134")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still lets an extension answer fill an extension field", () => {
+    const matches = matchFields([field("Extension", { required: true })], [answer("Extension", "204")]);
+    expect(matches[0]?.answer?.answer).toBe("204");
+  });
 });
 
 
