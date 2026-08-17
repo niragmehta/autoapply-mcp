@@ -691,7 +691,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       }
     }
 
-    await attachResume(page, packet.resumePath);
+    // The wizard has already attached and verified the resume; re-offering it on
+    // the review page would add a second copy to the saved profile.
+    if (!resumeAttached) {
+      await attachResume(page, packet.resumePath);
+    }
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
     if (/\.ashbyhq\.com$/i.test(new URL(page.url()).hostname)) {
       await page
@@ -1648,7 +1652,20 @@ export async function fillSegmentedCode(page: AnyPage, code: string): Promise<An
   return visible[code.length - 1] ?? null;
 }
 
-async function clickSubmit(page: AnyPage): Promise<boolean> {  for (const selector of SUBMIT_SELECTORS) {
+async function clickSubmit(page: AnyPage): Promise<boolean> {
+  // Workday's review page carries no button[type=submit] at all: the control is
+  // the same footer button that says "Save and Continue" on every earlier step
+  // and "Submit" on the last one. Without this the generic selectors find
+  // nothing and a fully filled application is reported as unsubmittable.
+  const footer = page.locator('[data-automation-id="pageFooterNextButton"]').first();
+  if ((await footer.count()) > 0 && (await footer.isVisible().catch(() => false))) {
+    const label = ((await (footer as { textContent?: () => Promise<string | null> }).textContent?.().catch(() => "")) ?? "").trim();
+    if (/submit/i.test(label)) {
+      await footer.click();
+      return true;
+    }
+  }
+  for (const selector of SUBMIT_SELECTORS) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
       await locator.click();
