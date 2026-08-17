@@ -134,6 +134,19 @@ export function latestApproval(db: Db, applicationId: string): ApprovalRecord | 
   };
 }
 
+/**
+ * Records an outcome, and retires the application when that outcome means no
+ * application will be sent.
+ *
+ * A withdrawal recorded before submission says the posting is gone or the role
+ * is not being pursued, yet the application previously stayed `approved` and so
+ * was re-selected by every later submission wave. The same dead postings were
+ * withdrawn in three separate sessions for that reason.
+ *
+ * A withdrawal *after* submission is the opposite case - the candidate leaving a
+ * live process - and must not disturb the `submitted` status that drives the
+ * daily limit and campaign totals, so only unsubmitted applications are retired.
+ */
 export function recordOutcome(db: Db, applicationId: string, status: string, detail: string): void {
   db.prepare("INSERT INTO outcomes (application_id, status, noted_at, detail) VALUES (?,?,?,?)").run(
     applicationId,
@@ -141,6 +154,9 @@ export function recordOutcome(db: Db, applicationId: string, status: string, det
     nowIso(),
     detail,
   );
+  if (status === "withdrawn") {
+    db.prepare("UPDATE applications SET status = 'skipped' WHERE id = ? AND status != 'submitted'").run(applicationId);
+  }
 }
 
 export function listOutcomes(db: Db, applicationId: string): Array<{ status: string; notedAt: string; detail: string }> {
