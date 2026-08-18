@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { COLLECT_FIELDS, fillCombobox } from "../src/submission/browser.js";
+import { COLLECT_FIELDS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
+import type { FillPlan } from "../src/submission/formFields.js";
 
 describe("COLLECT_FIELDS", () => {
   it("executes immediately and returns field descriptors", () => {
@@ -258,6 +259,74 @@ function fakeCombobox(optionsByFilter: Record<string, string[]>): FakeCombobox {
     events,
   };
 }
+
+describe("repairReportedFields", () => {
+  type Recorded = { events: string[]; page: Parameters<typeof repairReportedFields>[0] };
+
+  function fakeRepairPage(): Recorded {
+    const events: string[] = [];
+    const locator = {
+      first: () => locator,
+      click: async () => events.push("click"),
+      fill: async (value: string) => events.push(`fill:${value === "" ? "<clear>" : value}`),
+      count: async () => 1,
+      locator: () => ({ count: async () => 0, first: () => ({ click: async () => undefined }) }),
+      isChecked: async () => false,
+      check: async () => events.push("check"),
+      selectOption: async () => events.push("select"),
+      evaluate: async () => undefined,
+      inputValue: async () => "",
+    };
+    const page = {
+      locator: () => locator,
+      keyboard: {
+        type: async (value: string) => events.push(`type:${value}`),
+        press: async (key: string) => events.push(`press:${key}`),
+      },
+      waitForTimeout: async () => undefined,
+    };
+    return { events, page: page as unknown as Parameters<typeof repairReportedFields>[0] };
+  }
+
+  function match(label: string, type: string, value: string) {
+    return {
+      field: { label, type, selectorIndex: 0, required: true, name: label, role: "textbox" },
+      answer: { label, answer: value, questionKey: label, source: "profile", required: true },
+      confidence: 1,
+    } as unknown as FillPlan["toFill"][number];
+  }
+
+  it("retypes a text field the board reported empty, then blurs it", async () => {
+    const fake = fakeRepairPage();
+    const repaired = await repairReportedFields(fake.page, [match("Full Name", "text", "Nirag Mehta")], [
+      "Missing entry for required field: Full Name",
+    ]);
+    expect(repaired).toEqual(["Full Name"]);
+    // fill() is what the board ignored the first time, so the value has to be
+    // re-entered as real keystrokes and committed with a blur.
+    expect(fake.events).toEqual(["click", "fill:<clear>", "type:Nirag Mehta", "press:Tab"]);
+  });
+
+  it("leaves fields the board did not complain about alone", async () => {
+    const fake = fakeRepairPage();
+    const repaired = await repairReportedFields(
+      fake.page,
+      [match("Full Name", "text", "Nirag Mehta"), match("Email", "email", "n@example.com")],
+      ["Missing entry for required field: Full Name"],
+    );
+    expect(repaired).toEqual(["Full Name"]);
+    expect(fake.events).not.toContain("type:n@example.com");
+  });
+
+  it("reports nothing repaired when the errors name no field it filled", async () => {
+    const fake = fakeRepairPage();
+    const repaired = await repairReportedFields(fake.page, [match("Full Name", "text", "Nirag Mehta")], [
+      "Please complete the captcha",
+    ]);
+    expect(repaired).toEqual([]);
+    expect(fake.events).toEqual([]);
+  });
+});
 
 describe("fillCombobox", () => {
   it("selects the first candidate that produces a matching option", async () => {

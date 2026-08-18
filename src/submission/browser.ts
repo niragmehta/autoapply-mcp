@@ -15,6 +15,7 @@ import {
   fallbackAnswersForFields,
   isAffirmativeAnswer,
   looksLikeApplicationForm,
+  normalizeLabel,
   optionSearchCandidates,
   orderFieldsForBrowser,
   pickOptionIndex,
@@ -976,6 +977,56 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           captchaDetected: false,
         };
       }
+      // The board has told us which fields it thinks are empty. Repair exactly
+      // those and click once more: validation failed, so nothing was sent, and
+      // a second click cannot produce a second application. Only one repair is
+      // attempted - if the board still refuses, the problem is not a lost value.
+      const repairedFields = await repairReportedFields(page, plan.toFill, pageErrors);
+      if (repairedFields.length > 0) {
+        logger.info("repairing fields the board reported empty", { fields: repairedFields });
+        await reassertChoices(page, choiceLog);
+        if (await clickSubmit(page)) {
+          await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+          const retryText = await waitForSubmissionOutcome(page);
+          const retryShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+          if (detectSubmissionConfirmation(retryText, page.url())) {
+            page.off?.("response", onResponse as (payload: never) => void);
+            return {
+              status: "submitted",
+              reason: `submission confirmed after re-entering ${repairedFields.join("; ")}, which the board had reported empty`,
+              filledFields: filled,
+              unmatchedRequired: [],
+              unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+              screenshotPath: retryShot,
+              finalUrl: page.url(),
+              confirmationText: retryText.slice(0, 600),
+              captchaDetected: false,
+            };
+          }
+          // A code gate after the repair means the form was accepted and only
+          // the code is outstanding. That needs the full gated path, which this
+          // repair deliberately does not duplicate, so say so plainly rather
+          // than guess at the outcome.
+          const retryGate = detectVerificationCodeGate(retryText);
+          const retryErrors = await readValidationErrors(page);
+          page.off?.("response", onResponse as (payload: never) => void);
+          return {
+            status: "aborted",
+            reason: retryGate
+              ? `${retryGate} The form was repaired and accepted, so re-run this application to clear the code gate.`
+              : `re-entered ${repairedFields.join("; ")} and clicked submit again, but the board still did not confirm.${
+                  retryErrors.length ? ` page reported: ${retryErrors.join(" | ")}` : ""
+                }`,
+            filledFields: filled,
+            unmatchedRequired: retryErrors.length > 0 ? repairedFields : [],
+            unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+            screenshotPath: retryShot,
+            finalUrl: page.url(),
+            confirmationText: "",
+            captchaDetected: false,
+          };
+        }
+      }
       return {
         status: "aborted",
         reason: `submit control clicked but no submission confirmation was detected; verify this application manually.${control}${detail}${network}`,
@@ -1099,6 +1150,61 @@ function aborted(reason: string, finalUrl: string): BrowserRunResult {  return {
 }
 
 type ChoiceSelection = { button: AnyLocator; label: string; choice: string };
+
+/**
+ * Re-fills the fields a board's own validation says are empty.
+ *
+ * The board naming a field is far better evidence than anything inferable from
+ * the page, and a form that failed validation was not submitted, so repairing
+ * and clicking again cannot double-send. Ashby rejected a fully filled Abridge
+ * form as missing "Full Name" and a radio group that were both visibly set on
+ * screen: the board's own form state had not taken what Playwright wrote. The
+ * run gave up with "verify this application manually" on an application that
+ * needed one more click.
+ *
+ * Text is re-entered through the keyboard and blurred rather than set with
+ * fill(), because a React form that ignored a programmatic value change will
+ * still see real keystrokes and a blur.
+ */
+export async function repairReportedFields(
+  page: AnyPage,
+  toFill: FillPlan["toFill"],
+  errors: readonly string[],
+): Promise<string[]> {
+  const reported = errors.map((error) => normalizeLabel(error));
+  const repaired: string[] = [];
+  for (const match of toFill) {
+    if (!match.answer) continue;
+    const label = normalizeLabel(match.field.label);
+    // A one or two character label cannot be matched against prose without
+    // hitting every error message on the page.
+    if (label.length < 3) continue;
+    if (!reported.some((error) => error.includes(label))) continue;
+    const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
+    const value = answerValueForField(match.field, match.answer);
+    const candidates = optionSearchCandidates(match.field, match.answer);
+    try {
+      const typeable =
+        match.field.role !== "combobox" &&
+        ["text", "email", "tel", "url", "textarea", "number"].includes(match.field.type);
+      if (typeable) {
+        await locator.click();
+        await locator.fill("");
+        await page.keyboard.type(value, { delay: 25 });
+        await page.keyboard.press("Tab");
+      } else {
+        await fillControl(page, locator, match.field, value, candidates);
+      }
+      repaired.push(match.field.label);
+    } catch (error) {
+      logger.warn("could not repair a field the board reported empty", {
+        label: match.field.label,
+        error: String(error),
+      });
+    }
+  }
+  return repaired;
+}
 
 async function fillControl(
   page: AnyPage,
