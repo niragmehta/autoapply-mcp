@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { isDeadPostingText } from "../src/submission/workdayFlow.js";
+import { isDeadPostingText, isSignInStepLabel } from "../src/submission/workdayFlow.js";
 
 describe("isDeadPostingText", () => {
+  it("does not mistake the account gate for the application form", () => {
+    // Observed live on Workday's own tenant: step 1 of 8 is "Create Account/Sign
+    // In", and it renders both the progress bar and formField- divs for email
+    // and password - every signal the form check relied on.
+    expect(isSignInStepLabel("current step 1 of 8Create Account/Sign In")).toBe(true);
+    expect(isSignInStepLabel("current step 2 of 8My Information")).toBe(false);
+    expect(isSignInStepLabel("current step 8 of 8Review")).toBe(false);
+  });
+
   it("recognises Workday's not-found page", () => {
     expect(
       isDeadPostingText(
