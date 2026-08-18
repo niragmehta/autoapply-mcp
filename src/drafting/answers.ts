@@ -14,6 +14,7 @@ import {
 } from "./residence.js";
 import { canonicalizeWorkPermission } from "../text/workPermission.js";
 import { statesUnrelatedExperience } from "./experienceSubject.js";
+import { consentsToDocument } from "./documentConsent.js";
 
 /**
  * Answer policy engine.
@@ -510,9 +511,13 @@ function answerOne(
     // sole-consent rule further down could ever be reached. Sensitive
     // categories are excluded, because a lone "I agree" on a demographic or
     // work-authorization question is a disclosure, not a formality.
+    // In a sensitive category the sole option is taken only when it consents to
+    // a named document or process and claims nothing about the candidate. See
+    // documentConsent.ts: IonQ's "Background Check Disclosure & Consent" is a
+    // formality, "I certify that I have never been convicted" is not.
     const consentOnly = SELF_EVIDENT_CONSENT_CATEGORIES.has(category)
       ? soleConsentOption(question)
-      : undefined;
+      : soleDocumentConsentOption(question);
     if (consentOnly) {
       return {
         questionKey: question.key,
@@ -703,6 +708,16 @@ function soleConsentOption(question: FormQuestion): string | undefined {
   const only = options[0] ?? "";
   const normalized = only.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   return SOLE_CONSENT_OPTION.test(normalized) || ATTESTATION_SENTENCE.test(normalized) ? only : undefined;
+}
+
+/**
+ * The same rule under the stricter test used in sensitive categories, where a
+ * lone option may only be taken when it agrees to a document or process rather
+ * than stating something about the candidate.
+ */
+function soleDocumentConsentOption(question: FormQuestion): string | undefined {
+  const only = soleConsentOption(question);
+  return only !== undefined && consentsToDocument(only) ? only : undefined;
 }
 
 /** Questions still missing an answer that the form requires. */
