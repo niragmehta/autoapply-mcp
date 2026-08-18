@@ -79,6 +79,75 @@ const FORM_EVIDENCE = [
   '[data-automation-id^="formField-"]',
 ] as const;
 
+/**
+ * Evidence that the job advert itself has rendered. Workday is a single-page
+ * app: the careers shell (header, logo, "Sign In" link) paints immediately
+ * while the posting body arrives later. Waiting for one of these before
+ * reaching for the Apply button is what separates a slow tenant from a closed
+ * posting - Cisco's tenant rendered nothing but its header inside the old
+ * budget and was reported as "probably closed" while the posting was live.
+ */
+const ADVERT_EVIDENCE = [
+  SEL.apply,
+  '[data-automation-id="jobPostingHeader"]',
+  '[data-automation-id="jobPostingDescription"]',
+] as const;
+
+/**
+ * Longest body text a bare careers shell produces. Cisco's is roughly 60
+ * characters ("English | Sign In | Careers | Search for Jobs"); a real advert
+ * carries a title, location, requisition id and description and runs to
+ * thousands.
+ */
+const SHELL_TEXT_MAX = 200;
+
+/**
+ * Workday's own wording when a requisition has been pulled. Distinguishing this
+ * from "the wizard never opened" matters: a dead posting is final and the
+ * application should be withdrawn, whereas an unopened wizard is worth retrying.
+ */
+const DEAD_POSTING_TEXT = /page you are looking for (does ?n[o']?t|doesn't) exist|no longer (available|accepting)|job (posting )?(has been )?(closed|removed)|requisition .*(closed|no longer)/i;
+
+export function isDeadPostingText(text: string): boolean {
+  return DEAD_POSTING_TEXT.test(text);
+}
+
+export type AdvertState = "advert" | "dead" | "blank";
+
+/**
+ * Waits for the advert to paint, ending early on the tenant's not-found page.
+ *
+ * Element presence alone is not enough: a tenant serves the shell with empty
+ * `data-automation-id` containers already in the DOM, so a selector match
+ * reports a rendered advert over a blank page. The posting's own text is the
+ * reliable signal, so a body no longer than the surrounding chrome counts as
+ * not rendered.
+ *
+ * The three outcomes are genuinely different and must not be collapsed: an
+ * advert can be applied to, a dead posting never will be, and a blank page
+ * says nothing about whether the posting is open.
+ */
+async function awaitAdvert(page: Page, timeoutMs: number): Promise<AdvertState> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const paragraphs = await page.locator("body").allInnerTexts().catch(() => [] as string[]);
+    const text = paragraphs.join(" ").trim();
+
+    // Checked before the length gate: the not-found page is itself short.
+    const errorShown = await page.locator(SEL.errorBanner).first().isVisible().catch(() => false);
+    if (errorShown && isDeadPostingText(text)) return "dead";
+
+    if (text.length > SHELL_TEXT_MAX) {
+      for (const selector of ADVERT_EVIDENCE) {
+        const visible = await page.locator(selector).first().isVisible().catch(() => false);
+        if (visible) return "advert";
+      }
+    }
+    await page.waitForTimeout(1000);
+  }
+  return "blank";
+}
+
 export type WorkdayEntryResult = {
   reached: "form" | "sign-in" | "blocked";
   detail: string;
@@ -631,6 +700,21 @@ export async function enterWorkdayApplication(
 ): Promise<WorkdayEntryResult> {
   const credentials: AtsCredentials = getAtsCredentials(profileEmail);
 
+  // The advert has to be on screen before the Apply button can be reached for.
+  // Without this the run raced the single-page app and blamed the posting.
+  const advert = await awaitAdvert(page, 45_000);
+
+  // A pulled requisition renders the tenant's not-found page, which has neither
+  // an Apply button nor a sign-in form. Naming it here stops the caller from
+  // retrying a posting that will never come back.
+  if (advert === "dead") {
+    return {
+      reached: "blocked",
+      detail: "the posting no longer exists; Workday served its not-found page",
+      createdAccount: false,
+    };
+  }
+
   await clickIfPresent(page, SEL.apply, 15_000);
   // The modal offers "Autofill with Resume" and "Apply Manually". Manual is the
   // honest path: resume autofill silently invents field values from parsed text.
@@ -657,8 +741,9 @@ export async function enterWorkdayApplication(
     if (!(await atApplicationForm(page))) {
       return {
         reached: "blocked",
-        detail:
-          "no application form on screen and no sign-in gate; the posting is probably closed or the wizard never opened",
+        detail: advert === "advert"
+          ? "no application form on screen and no sign-in gate; the posting is probably closed or the wizard never opened"
+          : "the job advert never rendered within 45s; the tenant is slow or is refusing this session, so whether the posting is open is unknown",
         createdAccount: false,
       };
     }
