@@ -1502,7 +1502,10 @@ const SUBMISSION_CONFIRMATION_MARKERS = [
 const SUBMISSION_CONFIRMATION_PATTERNS = [
   /\byour application (?:was|has been|is)(?: \w+ly)? (?:submitted|received|sent|complete[d]?)\b/,
   /\bapplication (?:was|has been)(?: \w+ly)? (?:submitted|received)\b/,
-  /\b(?:successfully|already) (?:submitted|applied)\b/,
+  // "already submitted/applied" is deliberately absent: it reads the same in an
+  // employer's application-limits policy as in a real confirmation, so it is
+  // handled by detectAlreadyApplied, which rejects conditional phrasing.
+  /\bsuccessfully (?:submitted|applied)\b/,
 ];
 
 /**
@@ -1570,13 +1573,34 @@ const ALREADY_APPLIED_MARKERS = [
   "you've already applied",
   "you already applied",
   "already submitted an application",
+  "already submitted",
   "an application already exists",
 ];
+
+/**
+ * Wording that turns an already-applied phrase into a policy statement about
+ * hypothetical candidates rather than a fact about this submission. Plaid's
+ * Ashby posting carries "If you've already applied and been considered for a
+ * specific role, you'll need to wait 12 months before reapplying", which is
+ * printed above an empty form - reading it as proof of submission reported an
+ * unsubmitted application as submitted.
+ */
+const CONDITIONAL_LEAD_IN = /\b(if|unless|in case|should you|whether|when|once)\b[^.!?]{0,40}$/;
 
 /** True when the board says an application for this posting is already on file. */
 export function detectAlreadyApplied(pageText: string): boolean {
   const haystack = pageText.toLowerCase();
-  return ALREADY_APPLIED_MARKERS.some((marker) => haystack.includes(marker));
+  return ALREADY_APPLIED_MARKERS.some((marker) => {
+    let from = 0;
+    for (;;) {
+      const at = haystack.indexOf(marker, from);
+      if (at === -1) return false;
+      // Only the text since the last sentence break can qualify the phrase.
+      const before = haystack.slice(Math.max(0, at - 60), at);
+      if (!CONDITIONAL_LEAD_IN.test(before)) return true;
+      from = at + marker.length;
+    }
+  });
 }
 
 /**
