@@ -506,6 +506,14 @@ const DECLINE_ANSWER_PATTERN =
  * ships "Decline to self identify", "I don't wish to answer" and "Prefer not to
  * say" across customers. Offer every phrasing so one approved answer works
  * everywhere.
+ *
+ * Some boards state the decline as an outcome rather than a refusal: Pinecone's
+ * pronouns question offers "she/her", "he/him", "they/them" and "did not
+ * provide". Nothing there says "prefer" or "decline", so a stored decline
+ * matched no option and blocked the whole application over the one field whose
+ * answer was already settled. Entries are matched as substrings after
+ * punctuation is normalized away, so "not to disclose" covers "choose not to",
+ * "prefer not to" and "decline to disclose" in one line.
  */
 const DECLINE_OPTION_CANDIDATES = [
   "wish to answer",
@@ -515,6 +523,12 @@ const DECLINE_OPTION_CANDIDATES = [
   "Prefer not to say",
   "Prefer not to answer",
   "Decline to answer",
+  "did not provide",
+  "not provided",
+  "not to disclose",
+  "not wish to disclose",
+  "not to self identify",
+  "rather not say",
 ];
 
 /** Ordered search strings to try when driving a typeahead combobox. */

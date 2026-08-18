@@ -563,6 +563,35 @@ describe("optionSearchCandidates", () => {
     expect(pickOptionIndex(["Yes", "No"], ["No"])).toBe(1);
     expect(pickOptionIndex(["Yes", "No, I have not"], ["No"])).toBe(1);
   });
+
+  // Pinecone's Ashby pronouns question is required and states its decline as an
+  // outcome rather than a refusal, so nothing in it reads as "prefer" or
+  // "decline" and a settled answer matched no option at all.
+  it("recognizes a decline option stated as an outcome", () => {
+    const candidates = optionSearchCandidates(
+      field("Preferred Pronouns", { type: "radio", optionLabel: "she/her", required: true }),
+      answer("Pronouns", "I prefer not to say"),
+    );
+    expect(pickOptionIndex(["she/her", "he/him", "they/them", "did not provide"], candidates)).toBe(3);
+  });
+
+  it("covers the disclosure wordings boards use for the same refusal", () => {
+    const candidates = optionSearchCandidates(
+      field("Gender*", { role: "combobox" }),
+      answer("Gender", "Decline to self-identify", { category: "demographic" }),
+    );
+    expect(pickOptionIndex(["Man", "Woman", "I choose not to disclose"], candidates)).toBe(2);
+    expect(pickOptionIndex(["Man", "Woman", "I would rather not say"], candidates)).toBe(2);
+    expect(pickOptionIndex(["Man", "Woman", "Choose not to self-identify"], candidates)).toBe(2);
+  });
+
+  it("never lets an outcome-worded decline answer the question instead", () => {
+    const candidates = optionSearchCandidates(
+      field("Preferred Pronouns", { type: "radio", optionLabel: "she/her" }),
+      answer("Pronouns", "I prefer not to say"),
+    );
+    expect(pickOptionIndex(["she/her", "he/him", "they/them"], candidates)).toBe(-1);
+  });
 });
 
 describe("pickOptionIndex", () => {
