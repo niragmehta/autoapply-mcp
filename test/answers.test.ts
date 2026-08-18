@@ -42,6 +42,15 @@ describe("classifyQuestion", () => {
     expect(classifyQuestion("Why do you want to work here?")).toBe("essay");
   });
 
+  it("recognizes permission to work however the board words it", () => {
+    // Pear VC asks "currently eligible", with no "legally" in front of it.
+    expect(classifyQuestion("Are you currently eligible to work in the United States of America?")).toBe(
+      "work-authorization",
+    );
+    expect(classifyQuestion("Are you entitled to work in Canada?")).toBe("work-authorization");
+    expect(classifyQuestion("Are you permitted to work in the country of this role?")).toBe("work-authorization");
+  });
+
   it("does not take a category from a passing mention inside a condition", () => {
     // Block's interview-expectations agreement. Accommodations appear only
     // inside conditional clauses, so a conduct acknowledgement was classified
@@ -113,6 +122,54 @@ describe("draftAnswers", () => {
     expect(answers[0]?.answer).toBe("Company careers page");
     expect(answers[0]?.source).toBe("approved-answer");
     expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("answers permission to work however the board words it", () => {
+    // Pear VC's required question reads "currently eligible to work"; the
+    // settled answer on file is written for "authorized to work". One phrasing
+    // of one question left a whole application unsubmittable.
+    const authorized = makeProfile({
+      answers: [
+        {
+          key: "us-work-authorization-now",
+          label: "Currently authorized to work in the US",
+          patterns: ["authorized to work in the united states"],
+          answer: "Yes",
+          allowAutoFill: true,
+        },
+      ],
+    });
+    for (const label of [
+      "Are you currently eligible to work in the United States of America?",
+      "Are you entitled to work in the United States?",
+      "Are you permitted to work in the United States?",
+      "Are you authorised to work in the United States?",
+    ]) {
+      const { answers } = draftAnswers([question(label, { required: true })], authorized, campaign);
+      expect(answers[0]?.answer, label).toBe("Yes");
+      expect(answers[0]?.source, label).toBe("approved-answer");
+    }
+  });
+
+  it("never lets a work permission answer fill a question about commuting", () => {
+    // "Able to work from our office" is a different question and is left alone.
+    const authorized = makeProfile({
+      answers: [
+        {
+          key: "us-work-authorization-now",
+          label: "Currently authorized to work in the US",
+          patterns: ["authorized to work in the united states"],
+          answer: "Yes",
+          allowAutoFill: true,
+        },
+      ],
+    });
+    const { answers } = draftAnswers(
+      [question("Are you able to work from our United States office two days a week?", { required: true })],
+      authorized,
+      campaign,
+    );
+    expect(answers[0]?.source).not.toBe("approved-answer");
   });
 
   it("suggests the verified authorization statement but still requires a human", () => {

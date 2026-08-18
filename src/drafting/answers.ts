@@ -12,6 +12,7 @@ import {
   WORK_AUTHORITY_TEXT as SHARED_WORK_AUTHORITY_TEXT,
   namesCandidateLocation,
 } from "./residence.js";
+import { canonicalizeWorkPermission } from "../text/workPermission.js";
 
 /**
  * Answer policy engine.
@@ -87,7 +88,7 @@ function contactResolverFor(label: string) {
  * which names a route the candidate would in fact use.
  */
 function matchApprovedAnswer(profile: Profile, label: string) {
-  const haystack = label.toLowerCase();
+  const haystack = canonicalizeWorkPermission(label.toLowerCase());
   const residenceAsked = CURRENT_RESIDENCE_QUESTION.test(haystack) && !WORK_AUTHORITY_TEXT.test(haystack);
   const asksAboutHome = residenceAsked && namesCandidateLocation(haystack, profile);
   let best: { entry: Profile["answers"][number]; length: number } | null = null;
@@ -101,7 +102,7 @@ function matchApprovedAnswer(profile: Profile, label: string) {
     // own location; resolvePersonal supplies the affirmative instead.
     if (asksAboutHome && deniesResidence(entry)) continue;
     for (const pattern of entry.patterns) {
-      const needle = pattern.toLowerCase();
+      const needle = canonicalizeWorkPermission(pattern.toLowerCase());
       if (!haystack.includes(needle)) continue;
       if (!best || needle.length > best.length) best = { entry, length: needle.length };
     }
