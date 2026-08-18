@@ -449,8 +449,30 @@ describe("optionSearchCandidates", () => {
     ).toBe(1);
   });
 
-  it("never claims willingness when the answer is no", () => {
-    const candidates = optionSearchCandidates(
+  // Abridge puts the relocation decision entirely in the options: the label is
+  // "Where in the United States will you be working from?", which says nothing
+  // about relocating, so a label-only rule left a required question with no
+  // reachable answer and aborted the application.
+  it("reads relocation wording out of the options when the label omits it", () => {
+    const abridgeOptions = [
+      "I am currently living in the SF Bay or New York areas",
+      "I do not currently live in New York, San Francisco - but I am willing to relocate within 6 months",
+      "I do not currently live in New York, San Francisco - but I am willing to travel 20%",
+      "I am NOT willing to relocate and am only open to 100% remote positions",
+    ];
+    const chosen = abridgeOptions.findIndex((optionLabel) => {
+      const candidates = optionSearchCandidates(
+        field("Where in the United States will you be working from?", { type: "radio", optionLabel }),
+        answer("Open to relocation", "Yes"),
+      );
+      return pickOptionIndex([optionLabel], candidates) >= 0;
+    });
+    expect(abridgeOptions[chosen]).toBe(
+      "I do not currently live in New York, San Francisco - but I am willing to relocate within 6 months",
+    );
+  });
+
+  it("never claims willingness when the answer is no", () => {    const candidates = optionSearchCandidates(
       field("Are you willing to relocate to the jobâ€™s location?*", { role: "combobox" }),
       answer("Open to relocation", "No"),
     );
@@ -803,6 +825,48 @@ describe("fallbackAnswersForFields with a personal resolver", () => {
   it("prefers the approved answer bank over the personal resolver", () => {
     const bank = [{ key: "gender-pref", label: "Gender", patterns: ["gender"], answer: "From the bank", allowAutoFill: true }];
     const extra = fallbackAnswersForFields([field("Gender")], [], bank, resolver);
+    expect(extra[0]?.answer).toBe("From the bank");
+  });
+
+  // Abridge asks "Which state do you currently reside in?". A work-authority
+  // bank entry matched it and was correctly rejected - a residence question must
+  // never take a work-authorisation answer - but the rejection also threw away
+  // the personal answer that was right, and the required field aborted the
+  // submission with no answer at all.
+  it("falls back to the personal resolver when the bank answer is rejected", () => {
+    const residence = (label: string) =>
+      /reside/i.test(label)
+        ? { answer: "British Columbia", citation: "personal.address.region", category: "contact", authorized: true }
+        : null;
+    const bank = [
+      {
+        key: "us-work-authorization-now",
+        label: "Authorized to work in the United States",
+        patterns: ["are you authorized", "reside"],
+        answer: "Yes",
+        allowAutoFill: true,
+      },
+    ];
+    const extra = fallbackAnswersForFields(
+      [field("Which state do you currently reside in?", { required: true })],
+      [],
+      bank,
+      residence,
+    );
+    expect(extra).toHaveLength(1);
+    expect(extra[0]?.answer).toBe("British Columbia");
+    expect(extra[0]?.citation).toBe("personal.address.region");
+  });
+
+  it("still lets a compatible bank answer win over the personal resolver", () => {
+    const residence = (label: string) =>
+      /reside/i.test(label)
+        ? { answer: "British Columbia", citation: "personal.address.region", category: "contact", authorized: true }
+        : null;
+    const bank = [
+      { key: "residence-state", label: "State of residence", patterns: ["reside"], answer: "From the bank", allowAutoFill: true },
+    ];
+    const extra = fallbackAnswersForFields([field("Which state do you reside in?")], [], bank, residence);
     expect(extra[0]?.answer).toBe("From the bank");
   });
 

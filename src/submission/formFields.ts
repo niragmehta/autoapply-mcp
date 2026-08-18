@@ -679,9 +679,14 @@ function veteranCandidates(value: string): string[] {
  * distance" is a statement of fact the profile has not made.
  */
 function relocationCandidates(field: FieldDescriptor, value: string): string[] {
-  const label = normalizeLabel(field.label);
+  // A relocation question does not always say so in its label. Abridge asks
+  // "Where in the United States will you be working from?" and puts the
+  // decision in the options ("I am willing to relocate within 6 months"), so
+  // reading the label alone left a required question unanswerable. The option
+  // text is part of the question being asked, so it counts too.
   // "relocating" does not contain "relocate", so match the shared stem.
-  if (!label.includes("relocat")) return [];
+  const haystack = `${normalizeLabel(field.label)} ${normalizeOptionText(field.optionLabel ?? "")}`;
+  if (!haystack.includes("relocat")) return [];
   if (/^(yes|true|1)$/i.test(value.trim())) return ["am willing to relocate", "open to relocating"];
   if (/^(no|false|0)$/i.test(value.trim())) return ["not willing to relocate", "not open to relocating"];
   return [];
@@ -1208,13 +1213,17 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
       continue;
     }
 
-    const entry = bestBankEntry(match.field, eligible);    if (entry) {
-      // The derived answer carries the live field label so it binds to this
-      // field, which also means the compatibility rules can no longer see where
-      // the answer came from. Check the entry's own label first: a bank pattern
-      // as broad as "major" otherwise matches "major life activities" and
-      // answers a disability question with a degree subject.
-      if (isIncompatible(match.field, bankEntryAsAnswer(entry))) continue;
+    const entry = bestBankEntry(match.field, eligible);
+    // A bank entry that cannot serve this field is no reason to leave the field
+    // blank - the personal and narrative resolvers below may still hold the
+    // right answer. Abridge asks "Which state do you currently reside in?"; a
+    // bank entry matched and was correctly rejected as a work-authority answer
+    // to a residence question, but the `continue` that followed also discarded
+    // personal.address.region, which is exactly the answer wanted. The required
+    // field went unanswered and the submission aborted with nothing to show for
+    // it. Rejecting a candidate answer must fall through to the next source, not
+    // veto the field.
+    if (entry && !isIncompatible(match.field, bankEntryAsAnswer(entry))) {
       // Radio options arrive one field per option, so a bank answer may only be
       // spent once across them. Standalone controls are independent, and forms
       // do repeat them - two acknowledgement boxes, or "LinkedIn" alongside
@@ -1229,21 +1238,22 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
       // stricter rule, where spending a bank answer twice can contradict the
       // packet.
       const spent = match.field.optionLabel ? used.has(usedKey) || alreadyAnswered.has(entry.key) : used.has(usedKey);
-      if (spent) continue;
-      used.add(usedKey);
-      derived.push({
-        questionKey: entry.key,
-        // The live label guarantees this answer binds to the field it was chosen for.
-        label: match.field.label,
-        answer: entry.answer,
-        source: "approved-answer",
-        citation: `profile.answers.${entry.key}`,
-        requiresHuman: false,
-        required: match.field.required ?? true,
-        category: "general",
-        guidance: "",
-      });
-      continue;
+      if (!spent) {
+        used.add(usedKey);
+        derived.push({
+          questionKey: entry.key,
+          // The live label guarantees this answer binds to the field it was chosen for.
+          label: match.field.label,
+          answer: entry.answer,
+          source: "approved-answer",
+          citation: `profile.answers.${entry.key}`,
+          requiresHuman: false,
+          required: match.field.required ?? true,
+          category: "general",
+          guidance: "",
+        });
+        continue;
+      }
     }
 
     const personal = resolvePersonalAnswer?.(resolverLabel);
