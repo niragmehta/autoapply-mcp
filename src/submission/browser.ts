@@ -964,6 +964,25 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       const network = failedCalls.length ? ` submit request failed: ${failedCalls.join("; ")}` : "";
       const control = submitState ? ` ${submitState}` : "";
       const finalText = await readBodyText(page);
+      // Ashby paints its success panel after the outcome poll has already given
+      // up, so the first read of the page can miss a submission that did land.
+      // Reporting a successful application as a failure is the worst outcome
+      // available - it invites a duplicate - so the later read decides.
+      if (detectSubmissionConfirmation(finalText, page.url())) {
+        const lateShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+        page.off?.("response", onResponse as (payload: never) => void);
+        return {
+          status: "submitted",
+          reason: "submission confirmed on a second read of the page, after the board rendered its success panel late",
+          filledFields: filled,
+          unmatchedRequired: [],
+          unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+          screenshotPath: lateShot,
+          finalUrl: page.url(),
+          confirmationText: finalText.slice(0, 600),
+          captchaDetected: false,
+        };
+      }
       if (detectSubmissionRejection(finalText) || detectSubmissionRejection(postSubmitText)) {
         return {
           status: "aborted",
@@ -1029,7 +1048,26 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           };
         }
         roundErrors = await readValidationErrors(page);
-        if (roundErrors.length === 0) break;
+        if (roundErrors.length === 0) {
+          // No complaint left. Either the success panel arrived late or the
+          // board went quiet; a fresh read of the page tells us which.
+          const settledText = await readBodyText(page);
+          if (detectSubmissionConfirmation(settledText, page.url())) {
+            page.off?.("response", onResponse as (payload: never) => void);
+            return {
+              status: "submitted",
+              reason: `submission confirmed after re-entering ${allRepaired.join("; ")}, which the board had reported empty`,
+              filledFields: filled,
+              unmatchedRequired: [],
+              unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+              screenshotPath: lastShot,
+              finalUrl: page.url(),
+              confirmationText: settledText.slice(0, 600),
+              captchaDetected: false,
+            };
+          }
+          break;
+        }
       }
       if (allRepaired.length > 0) {
         page.off?.("response", onResponse as (payload: never) => void);
