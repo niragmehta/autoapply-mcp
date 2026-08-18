@@ -67,6 +67,18 @@ describe("resolvePersonal", () => {
     expect(resolvePersonal("Email Address", profile)).toBeNull();
   });
 
+  it("answers a single city-and-state box with both parts", () => {
+    // Zscaler's real label. It forbids the city rule (which excludes "state")
+    // and matched the region rule, so a city-and-state question was answered
+    // with the province alone.
+    const resolved = resolvePersonal("In what city and state is your primary residence? (e.g. San Jose, CA)", profile);
+    expect(resolved?.answer).toBe("Vancouver, BC");
+  });
+
+  it("still answers a bare state field with the region alone", () => {
+    expect(resolvePersonal("State/Province", profile)?.citation).toBe("personal.address.region");
+  });
+
   it("answers numbered address lines with the street only", () => {
     const result = resolvePersonal("Address Line 1", profile);
     expect(result?.answer).toBe("1 Main St");
