@@ -7,7 +7,7 @@
  */
 
 const CATEGORY_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
-  ["work-authorization", /\b(authoriz|authoris)\w*\b[^?]{0,40}\bwork\b|\bwork\b[^?]{0,30}\b(authoriz|authoris)\w*|\bright to work\b|\blegally (?:able|entitled|eligible) to work\b/i],
+  ["work-authorization", /\b(authoriz|authoris)\w*\b[^?]{0,40}\bwork\b|\bwork\b[^?]{0,30}\b(authoriz|authoris)\w*|\bright to work\b|\blegally able to work\b|\b(?:entitled|eligible|permitted) to work\b/i],
   ["sponsorship", /\bsponsor\w*\b|\bvisa\b|\bh-?1b\b|\bwork permit\b|\bimmigration status\b/i],
   ["citizenship", /\bcitizen\w*\b|\bnationality\b|\bpermanent resident\b|\bgreen card\b/i],
   ["clearance", /\bclearance\b|\bts\/sci\b|\btop secret\b|\bpublic trust\b/i],

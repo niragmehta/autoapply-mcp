@@ -771,6 +771,48 @@ describe("fallbackAnswersForFields", () => {
     expect(extra).toEqual([]);
   });
 
+  it("answers a live question that words permission to work differently", () => {
+    // Pear VC's page asks "Are you currently eligible to work in the United
+    // States of America?". The stored answer is written for "authorized to
+    // work", so the required field was left blank and the board refused the
+    // submission over a question whose answer was never in doubt.
+    const authBank = [
+      {
+        key: "us-work-authorization-now",
+        label: "Currently authorized to work in the US",
+        patterns: ["authorized to work in the united states"],
+        answer: "Yes",
+        allowAutoFill: true,
+      },
+    ];
+    const extra = fallbackAnswersForFields(
+      [field("Are you currently eligible to work in the United States of America?", { required: true })],
+      [],
+      authBank,
+    );
+    expect(extra).toHaveLength(1);
+    expect(extra[0]?.answer).toBe("Yes");
+    expect(extra[0]?.questionKey).toBe("us-work-authorization-now");
+  });
+
+  it("keeps a permission to work answer away from a question about commuting", () => {
+    const authBank = [
+      {
+        key: "us-work-authorization-now",
+        label: "Currently authorized to work in the US",
+        patterns: ["authorized to work in the united states"],
+        answer: "Yes",
+        allowAutoFill: true,
+      },
+    ];
+    const extra = fallbackAnswersForFields(
+      [field("Are you able to work in the United States office two days a week?", { required: true })],
+      [],
+      authBank,
+    );
+    expect(extra).toEqual([]);
+  });
+
   it("supplies a bank entry to every standalone field that matches it", () => {
     const fields = [field("When can you start a new role?"), field("Start date preference", { selectorIndex: 1 })];
     const extra = fallbackAnswersForFields(fields, [], bank);

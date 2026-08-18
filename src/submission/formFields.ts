@@ -1,5 +1,6 @@
 import type { DraftAnswer } from "../domain/job.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
+import { canonicalizeWorkPermission } from "../text/workPermission.js";
 
 /**
  * Field matching for web forms, kept free of browser APIs so it can be tested
@@ -1357,7 +1358,9 @@ function bestBankEntry(
   // it asks. A background-check box reads only "I understand" on its own, which
   // matches no stored pattern and leaves a required box clear.
   const questionText = field.questionLabel ? normalizeLabel(field.questionLabel) : "";
-  const candidates = [haystack, optionText, questionText].filter((value) => value.length > 0);
+  const candidates = [haystack, optionText, questionText]
+    .filter((value) => value.length > 0)
+    .map((value) => canonicalizeWorkPermission(value));
   if (candidates.length === 0) return undefined;
   // "GitHub" normalizes to "git hub", so a stored pattern of "github" would
   // never match. Compare de-spaced forms too, scoring on the original length.
@@ -1365,7 +1368,7 @@ function bestBankEntry(
   let best: { entry: ApprovedAnswerEntry; length: number } | undefined;
   for (const entry of bank) {
     for (const pattern of entry.patterns) {
-      const needle = normalizeLabel(pattern);
+      const needle = canonicalizeWorkPermission(normalizeLabel(pattern));
       if (needle.length === 0) continue;
       const squashedNeedle = needle.replace(/\s+/g, "");
       const hit =
