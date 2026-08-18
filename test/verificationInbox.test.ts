@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { canAwaitVerificationCode } from "../src/submission/browser.js";
 import {
   decodeMessageText,
   extractVerificationCode,
@@ -14,6 +15,25 @@ const config: VerificationInboxConfig = {
   password: "secret",
   mailboxes: ["INBOX"],
 };
+
+describe("waiting at a verification gate", () => {
+  it("waits on a configured mailbox alone, with no code file", () => {
+    // This demanded a code file, so a mailbox-only run returned instantly and
+    // reported that no code arrived on a fully filled form.
+    expect(canAwaitVerificationCode({ codeWaitMs: 300_000, verificationInbox: config })).toBe(true);
+  });
+
+  it("waits on a code file alone, with no mailbox", () => {
+    expect(canAwaitVerificationCode({ codeWaitMs: 300_000, codeFilePath: "a.code", verificationInbox: null })).toBe(
+      true,
+    );
+  });
+
+  it("does not wait when nothing can supply a code, or when no time was granted", () => {
+    expect(canAwaitVerificationCode({ codeWaitMs: 300_000, verificationInbox: null })).toBe(false);
+    expect(canAwaitVerificationCode({ codeWaitMs: 0, codeFilePath: "a.code", verificationInbox: config })).toBe(false);
+  });
+});
 
 describe("verification inbox configuration", () => {
   it("is absent until credentials are supplied", () => {

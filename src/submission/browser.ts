@@ -1432,6 +1432,24 @@ async function resumeIsAttached(page: AnyPage, resumePath: string): Promise<bool
 }
 
 /**
+ * Whether a run can hold the browser at a verification gate.
+ *
+ * Two independent readers can supply the code: a file a person writes, and a
+ * configured mailbox. Either is sufficient on its own. This used to demand the
+ * file, so a run with only a mailbox returned instantly and reported that no
+ * code had arrived, on a form that was otherwise completely filled.
+ */
+export function canAwaitVerificationCode(options: {
+  codeWaitMs?: number;
+  codeFilePath?: string;
+  verificationInbox?: VerificationInboxConfig | null;
+}): boolean {
+  if ((options.codeWaitMs ?? 0) <= 0) return false;
+  const inbox = options.verificationInbox ?? readVerificationInboxConfig();
+  return Boolean(options.codeFilePath) || Boolean(inbox);
+}
+
+/**
  * Holds the session open at a verification gate, polling for the code.
  *
  * The code is bound to the submit that requested it, so it cannot survive into
@@ -1447,22 +1465,26 @@ async function awaitVerificationCode(
 ): Promise<string | undefined> {
   const waitMs = options.codeWaitMs ?? 0;
   const path = options.codeFilePath;
-  if (waitMs <= 0 || !path) return undefined;
+  const inbox = options.verificationInbox ?? readVerificationInboxConfig();
+  if (!canAwaitVerificationCode(options)) return undefined;
 
   // A code emailed before this moment is already dead, so whoever is reading
   // the inbox needs to know when this attempt's code was sent rather than
   // guessing which of several similar emails is current.
-  const signalPath = `${path}.waiting`;
-  await writeFile(signalPath, emailedAt.toISOString(), "utf8").catch(() => undefined);
+  const signalPath = path ? `${path}.waiting` : undefined;
+  if (signalPath) {
+    await writeFile(signalPath, emailedAt.toISOString(), "utf8").catch(() => undefined);
+  }
 
   try {
     const deadline = Date.now() + waitMs;
-    const inbox = options.verificationInbox ?? readVerificationInboxConfig();
     while (Date.now() < deadline) {
-      const code = await readFile(path, "utf8")
-        .then((text) => text.trim())
-        .catch(() => "");
-      if (code) {
+      const code = path
+        ? await readFile(path, "utf8")
+            .then((text) => text.trim())
+            .catch(() => "")
+        : "";
+      if (code && path) {
         // Consumed, so a stale code from an earlier attempt can never be picked
         // up by the next one.
         await rm(path, { force: true }).catch(() => undefined);
@@ -1482,7 +1504,7 @@ async function awaitVerificationCode(
     }
     return undefined;
   } finally {
-    await rm(signalPath, { force: true }).catch(() => undefined);
+    if (signalPath) await rm(signalPath, { force: true }).catch(() => undefined);
   }
 }
 
