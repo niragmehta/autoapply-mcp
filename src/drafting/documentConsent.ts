@@ -26,7 +26,7 @@
 
 /** Nouns that make the option's object a document or a process, not the candidate. */
 const DOCUMENT_OBJECT =
-  /\b(?:notice|notices|policy|policies|disclosure|disclosures|consent|consents|authorizations?|authorisations?|agreements?|terms|statements?|acknowledge?ments?|background check|credit check|reference check|privacy|form|forms|application|declaration|conditions|guidelines?|code of conduct)\b/;
+  /\b(?:notice|notices|policy|policies|disclosure|disclosures|consent|consents|authorizations?|authorisations?|agreements?|terms|statements?|acknowledge?ments?|background check|credit check|reference check|privacy|form|forms|application|declaration|conditions|guidelines?|code of conduct|expectations?|instructions?|process|procedures?|rules)\b/;
 
 /**
  * Wording that turns the option into an assertion about the candidate rather

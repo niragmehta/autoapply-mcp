@@ -12,6 +12,11 @@ describe("consentsToDocument", () => {
       "I have read and accept the terms of this agreement",
       "I consent to a background check being conducted",
       "I confirm I have reviewed the code of conduct",
+      // Block's Greenhouse form states its interview expectations - AI use,
+      // recording, video, confidentiality - and offers this single option. It
+      // classifies as "disability" because of the accommodation wording, and
+      // so blocked every Block application.
+      "I agree to these expectations",
     ]) {
       expect(consentsToDocument(option), option).toBe(true);
     }
