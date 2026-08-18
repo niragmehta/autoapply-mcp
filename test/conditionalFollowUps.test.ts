@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { DraftAnswer } from "../src/domain/job.js";
 import type { FormQuestion } from "../src/drafting/answers.js";
-import { unresolvedRequired } from "../src/drafting/answers.js";
+import { draftAnswers, unresolvedRequired } from "../src/drafting/answers.js";
 import {
   isConditionalFollowUp,
   isNegativeAnswer,
   resolveConditionalFollowUps,
 } from "../src/drafting/conditionalFollowUps.js";
 import { buildFillPlan } from "../src/submission/formFields.js";
+import { makeCampaign, makeProfile } from "./factories.js";
 
 function question(key: string, label: string, type = "input_text"): FormQuestion {
   return { key, label, required: true, type };
@@ -196,5 +197,41 @@ describe("conditional follow-ups", () => {
     const plan = buildFillPlan(fields, [answer("q", "Why do you want this job?", "", true)]);
 
     expect(plan.unmatchedRequired.map((field) => field.label)).toEqual(["Why do you want this job?"]);
+  });
+
+  it("never lets the answer bank fill a follow-up whose parent was answered No", () => {
+    // Robinhood's real pair. questionCore strips the leading condition so the
+    // remainder, "please provide additional information here", matched the
+    // stored additional-information essay - printing a page of unrelated work
+    // history under a government-official disclosure answered "No".
+    const profile = makeProfile({
+      answers: [
+        {
+          key: "additional-information",
+          label: "Additional information",
+          patterns: ["additional information"],
+          answer: "A long essay about a security hardening platform.",
+          allowAutoFill: true,
+        },
+        {
+          key: "government-official",
+          label: "Are you a government official?",
+          patterns: ["government official"],
+          answer: "No",
+          allowAutoFill: true,
+        },
+      ],
+    });
+    const questions = [
+      question("q_gov", "Do you currently hold, or have you held, a position as a government official?"),
+      question("q_gov_detail", 'If you answered "Yes" to the above question, please provide additional information here:'),
+    ];
+
+    const { answers } = draftAnswers(questions, profile, makeCampaign());
+
+    expect(answers[0]!.answer).toBe("No");
+    expect(answers[1]!.answer).toBe("N/A");
+    expect(answers[1]!.answer).not.toMatch(/hardening platform/);
+    expect(answers[1]!.citation).toMatch(/not applicable/);
   });
 });

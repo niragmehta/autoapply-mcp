@@ -29,6 +29,14 @@ const CONDITIONAL_PREFIX =
 const FREE_TEXT_TYPES = new Set(["input_text", "textarea", "text", "long_text", "short_text"]);
 
 /**
+ * True for a free-text field that asks nothing on its own because its subject
+ * lives entirely in the question above it.
+ */
+export function isFreeTextFollowUp(label: string, fieldType: string): boolean {
+  return isConditionalFollowUp(label) && FREE_TEXT_TYPES.has(fieldType);
+}
+
+/**
  * Deliberately narrow. Anything that is not plainly a "no" leaves the follow-up
  * blocked, because a wrong reading here silently drops a disclosure the
  * employer asked for.
