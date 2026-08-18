@@ -472,6 +472,38 @@ describe("optionSearchCandidates", () => {
     );
   });
 
+  // The wording rules see only the group's head option, so the whole group has
+  // to be planned to prove the right radio is actually selected.
+  it("selects the relocating option of a group whose head option never mentions it", () => {
+    const abridgeOptions = [
+      "I am currently living in the San Francisco Bay or New York areas",
+      "I do not currently live in New York, San Francisco - but I am willing to relocate within 6 months",
+      "I do not currently live in New York, San Francisco - but I am willing to travel 20%",
+      "I do not currently live in New York, San Francisco- I am NOT willing to relocate and am only open to 100% remote positions",
+    ];
+    const group = abridgeOptions.map((optionLabel, selectorIndex) =>
+      field("Where in the United States will you be working from?", {
+        type: "radio",
+        name: "where",
+        optionLabel,
+        selectorIndex,
+        required: true,
+      }),
+    );
+    const plan = buildFillPlan(group, [
+      // A derived answer carries the live field label, which is how it binds to
+      // the group at all - the stored key stays in questionKey.
+      answer("Where in the United States will you be working from?", "Yes", {
+        questionKey: "relocation-willing",
+        source: "approved-answer",
+      }),
+    ]);
+    expect(plan.toFill.map((match) => match.field.optionLabel)).toEqual([
+      "I do not currently live in New York, San Francisco - but I am willing to relocate within 6 months",
+    ]);
+    expect(plan.unmatchedRequired).toEqual([]);
+  });
+
   it("never claims willingness when the answer is no", () => {    const candidates = optionSearchCandidates(
       field("Are you willing to relocate to the jobâ€™s location?*", { role: "combobox" }),
       answer("Open to relocation", "No"),

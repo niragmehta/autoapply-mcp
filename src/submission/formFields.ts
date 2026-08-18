@@ -1658,6 +1658,25 @@ function collapseOptionGroups(
     }
 
     if (!selected) {
+      // Wording rules only ever see one option of the group - the head - so a
+      // decision spelled out in a later option is invisible to them. Abridge
+      // asks "Where in the United States will you be working from?" and puts
+      // "willing to relocate" in the second option; nothing matched and a
+      // required question was left unanswered with no explanation. Retry once
+      // with the whole group's wording visible. This can only turn a miss into
+      // a match - the candidates it produces are still checked against the real
+      // option labels by the same rules - so no existing choice can change.
+      const groupField = { ...head.field, optionLabel: optionLabels.join(" ") };
+      for (const answer of candidates) {
+        const index = pickOptionIndex(optionLabels, optionSearchCandidates(groupField, answer));
+        if (index >= 0) {
+          selected = { index, answer };
+          break;
+        }
+      }
+    }
+
+    if (!selected) {
       out.push({ ...head, answer: null });
       continue;
     }
