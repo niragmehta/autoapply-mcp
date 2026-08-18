@@ -15,6 +15,12 @@ class FakeTenant {
   visible: Set<string>;
   readonly clicks: string[] = [];
   readonly filled: Record<string, string> = {};
+  /**
+   * Body text the tenant renders. Defaults to a live advert so the existing
+   * cases keep modelling a posting that painted; a closed posting overrides it.
+   */
+  bodyText =
+    "Senior Software Engineer. San Jose, California. Apply. We are hiring engineers to build and operate large scale services, and this advert is long enough to be told apart from the bare careers shell that a tenant paints before its content arrives.";
   private readonly transitions: Record<string, string[]>;
 
   constructor(initial: string[], transitions: Record<string, string[]>) {
@@ -33,6 +39,7 @@ class FakeTenant {
       first: () => locator,
       count: async () => (self.visible.has(id) ? 1 : 0),
       isVisible: async () => self.visible.has(id),
+      allInnerTexts: async () => [self.bodyText],
       waitFor: async () => {
         if (!self.visible.has(id)) throw new Error(`not visible: ${id}`);
       },
@@ -139,6 +146,23 @@ describe("enterWorkdayApplication", () => {
 
     expect(result.reached).toBe("blocked");
     expect(result.detail).toMatch(/posting is probably closed|never opened/i);
+    expect(result.createdAccount).toBe(false);
+  });
+
+  it("names a pulled requisition instead of hedging about the wizard", async () => {
+    // Observed live on Cisco: the tenant paints its careers shell, then renders
+    // "The page you are looking for doesn't exist." in an error banner. Reporting
+    // that as "the wizard never opened" invites a pointless retry.
+    const tenant = new FakeTenant(["errorMessage"], {});
+    tenant.bodyText =
+      "Skip to main content Careers English Sign In Search for Jobs The page you are looking for doesn't exist. Search for Jobs Follow Us Privacy Policy";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+    });
+
+    expect(result.reached).toBe("blocked");
+    expect(result.detail).toMatch(/no longer exists/i);
     expect(result.createdAccount).toBe(false);
   });
 
