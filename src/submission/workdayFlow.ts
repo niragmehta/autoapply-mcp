@@ -333,6 +333,37 @@ async function clickMatch(page: Page, candidate: string): Promise<boolean> {
 }
 
 /**
+ * Removes anything this pass added, so a prompt that could not be answered is
+ * left exactly as it was found.
+ *
+ * The undo used to be one unverified click on the pill, made while the menu was
+ * still open and overlaying it. When it missed, Adobe's application kept
+ * "Agricultural/Biological Engineering and Bioengineering" in Field of Study —
+ * a major the candidate never studied, on a field the step does not require, so
+ * nothing stopped it being submitted. A stray value here is a fabricated claim,
+ * which is worse than an empty field.
+ */
+async function clearAddedValues(
+  page: Page,
+  field: Locator,
+  before: readonly string[],
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const current = await chosenValues(field);
+    if (current.length <= before.length) return true;
+    // The pill only becomes clickable once the popup stops covering it.
+    await closeMenu(page);
+    const pills = field.locator(WD_PILL);
+    const pill = pills.nth(Math.max((await pills.count()) - 1, 0));
+    const remove = pill.locator('button, [role="button"], [data-automation-id*="delete" i], svg').first();
+    const target = (await remove.count()) > 0 ? remove : pill;
+    await target.click({ timeout: 5_000 }).catch(() => undefined);
+    await page.waitForTimeout(500);
+  }
+  return (await chosenValues(field)).length <= before.length;
+}
+
+/**
  * Chooses a value in a Workday prompt, reporting honestly when it cannot.
  *
  * The caller must be able to tell a real selection from a no-op, so success is
@@ -393,9 +424,17 @@ export async function fillWorkdayPrompt(
         if (opened.some((value) => matches(value, candidate))) {
           return { filled: true, detail: `selected ${opened.join(", ")}` };
         }
-        await field.locator(WD_PILL).first().click({ timeout: 5_000 }).catch(() => undefined);
-        await page.waitForTimeout(500);
-        continue;
+        const cleared = await clearAddedValues(page, field, before);
+        if (!cleared) {
+          return {
+            filled: false,
+            detail: `left ${JSON.stringify(await chosenValues(field))} selected and could not clear it; the field now states something that was never answered`,
+          };
+        }
+        // Every entry in a flat taxonomy is a value, so there are no categories
+        // to open and each further probe only risks another stray selection.
+        // Adobe's Field of Study lists thousands of majors this way.
+        break;
       }
 
       if (!(await clickMatch(page, candidate))) continue;
@@ -429,6 +468,14 @@ export async function fillWorkdayPrompt(
   // Say what was actually on offer. Without it every mismatch needs a bespoke
   // browser probe to diagnose, because the wanted values are all the log shows.
   await closeMenu(page);
+  // Last line of defence: whatever happened above, this prompt must end the
+  // pass holding exactly what it held at the start.
+  if (!(await clearAddedValues(page, field, before))) {
+    return {
+      filled: false,
+      detail: `left ${JSON.stringify(await chosenValues(field))} selected and could not clear it; the field now states something that was never answered`,
+    };
+  }
   return {
     filled: false,
     detail: `no Workday option matched ${JSON.stringify(candidates)}; offered ${JSON.stringify(offered)}; search: ${lastSearchDetail}`,

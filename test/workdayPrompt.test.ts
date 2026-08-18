@@ -22,6 +22,8 @@ class FakePrompt {
     private readonly kind: "picker" | "dropdown" = "picker",
     /** Pills belonging to *other* fields, which must never be treated as choices. */
     private readonly strayPills: string[] = [],
+    /** False models a delete click that misses, which is how Adobe kept a stray major. */
+    private readonly pillDeletes: boolean = true,
   ) {}
 
   private top(): string[] {
@@ -68,7 +70,26 @@ class FakePrompt {
       return this.list(selector, this.menu);
     }
     if (selector.includes("selectedItem")) {
-      return this.list(selector, this.kind === "picker" ? this.selected : []);
+      const pills = this.kind === "picker" ? this.selected : [];
+      const self = this;
+      const asPill = (index: number | null) => ({
+        first: () => asPill(0),
+        last: () => asPill(pills.length - 1),
+        nth: (i: number) => asPill(i),
+        count: async () => pills.length,
+        isVisible: async () => pills.length > 0,
+        waitFor: async () => undefined,
+        allInnerTexts: async () => pills,
+        locator: (child: string) => self.locator(child),
+        fill: async () => undefined,
+        // A pill is its own delete control on a real widget.
+        click: async () => {
+          if (!self.pillDeletes) return;
+          const at = index ?? 0;
+          self.selected = self.selected.filter((_, position) => position !== at);
+        },
+      });
+      return asPill(null);
     }
     if (selector.includes("multiSelectContainer") || selector.includes("aria-haspopup")) {
       // The production code asks three different questions with this markup:
@@ -330,6 +351,48 @@ describe("fillWorkdayPrompt", () => {
 
     expect(result.filled).toBe(false);
     expect(prompt.selected).toEqual([]);
+  });
+
+  // Adobe's "Field of Study" is a flat taxonomy of thousands of majors, so
+  // every entry the category probe opened was a value rather than a category.
+  const MAJORS: Tree = {
+    Accounting: null,
+    "Actuarial Science": null,
+    Advertising: null,
+    "Aerospace Engineering": null,
+    "African-American Studies": null,
+    "African Studies": null,
+    "Agricultural/Biological Engineering and Bioengineering": null,
+  };
+
+  it("leaves a prompt it could not answer exactly as it found it", async () => {
+    const prompt = new FakePrompt(MAJORS);
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Computer Science"]);
+
+    expect(result.filled).toBe(false);
+    // The form must not claim a major that was never studied.
+    expect(prompt.selected).toEqual([]);
+  });
+
+  it("stops probing once an entry proves to be a value rather than a category", async () => {
+    const prompt = new FakePrompt(MAJORS);
+
+    await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Computer Science"]);
+
+    // A flat list has no categories to open, so probing the rest of it would
+    // only risk another stray selection.
+    expect(prompt.clicked.filter((label) => label in MAJORS).length).toBeLessThan(3);
+  });
+
+  it("says so when a stray selection cannot be undone", async () => {
+    const prompt = new FakePrompt(MAJORS, "picker", [], false);
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Computer Science"]);
+
+    expect(result.filled).toBe(false);
+    expect(result.detail).toContain("could not clear");
+    expect(result.detail).toContain("Accounting");
   });
 });
 
