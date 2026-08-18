@@ -1273,7 +1273,9 @@ export async function repairReportedFields(
     try {
       const typeable =
         match.field.role !== "combobox" &&
-        ["text", "email", "tel", "url", "textarea", "number"].includes(match.field.type);
+        // A number input is filled through fillControl, which reduces the
+        // answer to the number it states rather than typing words into it.
+        ["text", "email", "tel", "url", "textarea"].includes(match.field.type);
       if (typeable) {
         await locator.click();
         await locator.fill("");
@@ -1380,6 +1382,14 @@ async function fillControl(
     return;
   }
   if (field.type === "file") return;
+  // A number input rejects any text at all, so "5+ years" threw and the field
+  // was reported unfillable. The years the answer states are what the box wants.
+  if (field.type === "number") {
+    const numeric = value.match(/-?\d+(?:\.\d+)?/)?.[0];
+    if (!numeric) throw new Error(`cannot type "${value}" into a number field`);
+    await locator.fill(numeric);
+    return;
+  }
   await locator.fill(value);
 }
 

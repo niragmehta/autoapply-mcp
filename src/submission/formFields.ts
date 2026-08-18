@@ -1,5 +1,6 @@
 import type { DraftAnswer } from "../domain/job.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
+import { statesUnrelatedExperience } from "../drafting/experienceSubject.js";
 import { canonicalizeWorkPermission } from "../text/workPermission.js";
 
 /**
@@ -1367,6 +1368,7 @@ function bestBankEntry(
   const squashed = candidates.map((value) => value.replace(/\s+/g, ""));
   let best: { entry: ApprovedAnswerEntry; length: number } | undefined;
   for (const entry of bank) {
+    if (candidates.some((value) => statesUnrelatedExperience(value, [entry.label, ...entry.patterns]))) continue;
     for (const pattern of entry.patterns) {
       const needle = canonicalizeWorkPermission(normalizeLabel(pattern));
       if (needle.length === 0) continue;

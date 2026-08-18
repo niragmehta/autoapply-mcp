@@ -13,6 +13,7 @@ import {
   namesCandidateLocation,
 } from "./residence.js";
 import { canonicalizeWorkPermission } from "../text/workPermission.js";
+import { statesUnrelatedExperience } from "./experienceSubject.js";
 
 /**
  * Answer policy engine.
@@ -94,6 +95,9 @@ function matchApprovedAnswer(profile: Profile, label: string) {
   let best: { entry: Profile["answers"][number]; length: number } | null = null;
   for (const entry of profile.answers) {
     if (residenceAsked && !statesWhereCandidateLives(entry)) continue;
+    // A question naming a subject may only be answered by an entry naming the
+    // same subject; see experienceSubject.ts.
+    if (statesUnrelatedExperience(haystack, [entry.label, ...entry.patterns])) continue;
     // "Are you located in <somewhere he is not>" is stored once, as a blanket
     // "No - based in Vancouver, Canada". That is true of everywhere except the
     // one place he actually lives, so when the question names Canada, British
