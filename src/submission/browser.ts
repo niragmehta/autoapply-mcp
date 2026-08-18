@@ -1,4 +1,4 @@
-﻿import { mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SubmissionPolicy } from "../domain/campaign.js";
@@ -978,54 +978,74 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         };
       }
       // The board has told us which fields it thinks are empty. Repair exactly
-      // those and click once more: validation failed, so nothing was sent, and
-      // a second click cannot produce a second application. Only one repair is
-      // attempted - if the board still refuses, the problem is not a lost value.
-      const repairedFields = await repairReportedFields(page, plan.toFill, pageErrors);
-      if (repairedFields.length > 0) {
-        logger.info("repairing fields the board reported empty", { fields: repairedFields });
+      // those and click again: validation failed, so nothing was sent, and a
+      // further click cannot produce a second application. Ashby reports one
+      // lost field at a time - Abridge named Full Name, then LinkedIn Profile,
+      // then Phone across three runs - so this repeats until the board either
+      // accepts the form or stops naming a field this run can repair.
+      let roundErrors = pageErrors;
+      const allRepaired: string[] = [];
+      let lastShot = confirmationShot;
+      for (let round = 0; round < 4; round += 1) {
+        const repairedFields = await repairReportedFields(page, plan.toFill, roundErrors);
+        if (repairedFields.length === 0) break;
+        allRepaired.push(...repairedFields.filter((label) => !allRepaired.includes(label)));
+        logger.info("repairing fields the board reported empty", { round: round + 1, fields: repairedFields });
         await reassertChoices(page, choiceLog);
-        if (await clickSubmit(page)) {
-          await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
-          const retryText = await waitForSubmissionOutcome(page);
-          const retryShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
-          if (detectSubmissionConfirmation(retryText, page.url())) {
-            page.off?.("response", onResponse as (payload: never) => void);
-            return {
-              status: "submitted",
-              reason: `submission confirmed after re-entering ${repairedFields.join("; ")}, which the board had reported empty`,
-              filledFields: filled,
-              unmatchedRequired: [],
-              unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
-              screenshotPath: retryShot,
-              finalUrl: page.url(),
-              confirmationText: retryText.slice(0, 600),
-              captchaDetected: false,
-            };
-          }
-          // A code gate after the repair means the form was accepted and only
-          // the code is outstanding. That needs the full gated path, which this
-          // repair deliberately does not duplicate, so say so plainly rather
-          // than guess at the outcome.
-          const retryGate = detectVerificationCodeGate(retryText);
-          const retryErrors = await readValidationErrors(page);
+        if (!(await clickSubmit(page))) break;
+        await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
+        const retryText = await waitForSubmissionOutcome(page);
+        lastShot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+        if (detectSubmissionConfirmation(retryText, page.url())) {
+          page.off?.("response", onResponse as (payload: never) => void);
+          return {
+            status: "submitted",
+            reason: `submission confirmed after re-entering ${allRepaired.join("; ")}, which the board had reported empty`,
+            filledFields: filled,
+            unmatchedRequired: [],
+            unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+            screenshotPath: lastShot,
+            finalUrl: page.url(),
+            confirmationText: retryText.slice(0, 600),
+            captchaDetected: false,
+          };
+        }
+        // A code gate after the repair means the form was accepted and only the
+        // code is outstanding. That needs the full gated path, which this repair
+        // deliberately does not duplicate, so say so plainly rather than guess.
+        const retryGate = detectVerificationCodeGate(retryText);
+        if (retryGate) {
           page.off?.("response", onResponse as (payload: never) => void);
           return {
             status: "aborted",
-            reason: retryGate
-              ? `${retryGate} The form was repaired and accepted, so re-run this application to clear the code gate.`
-              : `re-entered ${repairedFields.join("; ")} and clicked submit again, but the board still did not confirm.${
-                  retryErrors.length ? ` page reported: ${retryErrors.join(" | ")}` : ""
-                }`,
+            reason: `${retryGate} The form was repaired and accepted, so re-run this application to clear the code gate.`,
             filledFields: filled,
-            unmatchedRequired: retryErrors.length > 0 ? repairedFields : [],
+            unmatchedRequired: [],
             unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
-            screenshotPath: retryShot,
+            screenshotPath: lastShot,
             finalUrl: page.url(),
             confirmationText: "",
             captchaDetected: false,
           };
         }
+        roundErrors = await readValidationErrors(page);
+        if (roundErrors.length === 0) break;
+      }
+      if (allRepaired.length > 0) {
+        page.off?.("response", onResponse as (payload: never) => void);
+        return {
+          status: "aborted",
+          reason: `re-entered ${allRepaired.join("; ")} and clicked submit again, but the board still did not confirm.${
+            roundErrors.length ? ` page reported: ${roundErrors.join(" | ")}` : ""
+          }`,
+          filledFields: filled,
+          unmatchedRequired: roundErrors.length > 0 ? allRepaired : [],
+          unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+          screenshotPath: lastShot,
+          finalUrl: page.url(),
+          confirmationText: "",
+          captchaDetected: false,
+        };
       }
       return {
         status: "aborted",
@@ -1180,7 +1200,18 @@ export async function repairReportedFields(
     // hitting every error message on the page.
     if (label.length < 3) continue;
     if (!reported.some((error) => error.includes(label))) continue;
-    const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
+    let locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
+    // A validation re-render can replace the marked nodes. Re-marking rebuilds
+    // the same indexes from the same form, so the repair still addresses the
+    // field the board named rather than failing on a stale handle.
+    if ((await locator.count()) === 0) {
+      await page.evaluate(COLLECT_FIELDS).catch(() => undefined);
+      locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
+      if ((await locator.count()) === 0) {
+        logger.warn("could not find the field the board reported empty", { label: match.field.label });
+        continue;
+      }
+    }
     const value = answerValueForField(match.field, match.answer);
     const candidates = optionSearchCandidates(match.field, match.answer);
     try {
@@ -1393,7 +1424,7 @@ async function checkOption(locator: AnyLocator): Promise<void> {
  * Candidates are tried in order because boards word the same choice
  * differently; the trailing empty filter lists everything as a last resort.
  *
- * The flyout is always dismissed on the way out â€” an open listbox overlays the
+ * The flyout is always dismissed on the way out — an open listbox overlays the
  * fields below it and makes every later click time out.
  */
 export async function fillCombobox(
@@ -1855,7 +1886,7 @@ async function readBodyText(page: AnyPage): Promise<string> {
  * which is true but useless - it cannot distinguish a rejected field from a
  * silent network failure. Read the page's own complaint instead of guessing.
  */
-const READ_VALIDATION_ERRORS = `() => {
+export const READ_VALIDATION_ERRORS = `(() => {
   const seen = new Set();
   const out = [];
   const push = (raw) => {
@@ -1884,8 +1915,18 @@ const READ_VALIDATION_ERRORS = `() => {
     const entry = el.closest('.ashby-application-form-field-entry, fieldset[class*="_fieldEntry_"], .field-entry, label');
     push(entry ? entry.textContent : el.getAttribute("name"));
   }
+  // Ashby's "Your form needs corrections" block carries neither an alert role
+  // nor an error class, so it is only reachable by what it says. Reading the
+  // deepest element that matches keeps the field name and drops the wrapper.
+  const wording = /needs corrections|missing entry for required field|this field is required|please (complete|enter|select|provide)/i;
+  for (const el of Array.from(document.querySelectorAll("li, p, span, div"))) {
+    const text = (el.textContent || "").replace(/\\s+/g, " ").trim();
+    if (!text || text.length > 240 || !wording.test(text)) continue;
+    if (Array.from(el.children).some((child) => wording.test(child.textContent || ""))) continue;
+    if (visible(el)) push(text);
+  }
   return out.slice(0, 8);
-}`;
+})()`;
 
 /**
  * Greenhouse increasingly emails a one-time code and refuses the submission
@@ -1910,12 +1951,27 @@ export function detectVerificationCodeGate(text: string): string | undefined {
   return undefined;
 }
 
-async function readValidationErrors(page: AnyPage): Promise<string[]> {  try {
-    const errors = (await page.evaluate(READ_VALIDATION_ERRORS)) as unknown;
-    return Array.isArray(errors) ? errors.filter((entry): entry is string => typeof entry === "string") : [];
-  } catch {
-    return [];
+/**
+ * Reads the board's own complaints, waiting for them to render.
+ *
+ * Ashby paints its "Your form needs corrections" block after the click has
+ * already settled the page, so a single read races it and comes back empty -
+ * which is how an Abridge submission was reported as an unexplained "no
+ * confirmation" while the screenshot plainly showed the board naming a field.
+ * Polling only costs time on a run that has already failed.
+ */
+async function readValidationErrors(page: AnyPage): Promise<string[]> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const errors = (await page.evaluate(READ_VALIDATION_ERRORS)) as unknown;
+      const list = Array.isArray(errors) ? errors.filter((entry): entry is string => typeof entry === "string") : [];
+      if (list.length > 0) return list;
+    } catch {
+      return [];
+    }
+    await page.waitForTimeout(800);
   }
+  return [];
 }
 
 async function hasVisibleCaptchaChallenge(page: AnyPage): Promise<boolean> {  for (const selector of ACTIVE_CAPTCHA_SELECTORS) {
