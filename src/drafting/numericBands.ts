@@ -15,7 +15,18 @@
 
 type Band = { min: number; max: number };
 
-/** Every option must parse as a band before any band matching is attempted. */
+/**
+ * Every option that states a figure must parse as a band before any band
+ * matching is attempted. Options carrying no digit at all are set aside rather
+ * than disqualifying the list: almost every dropdown opens with a placeholder
+ * ("Select One", "Select...", "-"), and treating that as a failed parse
+ * switched band matching off on the very forms it exists for. Cisco offered
+ * "Select One / 0-1 year / 2-3 years / 4+ years" and matched nothing.
+ *
+ * A digit-free entry can never be the band containing a figure, so ignoring it
+ * cannot change which band is chosen. Two parsed bands are still required, so a
+ * list that merely happens to mention a number is not read as a set of ranges.
+ */
 function parseBand(option: string): Band | undefined {
   const text = option.toLowerCase().replace(/,/g, "").trim();
   if (!/\d/.test(text)) return undefined;
@@ -60,8 +71,11 @@ export function pickNumericBandIndex(
 ): number {
   if (optionTexts.length < 2) return -1;
 
-  const bands = optionTexts.map(parseBand);
+  const bands = optionTexts.map((option) => (/\d/.test(option) ? parseBand(option) : null));
+  // A figure-bearing option that is not a band means this list is not a set of
+  // ranges, so nothing here can be trusted to read it.
   if (bands.some((band) => band === undefined)) return -1;
+  if (bands.filter((band) => band !== null).length < 2) return -1;
 
   for (const candidate of candidates) {
     const figure = parseStatedFigure(candidate);
@@ -69,7 +83,8 @@ export function pickNumericBandIndex(
 
     let best = -1;
     for (let index = 0; index < bands.length; index += 1) {
-      const band = bands[index]!;
+      const band = bands[index];
+      if (!band) continue;
       if (figure < band.min || figure > band.max) continue;
       if (best < 0 || band.min > bands[best]!.min) best = index;
     }
