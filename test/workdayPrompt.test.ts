@@ -299,6 +299,38 @@ describe("fillWorkdayPrompt", () => {
     expect(result.filled).toBe(true);
     expect(prompt.selected).toEqual(["Cellular"]);
   });
+
+  /**
+   * Cisco asks "How many years of relevant work experience..." and offers
+   * ranges. "5" is a substring of none of them, so a required field stayed on
+   * "Select One" and the wizard would not advance past step 3 - three runs in a
+   * row, each costing a full sign-in.
+   */
+  it("places a stated figure in the band that contains it", async () => {
+    const prompt = new FakePrompt(
+      { "Select One": null, "0-1 year": null, "2-3 years": null, "4+ years": null },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["5"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["4+ years"]);
+  });
+
+  it("never overstates experience to fill a band", async () => {
+    // Every band starts above the stated figure, so the honest outcome is to
+    // leave it for a person rather than claim more experience than there is.
+    const prompt = new FakePrompt(
+      { "Select One": null, "8-10 years": null, "10+ years": null },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["5"]);
+
+    expect(result.filled).toBe(false);
+    expect(prompt.selected).toEqual([]);
+  });
 });
 
 describe("isWorkdayPrompt", () => {

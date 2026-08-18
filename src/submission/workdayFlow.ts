@@ -1,5 +1,6 @@
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
+import { pickNumericBandIndex } from "../drafting/numericBands.js";
 import { getAtsCredentials, type AtsCredentials } from "./credentials.js";
 
 /**
@@ -405,15 +406,28 @@ export async function fillWorkdayPrompt(
     }
   }
 
-  // Say what was actually on offer. Without it every mismatch needs a bespoke
-  // browser probe to diagnose, because the wanted values are all the log shows.
+  // Nothing matched by wording. A question whose options are numeric ranges is
+  // still answerable from a stated figure: "5" is not a substring of "4+ years"
+  // but it is the band that contains it. Read the menu once, both to try that
+  // and to report what was on offer.
   let offered: string[] = [];
   if (await openMenu(page, field)) {
     offered = (await page.locator(WD_MENU_ITEM).allInnerTexts().catch(() => [] as string[]))
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, WD_MAX_CATEGORIES);
+    const band = pickNumericBandIndex(offered, candidates);
+    if (band >= 0) {
+      await page.locator(WD_MENU_ITEM).nth(band).click({ timeout: 10_000 }).catch(() => undefined);
+      await page.waitForTimeout(1_000);
+      const after = await chosenValues(field);
+      if (after.length > before.length) {
+        return { filled: true, detail: `selected band ${after.join(", ")}` };
+      }
+    }
   }
+  // Say what was actually on offer. Without it every mismatch needs a bespoke
+  // browser probe to diagnose, because the wanted values are all the log shows.
   await closeMenu(page);
   return {
     filled: false,
