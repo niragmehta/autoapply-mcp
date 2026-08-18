@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLLECT_FIELDS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
+import { COLLECT_FIELDS, READ_VALIDATION_ERRORS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
 import type { FillPlan } from "../src/submission/formFields.js";
 
 describe("COLLECT_FIELDS", () => {
@@ -260,6 +260,73 @@ function fakeCombobox(optionsByFilter: Record<string, string[]>): FakeCombobox {
   };
 }
 
+describe("READ_VALIDATION_ERRORS", () => {
+  /** Ashby's refusal block: a heading, then one list item per lost field. */
+  function ashbyErrorDom() {
+    const item = {
+      tagName: "LI",
+      children: [] as unknown[],
+      textContent: "Missing entry for required field: Phone",
+      getBoundingClientRect: () => ({ width: 300, height: 20 }),
+      closest: () => null,
+      getAttribute: () => null,
+      querySelector: () => null,
+    };
+    const banner = {
+      tagName: "DIV",
+      children: [item],
+      textContent: "Your form needs corrections Missing entry for required field: Phone",
+      getBoundingClientRect: () => ({ width: 300, height: 60 }),
+      closest: () => null,
+      getAttribute: () => null,
+      querySelector: () => null,
+    };
+    return [banner, item];
+  }
+
+  function read(elements: unknown[]): string[] {
+    // Mirrors page.evaluate(): the constant is evaluated as an expression, so a
+    // reader that is merely declared and never invoked yields undefined - which
+    // is exactly how this silently returned no errors on every board.
+    const evaluate = new Function("document", "window", `return ${READ_VALIDATION_ERRORS}`);
+    const document = {
+      querySelectorAll: (selector: string) =>
+        selector.includes("li, p, span, div") ? elements : [],
+    };
+    return evaluate(document, { getComputedStyle: () => ({ display: "block", visibility: "visible" }) }) as string[];
+  }
+
+  it("is invoked, not merely declared, so page.evaluate gets a value", () => {
+    expect(READ_VALIDATION_ERRORS.trim().endsWith("})()")).toBe(true);
+    expect(read([])).toEqual([]);
+  });
+
+  it("reads a refusal that carries no alert role and no error class", () => {
+    // The block Ashby renders has neither, so it is only reachable by wording -
+    // and missing it turned a repairable Abridge refusal into an unexplained
+    // "no confirmation detected".
+    expect(read(ashbyErrorDom())).toContain("Missing entry for required field: Phone");
+  });
+
+  it("keeps the field name rather than the wrapper that repeats it", () => {
+    const out = read(ashbyErrorDom());
+    expect(out).not.toContain("Your form needs corrections Missing entry for required field: Phone");
+  });
+
+  it("ignores ordinary page copy", () => {
+    const paragraph = {
+      tagName: "P",
+      children: [],
+      textContent: "We review every application we receive.",
+      getBoundingClientRect: () => ({ width: 300, height: 20 }),
+      closest: () => null,
+      getAttribute: () => null,
+      querySelector: () => null,
+    };
+    expect(read([paragraph])).toEqual([]);
+  });
+});
+
 describe("repairReportedFields", () => {
   type Recorded = { events: string[]; page: Parameters<typeof repairReportedFields>[0] };
 
@@ -325,6 +392,32 @@ describe("repairReportedFields", () => {
     ]);
     expect(repaired).toEqual([]);
     expect(fake.events).toEqual([]);
+  });
+
+  it("re-marks the form when a validation re-render replaced the field it must repair", async () => {
+    const events: string[] = [];
+    let marked = false;
+    const locator = {
+      first: () => locator,
+      count: async () => (marked ? 1 : 0),
+      click: async () => events.push("click"),
+      fill: async () => events.push("clear"),
+    };
+    const page = {
+      locator: () => locator,
+      evaluate: async () => {
+        marked = true;
+        events.push("re-mark");
+        return [];
+      },
+      keyboard: { type: async () => events.push("type"), press: async () => events.push("blur") },
+      waitForTimeout: async () => undefined,
+    } as unknown as Parameters<typeof repairReportedFields>[0];
+    const repaired = await repairReportedFields(page, [match("Full Name", "text", "Nirag Mehta")], [
+      "Missing entry for required field: Full Name",
+    ]);
+    expect(repaired).toEqual(["Full Name"]);
+    expect(events[0]).toBe("re-mark");
   });
 });
 
