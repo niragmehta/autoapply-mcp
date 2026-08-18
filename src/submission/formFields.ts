@@ -1426,20 +1426,25 @@ export function augmentAnswersForBrowser(
   return [...answers, ...derived];
 }
 
-const CAPTCHA_CHALLENGE_MARKERS = [
-  "verify you are human",
-  "confirm you are human",
-  "are you a robot",
-  "please complete the captcha",
-  "complete this captcha",
-  "security challenge",
-  "challenge in progress",
+/**
+ * Whole-phrase patterns, not substrings. A bare "security challenge" matched
+ * inside "enterprise security challenges", which is ordinary prose in almost
+ * every security job advert, so a correct posting was reported as an anti-bot
+ * wall. A challenge marker has to be copy that asks the reader to act.
+ */
+const CAPTCHA_CHALLENGE_PATTERNS = [
+  /\b(?:verify|verifying|confirm|confirming)\s+(?:that\s+)?you\s+are\s+(?:a\s+)?human\b/,
+  /\bare\s+you\s+a\s+robot\b/,
+  /\b(?:please\s+)?complete\s+(?:the|this)\s+(?:captcha|security\s+(?:challenge|check))\b/,
+  /\bchallenge\s+in\s+progress\b/,
+  /\bchecking\s+(?:if\s+the\s+site\s+connection\s+is\s+secure|your\s+browser)\b/,
+  /\bunusual\s+traffic\s+from\s+your\s+(?:computer|network)\b/,
 ];
 
 /** Detects active anti-bot challenge copy without flagging passive widget markup. */
 export function detectCaptcha(pageText: string): boolean {
   const haystack = pageText.toLowerCase();
-  return CAPTCHA_CHALLENGE_MARKERS.some((marker) => haystack.includes(marker));
+  return CAPTCHA_CHALLENGE_PATTERNS.some((pattern) => pattern.test(haystack));
 }
 
 const SUBMISSION_CONFIRMATION_MARKERS = [

@@ -2,7 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { DraftAnswer } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { classifyQuestion, isBlockedCategory, looksLikeEssay, questionCore, withoutAsides } from "./blockedQuestions.js";
-import { resolveConditionalFollowUps } from "./conditionalFollowUps.js";
+import { isFreeTextFollowUp, resolveConditionalFollowUps } from "./conditionalFollowUps.js";
 import { resolveNarrative, type NarrativeContext } from "./narrative.js";
 import { selectBestOption } from "./options.js";
 import { resolvePersonal } from "./personal.js";
@@ -358,6 +358,23 @@ function answerOne(
           ? `"${approved.answer}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
           : "",
     };
+  }
+
+  // A conditional follow-up asks nothing on its own: what belongs in it is
+  // decided entirely by the question above it. questionCore deliberately strips
+  // the leading condition so the remainder can be matched, which let Robinhood's
+  // "If you answered "Yes" to the above question, please provide additional
+  // information here" match the stored additional-information essay - and print
+  // it under both a conflict-of-interest and a government-official question that
+  // were each answered "No". Left blank here so resolveConditionalFollowUps can
+  // settle it from the governing answer, or hand it to a person when that answer
+  // really was yes.
+  if (isFreeTextFollowUp(question.label, question.type)) {
+    return blocked(
+      question,
+      category,
+      "conditional follow-up: resolved from the question it depends on, never from the answer bank",
+    );
   }
 
   // A pre-approved answer is an explicit prior decision, so it can satisfy an

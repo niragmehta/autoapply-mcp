@@ -270,6 +270,16 @@ describe("detectCaptcha", () => {
     expect(detectCaptcha("Please complete the CAPTCHA")).toBe(true);
     expect(detectCaptcha("Apply for this job")).toBe(false);
   });
+
+  it("does not read a security job advert as an anti-bot wall", () => {
+    expect(
+      detectCaptcha(
+        "Tackle evolving enterprise security challenges, such as protecting against advanced persistent threats.",
+      ),
+    ).toBe(false);
+    expect(detectCaptcha("You will own the hardest security challenge in the company.")).toBe(false);
+    expect(detectCaptcha("Complete the security challenge to continue.")).toBe(true);
+  });
 });
 
 describe("detectSubmissionConfirmation", () => {
