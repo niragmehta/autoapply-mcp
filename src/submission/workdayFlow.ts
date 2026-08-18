@@ -677,7 +677,30 @@ async function atSignInWall(page: Page): Promise<boolean> {
  * has neither, so inferring success from those two absences reports a form that
  * was never opened - and postings in this campaign close constantly.
  */
+/**
+ * Wording of the wizard's first step, which is the account gate rather than the
+ * application. Every tenant probed renders the same eight-step progress bar and
+ * labels this step "Create Account/Sign In".
+ */
+const SIGN_IN_STEP_TEXT = /create account|sign ?in|log ?in/i;
+
+export function isSignInStepLabel(text: string): boolean {
+  return SIGN_IN_STEP_TEXT.test(text);
+}
+
 async function atApplicationForm(page: Page): Promise<boolean> {
+  // The account gate is step 1 of the wizard, so it renders the progress bar and
+  // a pair of `formField-` divs for email and password. Both are in
+  // FORM_EVIDENCE, which meant the sign-in box itself was read as the
+  // application form: the run then "collected" one field, filled nothing, and
+  // blamed the posting for being removed. The step label is what separates them.
+  const step = await page
+    .locator('[data-automation-id="progressBarActiveStep"]')
+    .first()
+    .allInnerTexts()
+    .catch(() => [] as string[]);
+  if (isSignInStepLabel(step.join(" "))) return false;
+
   for (const selector of FORM_EVIDENCE) {
     const visible = await page.locator(selector).first().isVisible().catch(() => false);
     if (visible) return true;
@@ -724,7 +747,8 @@ export async function enterWorkdayApplication(
   // Newer tenants gate the credential form behind a provider chooser offering
   // "Sign in with Google" or "Sign in with email". That page carries no email or
   // password field at all, so the form has to be opened before it can be found.
-  await clickIfPresent(page, SEL.signInWithEmail, 6000);
+  // Measured at ~8s to paint on Workday's own tenant, so 6s lost the race.
+  await clickIfPresent(page, SEL.signInWithEmail, 20_000);
 
   const onAccountPage = await page.locator(SEL.password).first().isVisible().catch(() => false);
   if (!onAccountPage) {
