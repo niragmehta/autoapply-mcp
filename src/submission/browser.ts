@@ -12,6 +12,7 @@ import {
   detectCaptcha,
   detectSubmissionConfirmation,
   detectSubmissionRejection,
+  detectAlreadyApplied,
   fallbackAnswersForFields,
   isAffirmativeAnswer,
   looksLikeApplicationForm,
@@ -734,6 +735,23 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // which has nothing to fill and everything to submit.
     if (!pageFill.hasForm && priorFilled.length === 0) {
       const shot = await capture(page, options.artifactsDir, packet.applicationId, "no-form");
+      // A board showing no form because the application is already on file is
+      // the opposite of a removed posting, and saying "removed" there loses a
+      // real application. Cisco's Workday tenant does exactly this.
+      const noFormText = await readBodyText(page);
+      if (detectAlreadyApplied(noFormText)) {
+        return {
+          status: "submitted",
+          reason: "the board reports an application for this posting is already on file",
+          filledFields: [],
+          unmatchedRequired: [],
+          unusedAnswers: [],
+          screenshotPath: shot,
+          finalUrl: page.url(),
+          confirmationText: noFormText.slice(0, 600),
+          captchaDetected: false,
+        };
+      }
       return {
         status: "aborted",
         reason:

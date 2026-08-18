@@ -1535,6 +1535,32 @@ export function detectSubmissionRejection(pageText: string): boolean {
 }
 
 /**
+ * Boards state an existing application plainly, and that statement is positive
+ * evidence: the application is on file whatever this run did. Cisco's Workday
+ * tenant returns "You've already applied for this job." on a page with no form,
+ * which the dead-posting check read as "the posting has been removed" - a
+ * confident, wrong diagnosis of a submission that had in fact just succeeded,
+ * and one that invites abandoning a live application.
+ *
+ * The submitted-application phrasings are kept apart from "already applied"
+ * only for the reason string; both mean the same thing to a caller.
+ */
+const ALREADY_APPLIED_MARKERS = [
+  "already applied for this job",
+  "you have already applied",
+  "you've already applied",
+  "you already applied",
+  "already submitted an application",
+  "an application already exists",
+];
+
+/** True when the board says an application for this posting is already on file. */
+export function detectAlreadyApplied(pageText: string): boolean {
+  const haystack = pageText.toLowerCase();
+  return ALREADY_APPLIED_MARKERS.some((marker) => haystack.includes(marker));
+}
+
+/**
  * Requires positive evidence before a run is recorded as submitted: either the
  * employer's own confirmation copy, or the ATS routing to its confirmation
  * page. Absence of both is still reported honestly as unverified.
@@ -1545,6 +1571,7 @@ export function detectSubmissionConfirmation(pageText: string, finalUrl = ""): b
   // Ashby's rejection banner sits on the job page, whose URL can still look
   // like a confirmation route, so the refusal has to win over every signal.
   if (detectSubmissionRejection(haystack)) return false;
+  if (detectAlreadyApplied(haystack)) return true;
   if (SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker))) return true;
   if (SUBMISSION_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(haystack))) return true;
   return isConfirmationUrl(finalUrl);
