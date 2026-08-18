@@ -86,6 +86,23 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "personal.address.street",
   },
   {
+    // One box asking for both parts of a location - "In what city and state is
+    // your primary residence?" is standard Greenhouse phrasing. Without this it
+    // fell past the city rule (which forbids "state" in the label) into the
+    // region rule below and answered a city-and-state question with the
+    // province alone, so "Vancouver, British Columbia" came out as
+    // "British Columbia". Guarded against work-authorization wording for the
+    // same reason as the region rule.
+    pattern:
+      /^(?!.*\bunited states\b)(?!.*\bauthoriz)(?=.*\b(?:city|town)\b)(?=.*\b(?:state|province|region)\b)(?!.*\b(?:street|postal|zip|country)\b)/i,
+    category: "contact",
+    resolve: (personal) => ({
+      value: [personal.address.city, personal.address.region].filter((part) => part.trim().length > 0).join(", "),
+      autoFill: personal.addressAutoFill,
+    }),
+    citation: "personal.address.city + personal.address.region",
+  },
+  {
     // Anchored, so Greenhouse's "Location (City)" geocoder still takes the
     // identity location. A bare "City" sits inside an address block beside the
     // stored street and postal code and must agree with them - his decision,
