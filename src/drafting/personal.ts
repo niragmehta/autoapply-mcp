@@ -61,6 +61,45 @@ function education(part: "institution" | "credential" | "field" | "end"): Resolv
   };
 }
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/**
+ * A month or year out of an education date stored as `YYYY-MM`.
+ *
+ * Greenhouse splits one date across two controls, and only the graduation year
+ * was ever resolved. The start pair fell through to generic matching, which
+ * answered LaunchDarkly's education block with February 2020 against a degree
+ * actually started in September 2016 - and the form then refused to submit
+ * because the end date no longer followed the start.
+ */
+function educationDatePart(
+  bound: "start" | "end",
+  part: "month" | "year",
+): Resolver["resolve"] {
+  return (_personal, profile) => {
+    const entry = latestEducation(profile);
+    if (!entry) return "";
+    const [year, month] = (bound === "start" ? entry.start : entry.end).split("-");
+    if (part === "year") return { value: year ?? "", autoFill: true };
+    const index = Number(month) - 1;
+    const name = MONTH_NAMES[index];
+    return { value: name ?? "", autoFill: true };
+  };
+}
+
 const RESOLVERS: readonly Resolver[] = [
   {
     pattern: /\b(date of birth|birth ?date|d\.?o\.?b\.?)\b/i,
@@ -240,6 +279,26 @@ const RESOLVERS: readonly Resolver[] = [
     pattern: /\b(graduation (?:year|date)|year of graduation|graduated)\b/i,
     category: "education",
     resolve: education("end"),
+    citation: "education[0].end",
+  },
+  // Synthetic labels applied by educationDateLabels once a date control is tied
+  // to a school block, so these can never capture an employment date.
+  {
+    pattern: /\beducation start month\b/i,
+    category: "education",
+    resolve: educationDatePart("start", "month"),
+    citation: "education[0].start",
+  },
+  {
+    pattern: /\beducation start year\b/i,
+    category: "education",
+    resolve: educationDatePart("start", "year"),
+    citation: "education[0].start",
+  },
+  {
+    pattern: /\beducation end month\b/i,
+    category: "education",
+    resolve: educationDatePart("end", "month"),
     citation: "education[0].end",
   },
 ];
