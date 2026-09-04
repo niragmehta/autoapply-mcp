@@ -1106,6 +1106,18 @@ function bankEntryAsAnswer(entry: ApprovedAnswerEntry): DraftAnswer {
  */
 const EDUCATION_DATE_ID = /^end-year--(\d+)$/;
 
+/**
+ * Every date control of an education block, paired with the synthetic label
+ * that reaches the right profile value. The graduation year keeps its original
+ * wording so answers already bound to it are unaffected.
+ */
+const EDUCATION_DATE_IDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^start-month--(\d+)$/, "Education start month"],
+  [/^start-year--(\d+)$/, "Education start year"],
+  [/^end-month--(\d+)$/, "Education end month"],
+  [EDUCATION_DATE_ID, "Graduation year"],
+];
+
 export function educationDateLabels(fields: readonly FieldDescriptor[]): Map<number, string> {
   const blocks = new Set<string>();
   const employment = new Set<string>();
@@ -1118,11 +1130,14 @@ export function educationDateLabels(fields: readonly FieldDescriptor[]): Map<num
   }
   const overrides = new Map<number, string>();
   for (const field of fields) {
-    const match = EDUCATION_DATE_ID.exec(field.domId ?? "");
-    if (!match) continue;
-    const index = match[1]!;
-    if (!blocks.has(index) || employment.has(index)) continue;
-    overrides.set(field.selectorIndex, "Graduation year");
+    const id = field.domId ?? "";
+    for (const [pattern, label] of EDUCATION_DATE_IDS) {
+      const match = pattern.exec(id);
+      if (!match) continue;
+      const index = match[1]!;
+      if (blocks.has(index) && !employment.has(index)) overrides.set(field.selectorIndex, label);
+      break;
+    }
   }
   return overrides;
 }
