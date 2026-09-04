@@ -530,6 +530,18 @@ async function fillFormPage(
   const choiceLog: ChoiceSelection[] = [];
   const answeredGroups = new Set<string>();
 
+  // Which answer each required control drew, before anything is typed. A run
+  // that ends "unmatched required" otherwise gives no way to tell a missing
+  // answer apart from one that matched the question but named no option.
+  logger.info("fill plan", {
+    required: plan.toFill
+      .filter((match) => match.field.required)
+      .map((match) => `${match.field.label}${match.field.optionLabel ? ` [${match.field.optionLabel}]` : ""} <- ${match.answer?.questionKey ?? "none"}`),
+    unmatchedRequired: plan.unmatchedRequired.map(
+      (field) => `${field.label}${field.optionLabel ? ` [${field.optionLabel}]` : ""}`,
+    ),
+  });
+
   for (const match of orderFieldsForBrowser(plan.toFill)) {
     const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
     const value = answerValueForField(match.field, match.answer!);
