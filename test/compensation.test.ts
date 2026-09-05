@@ -46,6 +46,58 @@ describe("parseCompensationFromText", () => {
     expect(annualize(range!.max!, "hour")).toBe(120 * 2080);
   });
 
+  it.each([
+    "Company paid commuter benefit; $300 per month\n\nCompensation:\nCompensation will be paid in the range of $170,000 - $205,000 + Bonus.",
+    "Salary range: $170,000 - $205,000, plus a commuter benefit of $300 per month.",
+    "Commuter reimbursement: $20 per hour.\nAnnual base salary: $170,000 - $205,000.",
+    "Commuter benefit $300 per month Salary range: $170,000 - $205,000.",
+  ])("does not borrow a benefit's payment period for salary", (text) => {
+    const range = parseCompensationFromText(text);
+    expect(range?.max).toBe(205000);
+    expect(range?.period).toBe("year");
+    expect(annualize(range!.max!, range!.period)).toBe(205000);
+  });
+
+  it.each([
+    "Monthly base salary range: $18,000 - $23,000.",
+    "Monthly salary:\n$18,000 - $23,000.",
+    "Salary range: $18,000 - $23,000 per month.",
+    "Salary range: 18,000 - 23,000 PLN gross per month.",
+  ])("preserves a monthly period attached to the salary range", (text) => {
+    const range = parseCompensationFromText(text);
+    expect(range?.period).toBe("month");
+    expect(annualize(range!.max!, range!.period)).toBe(276000);
+  });
+
+  it("recognizes an hourly salary heading before the amount", () => {
+    const range = parseCompensationFromText("Hourly pay range for this position: $95 - $120.");
+    expect(range?.period).toBe("hour");
+    expect(range?.max).toBe(120);
+  });
+
+  it("preserves a slash-separated hourly unit with whitespace", () => {
+    const range = parseCompensationFromText("US Hourly Range\nProduction Coordinator: $29 - $43/ hour");
+    expect(range?.period).toBe("hour");
+    expect(range?.max).toBe(43);
+  });
+
+  it("recognizes a published range written as between two amounts", () => {
+    const range = parseCompensationFromText("The reasonably expected base pay range is between $193,930 and $352,290.");
+    expect(range?.min).toBe(193930);
+    expect(range?.max).toBe(352290);
+    expect(range?.period).toBe("year");
+  });
+
+  it("recognizes a starting salary followed by and up to", () => {
+    const range = parseCompensationFromText("The base salary will begin at $164,000 and up to $227,000.");
+    expect(range?.max).toBe(227000);
+    expect(range?.period).toBe("year");
+  });
+
+  it("does not combine a salary and an equity award into a range", () => {
+    expect(parseCompensationFromText("Compensation: $180,000 salary and $250,000 equity.")).toBeNull();
+  });
+
   it("ignores numbers with no salary context", () => {
     expect(parseCompensationFromText("We serve 10,000 - 20,000 customers daily.")).toBeNull();
   });
