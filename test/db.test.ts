@@ -163,6 +163,52 @@ describe("queue", () => {
     expect(listQueue(db, { tiers: ["B"], trackId: "software" })).toHaveLength(1);
   });
 
+  it.each(["company", "compensation", "company cap"] as const)(
+    "finds matches beyond the first candidate page after applying the %s filter",
+    (constraint) => {
+      const decoys = Array.from({ length: 205 }, (_, index) =>
+        makeJob({
+          id: `job_decoy_${index}`,
+          externalId: `decoy_${index}`,
+          fingerprint: `fp_decoy_${index}`,
+          companyName: "Other Company",
+          compensation: { min: 200000, max: 220000, currency: "USD", period: "year", source: "ats-structured", raw: "" },
+        }),
+      );
+      const target = makeJob({ id: "job_target", fingerprint: "fp_target", companyName: "Target Company" });
+      upsertJobs(db, [...decoys, target]);
+      for (const job of decoys) saveEvaluation(db, evaluation(job.id, { score: 95 }));
+      saveEvaluation(db, evaluation(target.id, { score: 80 }));
+      if (constraint === "company cap") {
+        saveApplication(db, application(decoys[0]!.id, { status: "submitted" }));
+      }
+      const filter = constraint === "company"
+        ? { companies: ["target company"] }
+        : constraint === "compensation"
+          ? { minCompensation: 250000 }
+          : { maxPerCompany: 1 };
+
+      const queue = listQueue(db, { ...filter, limit: 1 });
+
+      expect(queue.map((item) => item.job.id)).toEqual(["job_target"]);
+    },
+  );
+
+  it("preserves a company's consumed headroom when advancing to another candidate page", () => {
+    const sameCompany = Array.from({ length: 205 }, (_, index) =>
+      makeJob({ id: `job_${index}`, externalId: `${index}`, fingerprint: `fp_${index}` }),
+    );
+    const other = makeJob({ id: "job_other", fingerprint: "fp_other", companyName: "Other Company" });
+    upsertJobs(db, [...sameCompany, other]);
+    for (const job of sameCompany) saveEvaluation(db, evaluation(job.id, { score: 95 }));
+    saveEvaluation(db, evaluation(other.id, { score: 80 }));
+
+    const queue = listQueue(db, { limit: 2, maxPerCompany: 1 });
+
+    expect(queue).toHaveLength(2);
+    expect(queue.map((item) => item.job.companyName)).toEqual([sameCompany[0]!.companyName, "Other Company"]);
+  });
+
   it("caps how many roles one company may take", () => {
     const jobs = ["a", "b", "c", "d"].map((suffix) =>
       makeJob({ id: `job_${suffix}`, externalId: suffix, fingerprint: `fp_${suffix}` }),
