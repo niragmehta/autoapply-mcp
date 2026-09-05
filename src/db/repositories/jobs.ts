@@ -251,22 +251,34 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
        )`
     : "";
 
-  // Every constraint below this line is applied in JS, so the rows SQL returns
-  // are candidates rather than results. Over-fetch, or a filter that discards
-  // heavily leaves the caller short of a limit the data could have satisfied.
+  // Filters can discard an entire page. Keep paging until the requested number
+  // survives or SQL is exhausted; an over-fetch multiplier alone is not a bound.
   const candidateLimit = Math.max(limit * 20, 200);
-
-  const rows = db
-    .prepare(`
+  const statement = db.prepare(`
       SELECT e.*, j.* FROM evaluations e
       JOIN jobs j ON j.id = e.job_id
       WHERE e.decision = 'accept' AND e.score >= ?
       ${dedupeClause}
-      ORDER BY e.score DESC, j.posted_at DESC
-      LIMIT ?
-    `)
-    .all(minScore, candidateLimit) as JobRow[];
+      ORDER BY e.score DESC, j.posted_at DESC, j.id
+      LIMIT ? OFFSET ?
+    `);
+  const withinCompanyCap = capPerCompany(db, filter.maxPerCompany);
+  let queue: QueueItem[] = [];
+  let offset = 0;
+  while (queue.length < limit) {
+    const rows = statement.all(minScore, candidateLimit, offset) as JobRow[];
+    queue = [...queue, ...filterQueueRows(rows, filter, withinCompanyCap)];
+    if (rows.length < candidateLimit) break;
+    offset += rows.length;
+  }
+  return queue.slice(0, limit);
+}
 
+function filterQueueRows(
+  rows: readonly JobRow[],
+  filter: QueueFilter,
+  withinCompanyCap: (item: QueueItem) => boolean,
+): QueueItem[] {
   return rows
     .map((row) => ({ job: rowToJob(row), evaluation: rowToEvaluation(row) }))
     .filter((item) => (filter.tiers ? filter.tiers.includes(item.evaluation.tier) : true))
@@ -292,8 +304,7 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
       if (value === null) return filter.allowUnknownCompensation === true;
       return value >= filter.minCompensation;
     })
-    .filter(capPerCompany(db, filter.maxPerCompany))
-    .slice(0, limit);
+    .filter(withinCompanyCap);
 }
 
 /**
