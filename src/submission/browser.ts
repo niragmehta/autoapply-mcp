@@ -27,6 +27,7 @@ import {
   type NarrativeResolver,
 } from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
+import { inertControlIndexes } from "./inertControls.js";
 import { redactSecrets } from "./credentials.js";
 import {
   advanceWorkdayStep,
@@ -1193,37 +1194,6 @@ export async function waitForSubmissionOutcome(
   return text;
 }
 
-/**
- * Controls the page has switched off since it was scanned. Forms disable
- * dependent fields once another answer makes them meaningless - ticking
- * "Current role" disables the end-date selects - and the scan runs before any
- * answer is entered, so this can only be read after filling.
- */
-async function inertControlIndexes(page: AnyPage, indexes: readonly number[]): Promise<Set<number>> {
-  if (indexes.length === 0) return new Set();
-  // Written as a plain string because it runs in the page, not in Node, and the
-  // server is not built against the DOM library.
-  const script = `((wanted) => {
-    const out = [];
-    for (const index of wanted) {
-      const el = document.querySelector('[data-autoapply-idx="' + index + '"]');
-      if (!el) continue;
-      const style = window.getComputedStyle(el);
-      const hidden = style.display === 'none' || style.visibility === 'hidden';
-      if (el.disabled || el.readOnly || el.getAttribute('aria-disabled') === 'true' || hidden) out.push(index);
-    }
-    return out;
-  })(${JSON.stringify(indexes)})`;
-  try {
-    const inert = (await page.evaluate(script)) as number[];
-    return new Set(inert);
-  } catch {
-    // A page that will not answer this question is not evidence that anything
-    // is disabled, so report nothing and let the required check stand.
-    return new Set();
-  }
-}
-
 function aborted(reason: string, finalUrl: string): BrowserRunResult {  return {
     status: "aborted",
     reason,
@@ -2064,4 +2034,3 @@ async function capture(page: AnyPage, dir: string, applicationId: string, stage:
   await page.screenshot({ path, fullPage: true }).catch(() => undefined);
   return path;
 }
-
