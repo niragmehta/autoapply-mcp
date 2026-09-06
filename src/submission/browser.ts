@@ -28,6 +28,8 @@ import {
 } from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
 import { inertControlIndexes } from "./inertControls.js";
+import { READ_VALIDATION_ERRORS } from "./validationErrors.js";
+export { READ_VALIDATION_ERRORS } from "./validationErrors.js";
 import { redactSecrets } from "./credentials.js";
 import {
   advanceWorkdayStep,
@@ -1187,7 +1189,7 @@ export async function waitForSubmissionOutcome(
   while (Date.now() < deadline) {
     if (detectSubmissionConfirmation(text, page.url())) return text;
     if (gateIsOutcome && detectVerificationCodeGate(text)) return text;
-    if ((await readValidationErrors(page)).length > 0) return text;
+    if ((await readValidationErrors(page)).length > 0) return readBodyText(page);
     await page.waitForTimeout(SUBMISSION_OUTCOME_POLL_MS);
     text = await readBodyText(page);
   }
@@ -1927,54 +1929,6 @@ async function describeSubmitControl(page: AnyPage): Promise<string> {
 async function readBodyText(page: AnyPage): Promise<string> {
   return page.locator("body").first().innerText().catch(() => "");
 }
-
-/**
- * When a submit click leaves us on the same page, the board almost always says
- * why somewhere on it. Without this the run reports "no confirmation detected",
- * which is true but useless - it cannot distinguish a rejected field from a
- * silent network failure. Read the page's own complaint instead of guessing.
- */
-export const READ_VALIDATION_ERRORS = `(() => {
-  const seen = new Set();
-  const out = [];
-  const push = (raw) => {
-    const text = (raw || "").replace(/\\s+/g, " ").trim();
-    if (!text || text.length > 240) return;
-    const key = text.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(text);
-  };
-  const visible = (el) => {
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return false;
-    const style = window.getComputedStyle(el);
-    return style.visibility !== "hidden" && style.display !== "none";
-  };
-  for (const el of Array.from(document.querySelectorAll('[role="alert"], [aria-live="assertive"], [aria-live="polite"]'))) {
-    if (visible(el)) push(el.textContent);
-  }
-  for (const el of Array.from(document.querySelectorAll('[class*="error" i], [class*="invalid" i]'))) {
-    if (el.querySelector('[class*="error" i], [class*="invalid" i]')) continue;
-    if (visible(el)) push(el.textContent);
-  }
-  for (const el of Array.from(document.querySelectorAll('[aria-invalid="true"]'))) {
-    if (!visible(el)) continue;
-    const entry = el.closest('.ashby-application-form-field-entry, fieldset[class*="_fieldEntry_"], .field-entry, label');
-    push(entry ? entry.textContent : el.getAttribute("name"));
-  }
-  // Ashby's "Your form needs corrections" block carries neither an alert role
-  // nor an error class, so it is only reachable by what it says. Reading the
-  // deepest element that matches keeps the field name and drops the wrapper.
-  const wording = /needs corrections|missing entry for required field|this field is required|please (complete|enter|select|provide)/i;
-  for (const el of Array.from(document.querySelectorAll("li, p, span, div"))) {
-    const text = (el.textContent || "").replace(/\\s+/g, " ").trim();
-    if (!text || text.length > 240 || !wording.test(text)) continue;
-    if (Array.from(el.children).some((child) => wording.test(child.textContent || ""))) continue;
-    if (visible(el)) push(text);
-  }
-  return out.slice(0, 8);
-})()`;
 
 /**
  * Greenhouse increasingly emails a one-time code and refuses the submission
