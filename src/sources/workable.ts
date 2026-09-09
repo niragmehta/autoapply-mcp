@@ -43,13 +43,30 @@ function isPublished(posting: Posting): boolean {
     && ![posting.state, posting.status].some((value) => /^(?:closed|archived|draft|unpublished)$/i.test(value ?? ""));
 }
 
-async function readBoard(company: Company): Promise<Posting[]> {
+function contentIdentity(posting: Posting): string {
+  const { locations, location, city, state, country, ...content } = posting;
+  return JSON.stringify(content);
+}
+
+async function readBoard(company: Company) {
   const payload = parseSourcePayload(boardSchema,
     await fetchJson<unknown>(listUrl(company), { allowedHosts: ALLOWED_HOSTS }), "Workable");
-  if (new Set(payload.jobs.map((job) => job.shortcode)).size !== payload.jobs.length) {
-    throw new AppError("invalid_source_payload", "Workable payload contains repeated posting identifiers");
-  }
-  return payload.jobs.filter(isPublished);
+  const published = payload.jobs.filter(isPublished);
+  const unique = [...new Map(published.map((posting) => [posting.shortcode, posting])).values()];
+  return unique.map((posting) => {
+    const variants = published.filter((candidate) => candidate.shortcode === posting.shortcode);
+    if (variants.some((candidate) => contentIdentity(candidate) !== contentIdentity(posting))) {
+      throw new AppError("invalid_source_payload", "Workable posting variants have conflicting non-location content");
+    }
+    const locations = variants.map(jobLocations);
+    return {
+      posting,
+      locations: {
+        labels: [...new Set(locations.flatMap((value) => value.labels))],
+        countries: [...new Set(locations.flatMap((value) => value.countries))],
+      },
+    };
+  });
 }
 
 function jobLocations(posting: Posting): { labels: string[]; countries: string[] } {
@@ -73,8 +90,12 @@ function workplaceType(posting: Posting): WorkplaceType {
   return "unknown";
 }
 
-function normalizePosting(posting: Posting, company: Company, capturedAt: string): Job {
-  const locations = jobLocations(posting);
+function normalizePosting(
+  posting: Posting,
+  company: Company,
+  capturedAt: string,
+  locations: ReturnType<typeof jobLocations>,
+): Job {
   const url = `https://apply.workable.com/j/${posting.shortcode}`;
   const type = workplaceType(posting);
   return normalizePublicJob({
@@ -92,10 +113,10 @@ export const workableAdapter: SourceAdapter = {
   listUrl,
   boardUrl: (company) => `https://apply.workable.com/${boardToken(company.board)}/`,
   async listJobs(company, capturedAt) {
-    return (await readBoard(company)).map((posting) => normalizePosting(posting, company, capturedAt));
+    return (await readBoard(company)).map(({ posting, locations }) => normalizePosting(posting, company, capturedAt, locations));
   },
   async verifyBoard(company) {
-    return boardVerification((await readBoard(company)).map((posting) => posting.title));
+    return boardVerification((await readBoard(company)).map(({ posting }) => posting.title));
   },
   probeUrls: () => [],
 };

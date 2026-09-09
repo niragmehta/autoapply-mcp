@@ -33,6 +33,10 @@ After deciding to save the verified board, use `save:true`, then
 `discover_jobs {"companies":["ServiceNow"]}`. `query` narrows SmartRecruiters and
 Workday requests. Prefer it for large boards: SmartRecruiters list pages need
 detail requests for complete descriptions and salary evidence.
+Non-text SmartRecruiters video sections are ignored, while an ad still needs
+real textual content. Workable may repeat a shortcode per job location:
+identical content is merged with all listed locations, but conflicting
+descriptions, salaries or other non-location fields fail explicitly.
 
 SmartRecruiters, Workable and Recruitee **do not have browser submission
 integrations**. Their assisted/auto calls fail with `ats_browser_not_supported`,
