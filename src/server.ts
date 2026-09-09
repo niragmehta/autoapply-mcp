@@ -4,11 +4,18 @@ import { registerDiscoveryTools } from "./tools/discovery.js";
 import { registerDraftingTools } from "./tools/drafting.js";
 import { registerSubmissionTools } from "./tools/submission.js";
 import { registerTrackingTools } from "./tools/tracking.js";
+import { registerSourceSearchTools } from "./tools/sourceSearch.js";
 
 export const SERVER_NAME = "autoapply-mcp";
 export const SERVER_VERSION = "0.2.0";
 
 const INSTRUCTIONS = `autoapply-mcp turns a verified candidate profile into a governed job-application pipeline.
+
+Additional source workflow:
+  1. list_sources          - inspect permanent sources, access requirements and discovery/submission support
+  2. search_job_sources    - search unverified aggregator leads with provenance; never directly submit them
+  3. scan_source_page      - extract employer ATS links from one known public source page
+  4. add_company_board    - verify a supported employer board before saving it; does not authorize submission
 
 Single-application workflow:
   1. discover_jobs        - fetch configured ATS boards, gate, score and store postings
@@ -47,6 +54,7 @@ export function createServer(): McpServer {
   );
 
   registerDiscoveryTools(server);
+  registerSourceSearchTools(server);
   registerDraftingTools(server);
   registerBatchTools(server);
   registerSubmissionTools(server);

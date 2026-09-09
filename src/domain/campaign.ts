@@ -158,7 +158,7 @@ export type ScoringWeights = z.infer<typeof ScoringWeightsSchema>;
 export type CompensationPolicy = z.infer<typeof CompensationPolicySchema>;
 export type SubmissionPolicy = z.infer<typeof SubmissionPolicySchema>;
 
-export const AtsKindSchema = z.enum(["greenhouse", "lever", "ashby", "workday"]);
+export const AtsKindSchema = z.enum(["greenhouse", "lever", "ashby", "workday", "smartrecruiters", "workable", "recruitee"]);
 export type AtsKind = z.infer<typeof AtsKindSchema>;
 
 export const CompanySchema = z.object({
@@ -178,7 +178,7 @@ export const CompanySchema = z.object({
   region: z.enum(["global", "eu"]).default("global"),
   /**
    * Server-side search filter, for boards that support one. Large Workday
-   * tenants publish thousands of unrelated postings (NVIDIA alone lists 2,000),
+   * tenants and SmartRecruiters boards publish thousands of unrelated postings,
    * and each posting costs a second request to read its description, so
    * narrowing at the source is both cheaper and more polite than filtering
    * after the fact. Ignored by boards with no search endpoint.

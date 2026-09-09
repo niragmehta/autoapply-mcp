@@ -4,6 +4,48 @@ All tools return JSON text. Failures return a structured message beginning with 
 
 ## Discovery and ranking
 
+### `list_sources`
+Returns the permanent catalog of employer adapters, public aggregate APIs and
+lead pages, including readiness, credential requirements, attribution and
+submission limitations. No input; no credentials are revealed.
+
+### `search_job_sources`
+Fetches one bounded page of **unverified leads**, without saving employer jobs or applications.
+
+| Input | Type | Notes |
+|---|---|---|
+| `source` | `"himalayas" \| "foorilla"` | Foorilla requires an existing PRO+ API key |
+| `query` | `string` | Required, 1-300 characters |
+| `country` | `string?` | Himalayas only, e.g. `US` |
+| `location` | `string?` | Foorilla only, e.g. `San Francisco` |
+| `company` | `string?` | Himalayas company slug or Foorilla company text |
+| `limit` | `number?` | 1-100, default 20 |
+| `page` | `number?` | Positive integer, default 1 |
+
+Results include provenance, original salary units, location restrictions,
+attribution and pagination. Truncated pages return the same `nextPage` and a
+larger `nextPageLimit`; see [SOURCES.md](SOURCES.md). Descriptions are untrusted.
+Follow an employer ATS link and verify it before creating a campaign job.
+
+### `scan_source_page`
+Reads one public page and returns recognized, unverified employer ATS board links.
+
+| Input | Type | Notes |
+|---|---|---|
+| `source` | `"a16z" \| "sequoia" \| "yc" \| "builtinsf"` | Required |
+| `url` | `string?` | Optional page on the selected source's HTTPS origin |
+| `limit` | `number?` | 1-100 board links, default 30 |
+
+Does not visit employer links, save boards or authorize submission. Client-rendered
+pages may need manual follow-up; empty/truncated results are not exhaustive.
+
+### `add_company_board`
+Verifies a real employer board and optionally saves it to discovery configuration.
+Supports `greenhouse`, `lever`, `ashby`, `workday`, `smartrecruiters`, `workable`
+and `recruitee`. Requires `name`, `ats`, and `board`; optional `query`, `region`,
+`tier`, `tags` and `save` (default true). `save:false` verifies without saving.
+Neither saving a board nor installing an adapter grants submission permission.
+
 ### `discover_jobs`
 Fetches every configured board, normalizes postings, applies gates, scores survivors and stores results. Read-only with respect to employers.
 
@@ -97,6 +139,10 @@ Runs every guard, then acts according to mode.
 - `manual` returns the packet and apply URL for you to submit.
 - `assisted` fills the hosted form in a visible browser, screenshots it, and leaves it open for you to review and submit.
 - `auto` fills and clicks submit. Requires campaign mode `auto`, an allowlisted company, every required field fillable, and no unresolved questions.
+
+SmartRecruiters, Workable and Recruitee are discovery-only integrations.
+`assisted` and `auto` fail with `ats_browser_not_supported`; manual packets remain
+subject to all existing destination, approval and campaign guards.
 
 ### `record_submission`
 Marks an application submitted after you sent it manually, keeping counts, pacing and duplicate checks accurate.

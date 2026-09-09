@@ -74,10 +74,10 @@ function inferPeriod(before: string, after: string): CompensationRange["period"]
   return "year";
 }
 
-export function annualize(amount: number, period: CompensationRange["period"]): number {
+export function annualize(amount: number, period: CompensationRange["period"]): number | null {
   if (period === "hour") return amount * HOURS_PER_YEAR;
   if (period === "month") return amount * MONTHS_PER_YEAR;
-  return amount;
+  return period === "year" ? amount : null;
 }
 
 /** Scans free text for the most plausible salary range. */
@@ -105,7 +105,7 @@ export function parseCompensationFromText(text: string, fallbackCurrency = "USD"
     if (high < 1000 && period !== "hour") continue;
 
     const annualHigh = annualize(high, period);
-    if (annualHigh < MIN_PLAUSIBLE_ANNUAL || annualHigh > MAX_PLAUSIBLE_ANNUAL) continue;
+    if (annualHigh === null || annualHigh < MIN_PLAUSIBLE_ANNUAL || annualHigh > MAX_PLAUSIBLE_ANNUAL) continue;
 
     const hasCurrencyMark = Boolean(groups.c1 ?? groups.c2 ?? groups.s1 ?? groups.s2);
     const contextScore = (SALARY_CONTEXT.test(window) ? 2 : 0) + (hasCurrencyMark ? 1 : 0);
@@ -160,6 +160,9 @@ export function checkCompensationFloor(
     return { status: "unknown", annualizedMax: null, campaignCurrencyMax: null, floor, reason: "no published compensation" };
   }
   const annualizedMax = annualize(range.max, range.period);
+  if (annualizedMax === null) {
+    return { status: "unknown", annualizedMax: null, campaignCurrencyMax: null, floor, reason: "published pay has no supported period" };
+  }
   const converted = convertCurrency(annualizedMax, range.currency, policy.currency, policy.fx);
   if (converted === null) {
     return {

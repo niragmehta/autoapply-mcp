@@ -53,11 +53,25 @@ describe("hacker news lead extraction", () => {
         comment('Initech | <a href="https:&#x2F;&#x2F;boards.greenhouse.io&#x2F;embed&#x2F;job_board?for=initech">gh</a>'),
       ],
     });
+
     expect(leads.map((lead) => `${lead.ats}:${lead.board}`).sort()).toEqual([
       "ashby:globex",
       "greenhouse:initech",
       "lever:acme",
     ]);
+  });
+
+  it("recognizes new public ATSs and preserves regional board identity", () => {
+    const leads = extractLeads({ children: [comment(`
+      Acme |
+      https://jobs.smartrecruiters.com/Acme/123
+      https://apply.workable.com/acme/j/ABC
+      https://acme.recruitee.com/o/security
+      https://jobs.eu.lever.co/acme/1
+      https://jobs.ashbyhq.com.evil.example/not-acme/1
+    `)] });
+    expect(leads.map((lead) => lead.ats)).toEqual(["smartrecruiters", "workable", "recruitee", "lever"]);
+    expect(leads[3]).toMatchObject({ region: "eu" });
   });
 
   it("returns one lead per board however often it is linked", () => {

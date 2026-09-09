@@ -56,6 +56,12 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
       `campaign submission mode is "${policy.mode}"; "${requestedMode}" submission is not permitted`,
     );
   }
+  if (requestedMode !== "manual" && ["smartrecruiters", "workable", "recruitee"].includes(job.ats)) {
+    return deny(
+      "ats_browser_not_supported",
+      `${job.ats} supports discovery and manual packets only; browser submission has not been implemented`,
+    );
+  }
 
   if (!approval || approval.decision !== "approved") {
     return deny("not_approved", "no recorded human approval for this application");
