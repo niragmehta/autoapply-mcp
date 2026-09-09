@@ -248,9 +248,31 @@ describe("Workable public adapter", () => {
     expect(job?.locationsRaw).toEqual([location]);
   });
 
-  it("rejects repeated shortcode identities", async () => {
-    json.mockResolvedValue({ jobs: [workablePosting(), workablePosting()] });
-    await expect(workableAdapter.listJobs(company("workable"), capturedAt)).rejects.toThrow(/repeated/i);
+  it("rejects repeated shortcode identities with conflicting content", async () => {
+    json.mockResolvedValue({ jobs: [workablePosting(), workablePosting({ title: "Different role" })] });
+    await expect(workableAdapter.listJobs(company("workable"), capturedAt)).rejects.toThrow(/conflicting/i);
+  });
+
+  it("merges identical Workable posting variants with distinct job locations", async () => {
+    const rows = [
+      workablePosting({ locations: [{ city: "New York", country: "United States", countryCode: "US" }] }),
+      workablePosting({ locations: [{ city: "San Francisco", country: "United States", countryCode: "US" }] }),
+      workablePosting({ locations: [{ city: "London", country: "United Kingdom", countryCode: "GB" }] }),
+    ];
+    json.mockResolvedValue({ jobs: [...rows, rows[0]] });
+    const jobs = await workableAdapter.listJobs(company("workable"), capturedAt);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ externalId: "ABC123", locationClass: "bay-area", country: "US", postedAt: "2026-09-01" });
+    expect(jobs[0]?.locationsRaw).toEqual(["New York, United States", "San Francisco, United States", "London, United Kingdom"]);
+    expect(await workableAdapter.verifyBoard!(company("workable"))).toMatchObject({ ok: true, postings: 1 });
+  });
+
+  it("does not merge different salary descriptions across Workable location variants", async () => {
+    json.mockResolvedValue({ jobs: [
+      workablePosting({ description: "Annual base salary $200000-$300000." }),
+      workablePosting({ description: "Annual base salary $100000-$150000." }),
+    ] });
+    await expect(workableAdapter.listJobs(company("workable"), capturedAt)).rejects.toThrow(/conflicting/i);
   });
 
   it.each([{}, { jobs: null }, { jobs: [{ title: "Missing shortcode" }] }, { jobs: [workablePosting({ shortcode: "../x" })] }])

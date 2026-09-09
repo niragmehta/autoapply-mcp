@@ -36,8 +36,8 @@ const detailSchema = summarySchema.extend({
   releaseDate: optionalText,
   typeOfEmployment: z.object({ label: optionalText }).nullish(),
   jobAd: z.object({
-    sections: z.record(z.string(), z.object({ title: optionalText, text: z.string() }))
-      .refine((sections) => Object.values(sections).some((section) => section.text.trim().length > 0)),
+    sections: z.record(z.string(), z.object({ title: optionalText, text: optionalText }))
+      .refine((sections) => Object.values(sections).some((section) => (section.text?.trim().length ?? 0) > 0)),
   }),
   compensation: z.unknown().optional(),
 });
@@ -100,7 +100,7 @@ async function readPosting(company: Company, summary: Summary, capturedAt: strin
   return normalizePublicJob({
     company, externalId: detail.id, title: detail.name,
     locations: location ? [location] : [], url, applyUrl: `${url}?oga=true`,
-    descriptionHtml: Object.values(detail.jobAd.sections).map((section) => section.text).join("\n"),
+    descriptionHtml: Object.values(detail.jobAd.sections).map((section) => section.text ?? "").filter(Boolean).join("\n"),
     postedAt: publishedDate(detail.releasedDate ?? detail.releaseDate),
     workplaceType, isRemote: workplaceType === "remote",
     employmentType: detail.typeOfEmployment?.label ?? undefined,
