@@ -2,6 +2,7 @@ import type { Db } from "../database.js";
 import { jsonOrDefault, textOrNull } from "../database.js";
 import type { CompensationRange, Evaluation, Job } from "../../domain/job.js";
 import { nowIso } from "../../util/hash.js";
+import { annualize } from "../../ranking/compensation.js";
 
 /** Row mapping and queries for discovered jobs and their evaluations. */
 
@@ -230,7 +231,8 @@ export function applicationCountsByCompany(db: Db): Map<string, number> {
 function annualizedMaxIn(job: Job, fx: Record<string, number>): number | null {
   const range = job.compensation;
   if (!range || range.max === null) return null;
-  const annual = range.period === "hour" ? range.max * 2080 : range.period === "month" ? range.max * 12 : range.max;
+  const annual = annualize(range.max, range.period);
+  if (annual === null) return null;
   const rate = fx[range.currency.toUpperCase()];
   return rate ? annual * rate : null;
 }
@@ -300,6 +302,7 @@ function filterQueueRows(
     )
     .filter((item) => {
       if (filter.minCompensation === undefined) return true;
+      if (item.job.compensation?.period === "unknown") return false;
       const value = annualizedMaxIn(item.job, filter.fx ?? { USD: 1 });
       if (value === null) return filter.allowUnknownCompensation === true;
       return value >= filter.minCompensation;

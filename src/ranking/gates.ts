@@ -144,6 +144,9 @@ export function evaluateGates(job: Job, context: GateContext): GateResult {
   const authGate = evaluateWorkAuthorizationGate(job, profile);
   if (!authGate.passed) return authGate;
 
+  if (job.compensation?.period === "unknown") {
+    return fail("compensation-period-unknown", "published pay needs its period verified before annual comparison", job.compensation.raw);
+  }
   const compensationCheck = checkCompensationFloor(job.compensation, job.country, campaign.compensation);
   if (compensationCheck.status === "below" && campaign.compensation.rejectBelowFloor) {
     return fail("compensation-below-floor", compensationCheck.reason, job.compensation?.raw ?? "");

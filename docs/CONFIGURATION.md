@@ -2,6 +2,13 @@
 
 Three files drive everything. The server itself contains no personal data or campaign policy, which is what makes it reusable.
 
+The permanent source catalog is code-backed and available through `list_sources`.
+It does not add employers or grant submission permission. New employer ATS
+kinds `smartrecruiters`, `workable` and `recruitee` can be used in `companies.json`
+after board verification. See [SOURCES.md](SOURCES.md) for the discovery/lead
+boundary and optional `AUTOAPPLY_FOORILLA_API_KEY` environment variable; never
+store API keys in configuration JSON.
+
 Scaffold them from the shipped examples:
 
 ```bash

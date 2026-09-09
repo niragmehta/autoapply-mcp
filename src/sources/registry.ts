@@ -7,6 +7,9 @@ import { ashbyAdapter } from "./ashby.js";
 import { greenhouseAdapter } from "./greenhouse.js";
 import { leverAdapter } from "./lever.js";
 import { workdayAdapter } from "./workday.js";
+import { smartrecruitersAdapter } from "./smartrecruiters.js";
+import { workableAdapter } from "./workable.js";
+import { recruiteeAdapter } from "./recruitee.js";
 import { probeJson } from "./http.js";
 import type { BoardVerification, DiscoveryIssue, SourceAdapter } from "./types.js";
 
@@ -15,6 +18,9 @@ const ADAPTERS: Record<AtsKind, SourceAdapter> = {
   lever: leverAdapter,
   ashby: ashbyAdapter,
   workday: workdayAdapter,
+  smartrecruiters: smartrecruitersAdapter,
+  workable: workableAdapter,
+  recruitee: recruiteeAdapter,
 };
 
 export function adapterFor(kind: AtsKind): SourceAdapter {

@@ -8,7 +8,7 @@ It is built for high-volume search **without** becoming a spam bot. Discovery, r
 
 | Stage | Behaviour |
 |---|---|
-| Discover | Fetches Greenhouse, Lever and Ashby public job-board APIs for the companies you configure |
+| Discover | Fetches Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable and Recruitee employer boards; searches additional sources for unverified leads |
 | Gate | Hard-rejects on location, seniority, compensation floor, clearance, citizenship and sponsorship constraints |
 | Score | Ranks survivors across seven weighted dimensions, each with the quote that earned it |
 | Draft | Builds a match report, loads the employer's real questions, and answers only what verified profile data supports |
@@ -77,6 +77,24 @@ WARN  campaign.json: "maxBatchSize" is ignored; it belongs at "submission.maxBat
 
 Seven of those are Workday boards. Workday is fully supported for discovery, but applying to one means creating an account on that employer's tenant and walking a multi-step wizard, so expect those to need more hand-holding than a Greenhouse or Ashby posting.
 
+### Additional listing sources
+
+`list_sources` exposes the permanent catalog of 14 ATS, community, aggregator and
+portfolio sources. `search_job_sources` searches Himalayas or an authorized
+Foorilla PRO+ account; `scan_source_page` extracts employer ATS links from one
+a16z, Sequoia, YC or Built In SF page. These results are **unverified leads**, not
+jobs that can bypass campaign gates or submission permissions.
+
+SmartRecruiters, Workable public account feeds and Recruitee company XML feeds
+work with `add_company_board` and `discover_jobs`. These three new ATSs support
+discovery and manual packets only: assisted/automatic submission is explicitly
+blocked until a browser integration exists. Adding a discovery board never
+changes the submission allowlist.
+
+See [docs/SOURCES.md](docs/SOURCES.md) for endpoints, examples, access requirements,
+pagination, attribution and limitations. No source requires candidate data for
+discovery. Paid accounts are never created automatically.
+
 Nothing in this repository is specific to one candidate. Keep `profile.json`, resumes and the database in `~/.autoapply` and they can never be committed by accident.
 
 A fresh install cannot contact an employer: `submission.mode` is `manual`, and `submission.allowedCompanies` is empty, which blocks every company until you add it by name.
@@ -94,6 +112,7 @@ A fresh install cannot contact an employer: `submission.mode` is `manual`, and `
 | `AUTOAPPLY_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `AUTOAPPLY_MIN_INTERVAL_MS` | `700` | Minimum delay between requests to one host |
 | `AUTOAPPLY_MAX_RESPONSE_MB` | `64` | Response size ceiling |
+| `AUTOAPPLY_FOORILLA_API_KEY` | unset | Optional API key for an existing Foorilla PRO+ subscription; never stored in campaign files |
 
 ## Register with an MCP client
 
@@ -152,7 +171,7 @@ See [docs/TOOLS.md](docs/TOOLS.md) for every tool, [docs/BATCH.md](docs/BATCH.md
 ## What it deliberately does not do
 
 - No LinkedIn, Indeed or Wellfound automation. Their terms prohibit it and their anti-bot systems are built to stop it. Use their alerts as leads, then apply through the employer's own board.
-- No Workday support. Each tenant is bespoke, session-bound and protected; a candidate-side integration cannot be done reliably or respectfully.
+- No assumption that discovery support grants browser submission support. New ATS integrations remain manual-only, and Workday's account-based flow can still require human intervention.
 - No CAPTCHA solving, proxy rotation or fingerprint evasion.
 - No writing of your resume prose or cover letters. The server supplies structured evidence; your agent writes the words and you approve them.
 

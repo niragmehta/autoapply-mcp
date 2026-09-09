@@ -8,7 +8,7 @@ import { countSubmittedSince, listApplications } from "../db/repositories/applic
 import { evaluateAndStore } from "../pipeline.js";
 import { discoverJobs, resolveBoards, verifyBoard } from "../sources/registry.js";
 import { scanHiringThread } from "../sources/hackernews.js";
-import { CompanySchema } from "../domain/campaign.js";
+import { AtsKindSchema, CompanySchema, type AtsKind } from "../domain/campaign.js";
 import { startOfDayIso } from "../submission/guards.js";
 import { prepareUntrusted, wrapUntrusted } from "../text/untrusted.js";
 import { AppError } from "../util/errors.js";
@@ -96,7 +96,7 @@ export function registerDiscoveryTools(server: McpServer): void {
         "Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.",
       inputSchema: {
         name: z.string().min(1).describe("Company name as it should appear in the queue."),
-        ats: z.enum(["greenhouse", "lever", "ashby", "workday"]),
+        ats: AtsKindSchema,
         board: z
           .string()
           .min(1)
@@ -111,7 +111,7 @@ export function registerDiscoveryTools(server: McpServer): void {
     },
     handler(async (args: {
       name: string;
-      ats: "greenhouse" | "lever" | "ashby" | "workday";
+      ats: AtsKind;
       board: string;
       tier?: "A" | "B" | "C";
       tags?: string[];
@@ -195,9 +195,9 @@ export function registerDiscoveryTools(server: McpServer): void {
       const { thread, leads } = await scanHiringThread(args.threadId);
 
       const known = new Set(
-        workspace.companies.map((company) => `${company.ats}:${company.board.toLowerCase()}`),
+        workspace.companies.map((company) => `${company.ats}:${company.board.toLowerCase()}:${company.region}`),
       );
-      const fresh = leads.filter((lead) => !known.has(`${lead.ats}:${lead.board}`));
+      const fresh = leads.filter((lead) => !known.has(`${lead.ats}:${lead.board.toLowerCase()}:${lead.region}`));
       const considered = fresh.slice(0, args.limit ?? 60);
 
       const verified: Array<{ company: string; ats: string; board: string; postings: number; saved: boolean }> = [];
@@ -208,6 +208,7 @@ export function registerDiscoveryTools(server: McpServer): void {
           name: lead.companyName,
           ats: lead.ats,
           board: lead.board,
+          region: lead.region,
           tier: args.tier ?? "C",
           tags: ["hacker-news"],
         });

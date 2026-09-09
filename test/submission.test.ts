@@ -139,6 +139,22 @@ describe("checkSubmissionAllowed", () => {
     expect(result.code).toBe("mode_not_permitted");
   });
 
+  it.each(["smartrecruiters", "workable", "recruitee"] as const)(
+    "keeps %s discovery separate from browser submission permission",
+    (ats) => {
+      const input = {
+        ...baseInput,
+        job: makeJob({ ats, applyUrl: "https://apply.example.com/job/1" }),
+        campaign: makeCampaign({
+          submission: { mode: "auto", allowedAtsDomains: ["apply.example.com"], allowedCompanies: [job.companyName] },
+        }),
+      };
+      expect(checkSubmissionAllowed(input).allowed).toBe(true);
+      expect(checkSubmissionAllowed({ ...input, requestedMode: "assisted" }).code).toBe("ats_browser_not_supported");
+      expect(checkSubmissionAllowed({ ...input, requestedMode: "auto" }).code).toBe("ats_browser_not_supported");
+    },
+  );
+
   it("refuses destinations off the allowlist", () => {
     const result = checkSubmissionAllowed({
       ...baseInput,

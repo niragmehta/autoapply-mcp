@@ -1,6 +1,7 @@
-import type { AtsKind } from "../domain/campaign.js";
+import type { AtsKind, Company } from "../domain/campaign.js";
 import { AppError } from "../util/errors.js";
 import { fetchJson } from "./http.js";
+import { extractBoardLinks } from "./boardLinks.js";
 
 /**
  * Hacker News "Ask HN: Who is hiring?" as a lead source.
@@ -74,24 +75,10 @@ function toPlainText(html: string): string {
     .trim();
 }
 
-/**
- * Board slug patterns, ordered so the more specific embed form is tried before
- * the plain board path it would otherwise be mis-read as.
- */
-const BOARD_PATTERNS: Array<{ pattern: RegExp; ats: AtsKind }> = [
-  { pattern: /job_board\?for=([a-z0-9_-]+)/gi, ats: "greenhouse" },
-  { pattern: /job_app\?for=([a-z0-9_-]+)/gi, ats: "greenhouse" },
-  { pattern: /(?:job-)?boards\.greenhouse\.io\/([a-z0-9_-]+)/gi, ats: "greenhouse" },
-  { pattern: /jobs\.lever\.co\/([a-z0-9_.-]+)/gi, ats: "lever" },
-  { pattern: /jobs\.ashbyhq\.com\/([a-z0-9_.-]+)/gi, ats: "ashby" },
-];
-
-/** Path segments that are part of the URL shape rather than a board name. */
-const NOT_A_SLUG = new Set(["www", "jobs", "embed", "job", "job_app", "job_board", "api", "boards"]);
-
 export type HnLead = {
   ats: AtsKind;
   board: string;
+  region: Company["region"];
   /** Company name as written by the poster, used only as a label. */
   companyName: string;
   /** The posting's first line, kept so a human can sanity-check the match. */
@@ -171,16 +158,10 @@ export function extractLeads(item: AlgoliaItem): HnLead[] {
     const decoded = decodeEntities(comment.text);
     const headline = toPlainText(comment.text).slice(0, 200);
 
-    for (const { pattern, ats } of BOARD_PATTERNS) {
-      // A global regex carries lastIndex between uses, so it is rebuilt per
-      // comment rather than shared.
-      for (const match of decoded.matchAll(new RegExp(pattern.source, pattern.flags))) {
-        const board = match[1]?.toLowerCase().replace(/[.]+$/, "") ?? "";
-        if (!board || NOT_A_SLUG.has(board)) continue;
-        const key = `${ats}:${board}`;
-        if (leads.has(key)) continue;
-        leads.set(key, { ats, board, companyName: companyNameFrom(headline, board), headline });
-      }
+    for (const { ats, board, region } of extractBoardLinks(decoded)) {
+      const key = `${ats}:${board.toLowerCase()}:${region}`;
+      if (leads.has(key)) continue;
+      leads.set(key, { ats, board, region, companyName: companyNameFrom(headline, board), headline });
     }
   }
 
