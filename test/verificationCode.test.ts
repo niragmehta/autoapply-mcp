@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   detectVerificationCodeGate,
@@ -224,5 +224,35 @@ describe("waiting for the outcome of a code-verified submit", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text = await waitForSubmissionOutcome(page as any);
     expect(text).toContain("verification code was sent");
+  });
+
+  it("outlasts a board that raises its code gate more than 30s after the click", async () => {
+    // A OneTrust Greenhouse embed emailed its security code ~29s after submit,
+    // and the next poll landed past a 30s ceiling, so a gated application was
+    // reported as "no confirmation detected". The clock here is simulated.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const start = Date.now();
+      const body = () =>
+        Date.now() - start >= 40_000
+          ? "A verification code was sent to you. Security code"
+          : "Apply for this job Submit application";
+      const page = {
+        url: () => "https://job-boards.greenhouse.io/embed/job_app?for=acme&token=1",
+        waitForTimeout: async (ms: number) => {
+          vi.setSystemTime(Date.now() + ms);
+        },
+        locator: () => ({
+          all: async () => [],
+          first: () => ({ count: async () => 1, isVisible: async () => false, innerText: async () => body() }),
+        }),
+        evaluate: async () => [],
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const text = await waitForSubmissionOutcome(page as any);
+      expect(text).toContain("verification code was sent");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -15,6 +15,7 @@ import {
   detectAlreadyApplied,
   fallbackAnswersForFields,
   isAffirmativeAnswer,
+  isGroupedOption,
   looksLikeApplicationForm,
   normalizeLabel,
   optionSearchCandidates,
@@ -27,6 +28,11 @@ import {
   type NarrativeResolver,
 } from "./formFields.js";
 import { validateResumeFile } from "./resume.js";
+import { coverLetterFor, enterCoverLetter } from "./coverLetter.js";
+import { waitForResumeProcessing } from "./resumeProcessing.js";
+import { fillLeverLocation } from "./leverLocation.js";
+import { hasVisibleCaptchaChallenge } from "./captcha.js";
+import { workdayDateParts } from "./workdayDates.js";
 import { inertControlIndexes } from "./inertControls.js";
 import { READ_VALIDATION_ERRORS } from "./validationErrors.js";
 export { READ_VALIDATION_ERRORS } from "./validationErrors.js";
@@ -38,7 +44,10 @@ import {
   fillWorkdayPrompt,
   isWorkdayPrompt,
   isWorkdayUrl,
+  readListboxOptions,
+  describeControl,
   workdayStepName,
+  reviewOmissions,
 } from "./workdayFlow.js";
 
 /**
@@ -87,9 +96,12 @@ type AnyLocator = {
   locator: (selector: string) => AnyLocator;
   count: () => Promise<number>;
   fill: (value: string, options?: unknown) => Promise<void>;
+  pressSequentially: (value: string, options?: unknown) => Promise<void>;
   selectOption: (value: unknown, options?: unknown) => Promise<unknown>;
   setInputFiles: (files: string, options?: unknown) => Promise<void>;
   check: (options?: unknown) => Promise<void>;
+  uncheck?: (options?: unknown) => Promise<void>;
+  isChecked?: () => Promise<boolean>;
   click: (options?: unknown) => Promise<void>;
   isVisible: () => Promise<boolean>;
   isEnabled?: () => Promise<boolean>;
@@ -232,6 +244,10 @@ export const COLLECT_FIELDS = `(() => {
     const entry = ashbyEntry(el);
     return entry ? entry.querySelector('.ashby-application-form-question-title') : null;
   };
+  const leverTitle = (el) => {
+    const question = el.closest('.application-question');
+    return question ? question.querySelector('.application-label .text, .application-label') : null;
+  };
   const visible = (el) => {
     const style = window.getComputedStyle(el);
     const ashbyBoolean = el.type === 'checkbox' && ashbyEntry(el);
@@ -246,6 +262,10 @@ export const COLLECT_FIELDS = `(() => {
     const wrapper = el.closest('label');
     const ashbyLabel = ashbyTitle(el);
     if (ashbyLabel && ashbyLabel.innerText.trim()) return ashbyLabel.innerText.trim();
+    const leverLabel = leverTitle(el);
+    if (el.type !== 'checkbox' && el.type !== 'radio' && leverLabel && leverLabel.innerText.trim()) {
+      return leverLabel.innerText.trim();
+    }
     if (wrapper && wrapper.innerText.trim()) return wrapper.innerText.trim();
     const aria = el.getAttribute('aria-label');
     if (aria) return aria.trim();
@@ -273,6 +293,8 @@ export const COLLECT_FIELDS = `(() => {
     return (el.getAttribute('value') || '').trim();
   };
   const groupLabel = (el) => {
+    const leverLabel = leverTitle(el);
+    if (leverLabel && leverLabel.innerText.trim()) return leverLabel.innerText.trim();
     const fieldset = el.closest('fieldset');
     if (fieldset) {
       const selectors = [
@@ -371,6 +393,19 @@ export const COLLECT_FIELDS = `(() => {
     // NVIDIA marks the questionnaire dropdowns only on the control itself.
     return /\\brequired\\b/i.test(el.getAttribute('aria-label') || '');
   };
+  // A questionnaire text box has no <label> of its own: its question is the
+  // wrapper's legend. Settling for the bare name attribute (or nothing) left
+  // Pax8's salary box nameless, so no approved answer could ever claim it.
+  const FREE_TEXT = ['text', 'textarea', 'email', 'tel', 'number', 'url'];
+  const plainLabel = (el) => {
+    const text = labelFor(el);
+    if (text && text !== (el.getAttribute('name') || '')) return text;
+    if (!FREE_TEXT.includes(String(el.type || '').toLowerCase())) return text;
+    // A date's month and year boxes belong to their group, which is labelled
+    // and filled as one field; naming the parts would fill the date twice.
+    if (el.closest('[data-automation-id="dateInputWrapper"]')) return text;
+    return workdayLabel(el) || text;
+  };
   // Workday names every field in its automation id, and that name is often the
   // only usable description of what a control asks. The disability checkboxes
   // are legended "Please check one of the boxes below:", which describes no
@@ -385,6 +420,11 @@ export const COLLECT_FIELDS = `(() => {
       .trim();
   };
   controls.filter(visible).forEach((el) => {
+    const leverLabel = leverTitle(el);
+    // Lever and Workday questions often put the part that decides them last:
+    // Snap's sponsorship question defines sponsorship, TN included or not,
+    // after the first 200 characters.
+    const labelLimit = leverLabel || workdayField(el) ? 2000 : 200;
     const isListbox = el.tagName.toLowerCase() === 'button';
     const isDateGroup = el.getAttribute('data-automation-id') === 'dateInputWrapper';
     const isRadio = el.type === 'radio';
@@ -393,18 +433,19 @@ export const COLLECT_FIELDS = `(() => {
       ? workdayLabel(el) || labelFor(el)
       : isRadio || container
         ? optionLabelFor(el)
-        : labelFor(el)
-    ).slice(0, 200);
+        : plainLabel(el)
+    ).slice(0, labelLimit);
     const group = isRadio
-      ? groupLabel(el).slice(0, 200)
+      ? groupLabel(el).slice(0, labelLimit)
       : container
-        ? checkboxGroupLabel(el, container).slice(0, 200)
+        ? checkboxGroupLabel(el, container).slice(0, labelLimit)
         : '';
     const label = group || optionLabel;
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
     const ashbyLabel = ashbyTitle(el);
-    const questionTitle = (ashbyLabel ? ashbyLabel.innerText.trim() : workdayName(el)).slice(0, 200);
+    const questionTitle = (ashbyLabel ? ashbyLabel.innerText.trim()
+      : leverLabel ? leverLabel.innerText.trim() : workdayName(el)).slice(0, labelLimit);
     if (!label && !name && !el.id && role !== 'combobox') return;
     const index = out.length;
     el.setAttribute('data-autoapply-idx', String(index));
@@ -430,6 +471,12 @@ export const COLLECT_FIELDS = `(() => {
         Boolean((isListbox || isDateGroup) && workdayRequired(el)) ||
         Boolean(ashbyLabel && String(ashbyLabel.className).includes('_required_')),
       role,
+      options: el.tagName.toLowerCase() === 'select'
+        ? Array.from(el.options || [])
+            .map((o) => (o.textContent || '').replace(/\\s+/g, ' ').trim())
+            .filter((t) => t.length > 0)
+            .slice(0, 40)
+        : undefined,
       value: (isListbox || isDateGroup
         ? el.innerText || ''
         : el.type === 'checkbox' || el.type === 'radio'
@@ -460,12 +507,6 @@ const SUBMIT_SELECTORS = [
   'button:has-text("Submit Application")',
   'button:has-text("Submit")',
   'button:has-text("Apply")',
-];
-
-const ACTIVE_CAPTCHA_SELECTORS = [
-  'iframe[title*="challenge" i]',
-  '[role="dialog"] iframe[src*="captcha" i]',
-  '[role="dialog"] iframe[src*="turnstile" i]',
 ];
 
 /**
@@ -548,14 +589,28 @@ async function fillFormPage(
   for (const match of orderFieldsForBrowser(plan.toFill)) {
     const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
     const value = answerValueForField(match.field, match.answer!);
-    const candidates = optionSearchCandidates(match.field, match.answer!);
+    const candidates = optionSearchCandidates(match.field, match.answer!, packet.company);
     try {
+      if (await hasVisibleCaptchaChallenge(page)) {
+        throw new AppError("captcha_required", "Interactive CAPTCHA appeared during form filling");
+      }
       await fillControl(page, locator, match.field, value, candidates, choiceLog);
       filled.push({ label: match.field.label, source: match.answer!.source });
       if (match.field.groupKey) answeredGroups.add(match.field.groupKey);
     } catch (error) {
+      if (error instanceof AppError && error.code === "captcha_required") throw error;
       logger.warn("field fill failed", { label: match.field.label, error: String(error) });
-      if (match.field.required) failedRequired.push(match.field.label);
+      // The reason is what makes a failure actionable. Reporting the bare label
+      // sent a Workday prompt back as indistinguishable from a field no answer
+      // matched, and the two need opposite fixes - one needs a working click,
+      // the other needs an answer.
+      if (match.field.required || error instanceof StrayValueError) {
+        const reason = String(error instanceof Error ? error.message : error)
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 500);
+        failedRequired.push(reason ? `${match.field.label} [fill failed: ${reason}]` : match.field.label);
+      }
     }
   }
 
@@ -568,6 +623,23 @@ async function fillFormPage(
   }
 
   return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups };
+}
+
+async function guardedFillFormPage(
+  page: AnyPage,
+  packet: SubmissionPacket,
+  options: BrowserRunOptions,
+  knownApplicationPage = false,
+): Promise<Awaited<ReturnType<typeof fillFormPage>> | BrowserRunResult> {
+  try {
+    if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options);
+    const result = await fillFormPage(page, packet, options, knownApplicationPage);
+    if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, result.filled);
+    return result;
+  } catch (error) {
+    if (!(error instanceof AppError) || error.code !== "captcha_required") throw error;
+    return await captureCaptchaAbort(page, packet, options);
+  }
 }
 
 export async function runApplicationForm(packet: SubmissionPacket, options: BrowserRunOptions): Promise<BrowserRunResult> {
@@ -621,6 +693,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
         allowAccountCreation: options.allowAccountCreation ?? false,
       });
+      if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options);
       if (entry.reached !== "form") {
         const shot = await capture(page, options.artifactsDir, packet.applicationId, "workday-entry");
         return {
@@ -675,13 +748,15 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           }
           await attachResume(page, packet.resumePath);
           await page.waitForTimeout(1200);
+          if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, priorFilled);
           if (await resumeIsAttached(page, packet.resumePath)) {
             resumeAttached = true;
             break;
           }
         }
         if (resumeAttached) await dedupeResumeAttachments(page);
-        const stepFill = await fillFormPage(page, packet, options, true);
+        const stepFill = await guardedFillFormPage(page, packet, options, true);
+        if ("status" in stepFill) return { ...stepFill, filledFields: [...priorFilled, ...stepFill.filledFields] };
         await clearPhoneExtension(page);
         // The transient fault can also arrive part-way through a step, after
         // the recovery above has already run. The step then collects nothing
@@ -702,9 +777,29 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         // reaches the report. Without this the run ends "unmatched required: []"
         // while a saved step still refuses to advance - the exact silent success
         // this whole path was built to stop.
-        const stepUnmatched = stepFill.plan.unmatchedRequired
-          .filter((entry) => !(entry.groupKey && stepFill.answeredGroups.has(entry.groupKey)))
-          .map((entry) => entry.label);
+        const stepUnmatchedFields = stepFill.plan.unmatchedRequired
+          .filter((entry) => !(entry.groupKey && stepFill.answeredGroups.has(entry.groupKey)));
+        // A Workday dropdown is a button whose options exist only once it is
+        // opened, so an unfillable required one otherwise reports nothing but
+        // its label and the only way on is to guess at employer-specific
+        // consent wording. Opening it turns that into a decision on the record.
+        const stepUnmatched: string[] = [];
+        for (const entry of stepUnmatchedFields) {
+          let choices = entry.options ?? [];
+          if (choices.length === 0 && stepUnmatched.length < 3) {
+            choices = await readListboxOptions(page as never, entry.selectorIndex, entry.label);
+          }
+          if (choices.length > 0) {
+            stepUnmatched.push(`${entry.label} [options: ${choices.join(" | ")}]`);
+            continue;
+          }
+          // No options at all usually means it is not a dropdown. Saying so
+          // costs one evaluate and replaces a round of guesswork.
+          const shape = stepUnmatched.length < 3
+            ? await describeControl(page as never, entry.selectorIndex, entry.label)
+            : "";
+          stepUnmatched.push(shape ? `${entry.label} [${shape}]` : entry.label);
+        }
         priorFailedRequired.push(...stepUnmatched);
         logger.info("workday step filled", {
           step: name || `step ${step + 1}`,
@@ -735,6 +830,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       await attachResume(page, packet.resumePath);
     }
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, priorFilled);
     if (/\.ashbyhq\.com$/i.test(new URL(page.url()).hostname)) {
       await page
         .locator("text=Autofill completed!")
@@ -742,9 +838,13 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         .waitFor({ state: "visible", timeout: 15_000 })
         .catch(() => undefined);
     }
+    if (/^jobs(?:\.eu)?\.lever\.co$/i.test(new URL(page.url()).hostname)) {
+      await waitForResumeProcessing(page.locator(".resume-upload-working").first(), timeout);
+    }
     await page.waitForTimeout(1000);
 
-    const pageFill = await fillFormPage(page, packet, options);
+    const pageFill = await guardedFillFormPage(page, packet, options);
+    if ("status" in pageFill) return { ...pageFill, filledFields: [...priorFilled, ...pageFill.filledFields] };
     // A page with no inputs is normally a dead posting. After a wizard has
     // already filled and saved earlier pages it is instead the Review page,
     // which has nothing to fill and everything to submit.
@@ -781,9 +881,17 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       };
     }
     const { plan, choiceLog, answeredGroups } = pageFill;
+    // Entered after the field pass, so the pass cannot overwrite the letter
+    // written for this application with the drafted template, and before the
+    // screenshot, so the record shows what was sent.
+    const letterOutcome = await enterCoverLetter(page, coverLetterFor(packet));
+    if (letterOutcome === "failed") logger.warn("cover letter could not be entered", { url: page.url() });
+    const letterFilled = letterOutcome === "entered"
+      ? [{ label: "Cover Letter", source: packet.coverLetter.trim().length > 0 ? "cover-letter" : "approved-answer" }]
+      : [];
     // Pages saved earlier in a multi-step wizard are part of this application,
     // so what they filled has to survive into the final report.
-    const filled = [...priorFilled, ...pageFill.filled];
+    const filled = [...priorFilled, ...pageFill.filled, ...letterFilled];
     const failedRequired = [...priorFailedRequired, ...pageFill.failedRequired];
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
@@ -791,19 +899,57 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       page,
       plan.unmatchedRequired.map((entry) => entry.selectorIndex),
     );
+    const unmatchedFields = plan.unmatchedRequired
+      // Some required controls switch themselves off in response to another
+      // answer: ticking "Current role" disables the end-date selects. A
+      // disabled control submits nothing, so it cannot be what is missing,
+      // and filling it would contradict the answer that disabled it.
+      .filter((entry) => !inertIndexes.has(entry.selectorIndex))
+      // One tick answers a whole multi-select question; the boxes left clear
+      // are choices declined, not requirements left unmet.
+      .filter((entry) => !(entry.groupKey && answeredGroups.has(entry.groupKey)));
+    // A required dropdown no answer matched is reported with the choices it
+    // actually offers. Employer-specific consent wording - Unity's privacy
+    // notice takes neither "Yes" nor "I Acknowledge" - otherwise leaves
+    // guessing at legal text as the only way on, which is never acceptable.
+    const unmatchedLabels: string[] = [];
+    for (const entry of unmatchedFields) {
+      const choices = entry.options && entry.options.length > 0
+        ? entry.options
+        : unmatchedLabels.length < 3
+          ? await readListboxOptions(page as never, entry.selectorIndex, entry.label)
+          : [];
+      logger.info("unmatched required field", { label: entry.label.slice(0, 80), type: entry.type, choices });
+      unmatchedLabels.push(choices.length > 0 ? `${entry.label} [options: ${choices.join(" | ")}]` : entry.label);
+    }
     const unmatchedRequired = [
-      ...plan.unmatchedRequired
-        // Some required controls switch themselves off in response to another
-        // answer: ticking "Current role" disables the end-date selects. A
-        // disabled control submits nothing, so it cannot be what is missing,
-        // and filling it would contradict the answer that disabled it.
-        .filter((entry) => !inertIndexes.has(entry.selectorIndex))
-        // One tick answers a whole multi-select question; the boxes left clear
-        // are choices declined, not requirements left unmet.
-        .filter((entry) => !(entry.groupKey && answeredGroups.has(entry.groupKey)))
-        .map((field) => field.label),
+      ...unmatchedLabels,
       ...failedRequired,
     ].filter((label, index, labels) => labels.indexOf(label) === index);
+
+    // A wizard reporting every field filled is not evidence the form states
+    // the truth. A signed-in Workday draft resumes values from earlier runs,
+    // and the run's own side effects can set values no answer supplied:
+    // Adobe's Review page claimed prior employment as an "Employee" (ticked by
+    // the options probe, which now reads toggles without clicking them) and a
+    // source of "Findem" while the log showed zero failures.
+    // Check the page repeats the distinctive answers that were given.
+    const answerFor = new Map(packet.answers.map((answer) => [answer.label, answer.answer]));
+    const contradicted = isWorkdayUrl(page.url())
+      ? await reviewOmissions(
+          page,
+          filled
+            .map((entry) => ({ label: entry.label, value: answerFor.get(entry.label) ?? "" }))
+            .filter((entry) => entry.value.length > 0),
+          packet.company,
+        )
+      : [];
+    if (contradicted.length > 0) {
+      logger.warn("form does not state what was answered", { labels: contradicted.map((entry) => entry.label) });
+    }
+    const notStatedBack = contradicted.map(
+      (entry) => `${entry.label} [answered ${JSON.stringify(entry.value)} but the page does not say it back]`,
+    );
 
     if (!options.submit) {
       const keepOpenMs = options.keepOpenMs ?? 0;
@@ -811,6 +957,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         logger.info("holding form open for human review", { keepOpenMs, url: page.url() });
         await page.waitForTimeout(keepOpenMs);
       }
+      if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, filled);
       return {
         status: "prepared",
         reason:
@@ -818,7 +965,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
             ? "form filled and left open for human review and submission"
             : "form filled and captured; submission not requested",
         filledFields: filled,
-        unmatchedRequired,
+        unmatchedRequired: [...unmatchedRequired, ...notStatedBack],
         leftForHuman: plan.unfilled.map((entry) => entry.label),
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
         screenshotPath,
@@ -834,6 +981,22 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         reason: `required field(s) could not be filled: ${unmatchedRequired.join("; ")}`,
         filledFields: filled,
         unmatchedRequired,
+        unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+        screenshotPath,
+        finalUrl: page.url(),
+        confirmationText: "",
+        captchaDetected: false,
+      };
+    }
+
+    if (notStatedBack.length > 0) {
+      // Submitting now would send whatever the page is actually holding, which
+      // is not what was approved. Stop with the discrepancy named.
+      return {
+        status: "aborted",
+        reason: `the form does not state what was answered: ${notStatedBack.join("; ")}`,
+        filledFields: filled,
+        unmatchedRequired: notStatedBack,
         unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
         screenshotPath,
         finalUrl: page.url(),
@@ -880,6 +1043,10 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     page.on?.("response", onResponse as (payload: never) => void);
 
     const submitState = await describeSubmitControl(page);
+    if (await hasVisibleCaptchaChallenge(page)) {
+      page.off?.("response", onResponse as (payload: never) => void);
+      return await captureCaptchaAbort(page, packet, options, filled);
+    }
     // The board emails its code the moment this click lands, so this is the
     // only honest measure of that code's age. Reading the clock later - after
     // the page settles, the outcome is polled and a screenshot is taken - dates
@@ -1039,7 +1206,25 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       const allRepaired: string[] = [];
       let lastShot = confirmationShot;
       for (let round = 0; round < 4; round += 1) {
-        const repairedFields = await repairReportedFields(page, plan.toFill, roundErrors);
+        let repairedFields: string[];
+        try {
+          repairedFields = await repairReportedFields(page, plan.toFill, roundErrors, packet.company);
+        } catch (error) {
+          if (!(error instanceof StrayValueError)) throw error;
+          // Clicking again would send a value nobody approved.
+          page.off?.("response", onResponse as (payload: never) => void);
+          return {
+            status: "aborted",
+            reason: `repairing a field the board reported empty left it stating something that was never answered, so the form was not sent again: ${error.message}`,
+            filledFields: filled,
+            unmatchedRequired: [],
+            unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+            screenshotPath: lastShot,
+            finalUrl: page.url(),
+            confirmationText: "",
+            captchaDetected: false,
+          };
+        }
         if (repairedFields.length === 0) break;
         allRepaired.push(...repairedFields.filter((label) => !allRepaired.includes(label)));
         logger.info("repairing fields the board reported empty", { round: round + 1, fields: repairedFields });
@@ -1152,9 +1337,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 /**
  * How long to keep looking for a confirmation before deciding one never came.
  * Single-page boards re-render in place after the POST returns, so "load state
- * is idle" is not the same as "the outcome is on screen".
+ * is idle" is not the same as "the outcome is on screen". Polling ends as soon
+ * as an outcome appears, so the ceiling only costs time on a silent page - and
+ * a Greenhouse embed has been seen taking ~29s to raise its security-code gate,
+ * which a 30s ceiling reported as "no confirmation detected".
  */
-const SUBMISSION_OUTCOME_TIMEOUT_MS = 30_000;
+const SUBMISSION_OUTCOME_TIMEOUT_MS = 60_000;
 // A code-verified submit is slower than an ordinary one: the board revalidates
 // the whole application behind the gate, and its button sits disabled with a
 // spinner the entire time.
@@ -1230,6 +1418,7 @@ export async function repairReportedFields(
   page: AnyPage,
   toFill: FillPlan["toFill"],
   errors: readonly string[],
+  employer?: string,
 ): Promise<string[]> {
   const reported = errors.map((error) => normalizeLabel(error));
   const repaired: string[] = [];
@@ -1253,7 +1442,7 @@ export async function repairReportedFields(
       }
     }
     const value = answerValueForField(match.field, match.answer);
-    const candidates = optionSearchCandidates(match.field, match.answer);
+    const candidates = optionSearchCandidates(match.field, match.answer, employer);
     try {
       const typeable =
         match.field.role !== "combobox" &&
@@ -1270,6 +1459,7 @@ export async function repairReportedFields(
       }
       repaired.push(match.field.label);
     } catch (error) {
+      if (error instanceof StrayValueError) throw error;
       logger.warn("could not repair a field the board reported empty", {
         label: match.field.label,
         error: String(error),
@@ -1277,6 +1467,15 @@ export async function repairReportedFields(
     }
   }
   return repaired;
+}
+
+/**
+ * A fill that failed and left the field stating something nobody approved.
+ * Unlike a field that stayed blank, it stops the run even when the question is
+ * optional, because submitting would send the stray value as the answer.
+ */
+export class StrayValueError extends Error {
+  override name = "StrayValueError";
 }
 
 async function fillControl(
@@ -1291,22 +1490,11 @@ async function fillControl(
   // beside a hidden text input, and the collector only sees that input, so
   // every one of them would otherwise be filled invisibly and reported filled.
   if (field.type !== "checkbox" && field.type !== "radio" && field.type !== "file" && isWorkdayUrl(page.url())) {
-    // A Workday date is three keyboard-driven sections in a div, not an input.
-    // Typing all eight digits at one focus point puts them into whichever
-    // section happens to hold it - the year ended up "8162" - so each section
-    // is filled on its own.
+    // Workday has full dates, month/year employment dates and education years.
+    // Fill only the stated precision, in separately focused native sections.
     if (field.type === "date") {
-      const digits = value.replace(/\D/g, "");
-      if (digits.length < 8) throw new Error(`cannot type "${value}" into a date field`);
-      const iso = /^\d{4}\D/.test(value);
-      const month = iso ? digits.slice(4, 6) : digits.slice(0, 2);
-      const day = iso ? digits.slice(6, 8) : digits.slice(2, 4);
-      const year = iso ? digits.slice(0, 4) : digits.slice(4, 8);
-      const parts: Array<[string, string]> = [
-        ["Month", month],
-        ["Day", day],
-        ["Year", year],
-      ];
+      const parts = workdayDateParts(value, field.domId);
+      if (!parts) throw new Error("Date answer is invalid or has the wrong precision for this control");
       // The section inputs are visually hidden spinbuttons behind their own
       // display divs, so Playwright refuses to click them. Focusing through the
       // DOM is what actually reaches them.
@@ -1326,15 +1514,22 @@ async function fillControl(
         await page.keyboard.type(part, { delay: 80 });
         await page.waitForTimeout(200);
       }
+      await page.keyboard.press("Tab");
       await page.waitForTimeout(400);
       return;
     }
     const wrapper = locator.locator('xpath=ancestor::div[starts-with(@data-automation-id,"formField-")][1]');
     if ((await wrapper.count()) > 0 && (await isWorkdayPrompt(wrapper as never))) {
       const result = await fillWorkdayPrompt(page as never, wrapper as never, candidates);
+      if (result.strayValue) throw new StrayValueError(result.detail);
       if (!result.filled) throw new Error(result.detail);
       return;
     }
+  }
+  if (field.domId === "location-input" && field.name === "location"
+    && /^jobs(?:\.eu)?\.lever\.co$/i.test(new URL(page.url()).hostname)) {
+    await fillLeverLocationControl(page, locator, candidates);
+    return;
   }
   if (field.role === "combobox") {
     await fillCombobox(page, locator, candidates);
@@ -1359,7 +1554,21 @@ async function fillControl(
       return;
     }
     if (field.optionLabel) {
-      await checkOption(locator);
+      // Ticking an option box asserts that this particular option applies. A
+      // lone box may only be ticked when the answer names it: Adobe asks which
+      // capacities the candidate previously worked at Adobe in and renders each
+      // as its own ungrouped checkbox, and an answer of "None of the above"
+      // names none of them, so an unconditional tick reported employment that
+      // never happened. A grouped option is already the plan's pick, made with
+      // its siblings in view; re-checking it alone rejected bands such as
+      // "6-10 years" for 7. A lone box already ticked by an earlier pass is
+      // cleared - a resumed draft keeps whatever the last run left.
+      if (isGroupedOption(field) || pickOptionIndex([field.optionLabel], candidates) >= 0) {
+        await checkOption(locator);
+      } else if (await locator.isChecked?.().catch(() => false)) {
+        await locator.uncheck?.({ timeout: 4000 }).catch(() => undefined);
+        await locator.uncheck?.({ timeout: 4000, force: true }).catch(() => undefined);
+      }
       return;
     }
     if (affirmative) await locator.check();
@@ -1375,6 +1584,49 @@ async function fillControl(
     return;
   }
   await locator.fill(value);
+}
+
+async function fillLeverLocationControl(page: AnyPage, locator: AnyLocator, candidates: readonly string[]): Promise<void> {
+  const lookupUrl = `${new URL(page.url()).origin}/searchLocations`;
+  let lookupStatus: number | null = null;
+  const observe = (response: { url(): string; status(): number }) => {
+    if (response.url().split("?")[0] !== lookupUrl) return;
+    lookupStatus = response.status();
+  };
+  page.on?.("response", observe);
+  try {
+    await fillLeverLocation({
+      search: async (query) => {
+        lookupStatus = null;
+        await searchLeverLocation(page, locator, query);
+      },
+      options: async () => {
+        const options = await waitForVisibleOptions(page, OPTION_WAIT_MS, ".dropdown-location:visible");
+        if (lookupStatus !== null && lookupStatus >= 400) {
+          throw new AppError("location_lookup_failed", `Native location lookup was refused (HTTP ${lookupStatus}); no location selected`);
+        }
+        return options;
+      },
+      pick: async (index) => { await page.locator(".dropdown-location:visible").nth(index).click(); },
+      selection: () => page.evaluate(`(() => ({
+        display: document.getElementById("location-input")?.value || "",
+        encoded: document.getElementById("selected-location")?.value || ""
+      }))()`),
+      hasChallenge: () => hasVisibleCaptchaChallenge(page),
+    }, candidates);
+  } finally {
+    page.off?.("response", observe);
+  }
+}
+
+async function searchLeverLocation(page: AnyPage, locator: AnyLocator, query: string): Promise<void> {
+  await locator.fill("");
+  if (await hasVisibleCaptchaChallenge(page)) {
+    throw new AppError("captcha_required", "Interactive CAPTCHA detected during location lookup");
+  }
+  // Lever starts its debounced lookup on character keydown events.
+  await locator.pressSequentially(query);
+  await page.waitForTimeout(LEVER_LOCATION_DEBOUNCE_MS);
 }
 
 /**
@@ -1445,6 +1697,7 @@ async function reassertChoices(
 }
 
 const OPTION_WAIT_MS = 6000;
+const LEVER_LOCATION_DEBOUNCE_MS = 600;
 
 /**
  * The group was already reduced to the one option that states the approved
@@ -1487,16 +1740,45 @@ export async function fillCombobox(
       await closeFlyout(page);
       await openFlyout(locator);
       await locator.fill(candidate);
-      const optionTexts = await waitForVisibleOptions(page, OPTION_WAIT_MS);
+      const selector = await optionSelectorFor(page, locator);
+      const optionTexts = await waitForVisibleOptions(page, OPTION_WAIT_MS, selector);
       const index = pickOptionIndex(optionTexts, candidates);
       if (index >= 0) {
-        await page.locator('[role="option"]:visible').nth(index).click();
+        await page.locator(selector).nth(index).click();
         return;
       }
     }
     throw new Error(`no visible option matched ${JSON.stringify(candidates)}`);
   } finally {
     await closeFlyout(page);
+  }
+}
+
+const VISIBLE_OPTION = '[role="option"]:visible';
+const LISTBOX_ID = /^[A-Za-z][\w:.-]*$/;
+
+/**
+ * Another listbox can be visible at the same time - Greenhouse keeps the phone
+ * field's country picker rendered - so a page-wide query read "Afghanistan+93"
+ * as the options of every dropdown on Chime's and Navan's forms. React-select
+ * names its own menu through aria-controls while it is open, so options are
+ * read from that listbox whenever the input says which one it is.
+ */
+async function optionSelectorFor(page: AnyPage, locator: AnyLocator): Promise<string> {
+  for (let waited = 0; waited <= 1000; waited += 250) {
+    const controls = (await attributeOf(locator, "aria-controls")) ?? (await attributeOf(locator, "aria-owns"));
+    if (controls && LISTBOX_ID.test(controls)) return `[id="${controls}"] ${VISIBLE_OPTION}`;
+    if (waited < 1000) await page.waitForTimeout(250);
+  }
+  return VISIBLE_OPTION;
+}
+
+async function attributeOf(locator: AnyLocator, name: string): Promise<string | null> {
+  if (typeof locator.getAttribute !== "function") return null;
+  try {
+    return await locator.getAttribute(name);
+  } catch {
+    return null;
   }
 }
 
@@ -1515,8 +1797,8 @@ async function openFlyout(locator: AnyLocator): Promise<void> {
   await locator.click();
 }
 
-async function waitForVisibleOptions(page: AnyPage, timeoutMs: number): Promise<string[]> {
-  const options = page.locator('[role="option"]:visible');
+async function waitForVisibleOptions(page: AnyPage, timeoutMs: number, selector = '[role="option"]:visible'): Promise<string[]> {
+  const options = page.locator(selector);
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     if ((await options.count()) > 0) return await options.allInnerTexts();
@@ -1540,7 +1822,7 @@ async function fillNativeSelect(locator: AnyLocator, candidates: readonly string
  * Workday saves the candidate profile per tenant, so a value written once is
  * offered back on every later application to that employer. The matcher no
  * longer writes it, which does nothing for the ones already stored, and the
- * result is an undialable "+1 (604) 6536919 x604-653-6919" on the review page.
+ * result is an undialable "+1 (604) 5550142 x604-555-0142" on the review page.
  * A real extension is a handful of digits, so anything phone-length is wrong.
  */
 async function clearPhoneExtension(page: AnyPage): Promise<void> {
@@ -1976,11 +2258,15 @@ async function readValidationErrors(page: AnyPage): Promise<string[]> {
   return [];
 }
 
-async function hasVisibleCaptchaChallenge(page: AnyPage): Promise<boolean> {  for (const selector of ACTIVE_CAPTCHA_SELECTORS) {
-    const locator = page.locator(selector).first();
-    if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) return true;
-  }
-  return false;
+async function captureCaptchaAbort(
+  page: AnyPage,
+  packet: SubmissionPacket,
+  options: BrowserRunOptions,
+  filledFields: BrowserRunResult["filledFields"] = [],
+): Promise<BrowserRunResult> {
+  const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "captcha");
+  return { ...aborted("interactive CAPTCHA detected; a human must complete this application", page.url()),
+    filledFields, screenshotPath, captchaDetected: true };
 }
 
 async function capture(page: AnyPage, dir: string, applicationId: string, stage: string): Promise<string> {

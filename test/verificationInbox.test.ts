@@ -100,6 +100,27 @@ describe("extracting the code from an email", () => {
     expect(extractVerificationCode("Your security code is: a7rbekv4")).toBe("a7rbekv4");
   });
 
+  /**
+   * Chime's code on 2026-09-27 was eight capitals with no lowercase letter and
+   * no digit. The label vouched for it, but the shape test demanded a lowercase
+   * letter before it ever looked at the label, so the run waited out its whole
+   * timeout with the code sitting in the inbox. (Codes below are made up.)
+   */
+  it("reads a labelled code carrying no lowercase letter at all", () => {
+    const body = "Copy and paste this code into the security code field on your application: QWKZJTRB After you enter the code, resubmit your application.";
+    expect(extractVerificationCode(body)).toBe("QWKZJTRB");
+  });
+
+  it("reads a labelled code of capitals and digits", () => {
+    expect(extractVerificationCode("Your security code is: QW4ZJ7RB")).toBe("QW4ZJ7RB");
+  });
+
+  it("keeps refusing an unlabelled all-capital token", () => {
+    // Unlabelled, a run of capitals is as likely to be a signature fragment or
+    // a shouted word as a code.
+    expect(extractVerificationCode("Nirag,\r\n\r\nQWKZJTRB\r\n\r\nGreenhouse")).toBeNull();
+  });
+
   it("still refuses the ordinary word sitting beside the code", () => {
     // "After you enter the code, resubmit your application." is one sentence
     // away in Greenhouse's own email, and carries neither digit nor capital.

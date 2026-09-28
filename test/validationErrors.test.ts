@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 import { READ_VALIDATION_ERRORS } from "../src/submission/validationErrors.js";
 
 function read({ live = [], alerts = [], plain = [], error = [] }: { live?: string[]; alerts?: string[]; plain?: string[]; error?: string[] }) {
-  const element = (textContent: string, alert = false) => ({
+  const element = (textContent: string, alert = false, className: string | null = null) => ({
     textContent,
     children: [],
     querySelector: () => null,
+    querySelectorAll: () => [],
     getBoundingClientRect: () => ({ width: 200, height: 20 }),
-    getAttribute: (key: string) => key === "role" && alert ? "alert" : key === "aria-live" ? "polite" : null,
+    getAttribute: (key: string) =>
+      key === "class" ? className : key === "role" && alert ? "alert" : key === "aria-live" ? "polite" : null,
   });
   const document = {
     querySelectorAll: (selector: string) => {
       if (selector.includes('[role="alert"]')) return [...live.map((text) => element(text)), ...alerts.map((text) => element(text, true))];
-      if (selector.startsWith('[class*="error"')) return error.map((text) => element(text));
+      if (selector.startsWith('[class*="error"')) return error.map((text) => element(text, false, "field-error"));
       if (selector === "li, p, span, div") return [...live, ...alerts, ...plain, ...error].map((text) => element(text));
       return [];
     },

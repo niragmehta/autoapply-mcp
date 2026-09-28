@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLLECT_FIELDS, READ_VALIDATION_ERRORS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
-import type { FillPlan } from "../src/submission/formFields.js";
+import type { FieldDescriptor, FillPlan } from "../src/submission/formFields.js";
 
 describe("COLLECT_FIELDS", () => {
   it("executes immediately and returns field descriptors", () => {
@@ -151,7 +151,52 @@ describe("COLLECT_FIELDS", () => {
     expect(field!.label).toBe("I understand");
     expect(field!.questionLabel).toBe(question);
   });
+
+  it("reads Lever custom questions instead of opaque card names or placeholders", () => {
+    const title = "What is your desired salary for this position?";
+    const input = element({
+      type: "text", name: "cards[card][field0]", id: "",
+      rect: { width: 240, height: 32 }, leverEntry: leverQuestion(title),
+    });
+    const [field] = collect([input], {});
+    expect(field?.label).toBe(title);
+  });
+
+  it("keeps Lever radio options attached to their own complete questions", () => {
+    const authorization = "Are you legally eligible to work in the United States?";
+    const sponsorship = "Do you currently require the company's sponsorship or need the company's assistance "
+      + "to obtain or maintain authorization to work legally in the United States? This includes, but is not "
+      + "limited to, H-1B visas (lottery and transfers), TN visas, E-3 visas, or other company-sponsored visas.";
+    const controls = [authorization, sponsorship].flatMap((title, questionIndex) =>
+      ["Yes", "No"].map((option) => element({
+        type: "radio", name: `cards[card][field${questionIndex}]`, id: `${questionIndex}-${option}`,
+        rect: { width: 16, height: 16 }, leverEntry: leverQuestion(title),
+      })),
+    );
+    const fields = collect(controls, { "0-Yes": "Yes", "0-No": "No", "1-Yes": "Yes", "1-No": "No" });
+    expect(fields.map((field) => field.label)).toEqual([authorization, authorization, sponsorship, sponsorship]);
+    expect(fields.map((field) => field.optionLabel)).toEqual(["Yes", "No", "Yes", "No"]);
+    expect(fields[2]?.label).toContain("TN visas");
+  });
+
+  it("carries the actual Lever consent question when the checkbox is labelled Submit Application", () => {
+    const title = "By clicking Submit Application I agree to the Applicant Privacy Policy.";
+    const box = element({
+      type: "checkbox", name: "consent", id: "consent", rect: { width: 16, height: 16 },
+      leverEntry: leverQuestion(title),
+    });
+    const [field] = collect([box], { consent: "Submit Application" });
+    expect(field?.label).toBe("Submit Application");
+    expect(field?.questionLabel).toBe(title);
+  });
 });
+
+function leverQuestion(title: string): Record<string, unknown> {
+  return {
+    querySelector: (selector: string) => selector.includes(".application-label") ? { innerText: title } : null,
+    querySelectorAll: () => [],
+  };
+}
 
 /** Models Ashby's newer `<fieldset class="..._fieldEntry_...">` question wrapper. */
 function ashbyFieldset(title: string, options: { required?: boolean; checkboxes?: number }): Record<string, unknown> {
@@ -175,6 +220,7 @@ type FakeElementSpec = {
   automationId?: string;
   rect: { width: number; height: number };
   entry?: Record<string, unknown>;
+  leverEntry?: Record<string, unknown>;
   parent?: Record<string, unknown>;
 };
 
@@ -194,13 +240,14 @@ function element(spec: FakeElementSpec): Record<string, unknown> {
     // Only the newer fieldset wrapper is modelled, so a test that still matched
     // the older class selector would fail rather than quietly pass.
     closest: (selector: string) =>
-      spec.entry && (selector.includes("_fieldEntry_") || selector === "fieldset") ? spec.entry : null,
+      selector === ".application-question" ? spec.leverEntry ?? null
+        : spec.entry && (selector.includes("_fieldEntry_") || selector === "fieldset") ? spec.entry : null,
     parentElement: spec.parent ?? null,
   };
 }
 
 /** Runs COLLECT_FIELDS against a fake DOM whose labels come from `labels`. */
-function collect(elements: Array<Record<string, unknown>>, labels: Record<string, string>): Array<{ name: string }> {
+function collect(elements: Array<Record<string, unknown>>, labels: Record<string, string>): FieldDescriptor[] {
   const evaluate = new Function("document", "window", "CSS", `return ${COLLECT_FIELDS}`);
   const document = {
     querySelectorAll: () => elements,
@@ -213,7 +260,7 @@ function collect(elements: Array<Record<string, unknown>>, labels: Record<string
   };
   return evaluate(document, { getComputedStyle: () => ({ display: "block", visibility: "visible" }) }, {
     escape: (value: string) => value,
-  }) as Array<{ name: string }>;
+  }) as FieldDescriptor[];
 }
 
 type FakeCombobox = {
@@ -419,6 +466,55 @@ describe("repairReportedFields", () => {
     expect(repaired).toEqual(["Full Name"]);
     expect(events[0]).toBe("re-mark");
   });
+
+  describe("option boxes", () => {
+    function option(
+      label: string,
+      type: "radio" | "checkbox",
+      optionLabel: string,
+      value: string,
+      group: { name?: string; groupKey?: string },
+    ) {
+      return {
+        field: { label, type, selectorIndex: 0, required: true, name: group.name ?? "", groupKey: group.groupKey, optionLabel },
+        answer: { label, answer: value, questionKey: label, source: "profile", required: true },
+        confidence: 1,
+      } as unknown as FillPlan["toFill"][number];
+    }
+
+    it("ticks the band the plan chose from the whole group", async () => {
+      const fake = fakeRepairPage();
+      const label = "How many years of professional software engineering experience do you have?";
+      await repairReportedFields(fake.page, [option(label, "radio", "6-10 years", "7", { name: "years" })], [
+        `Missing entry for required field: ${label}`,
+      ]);
+      // "6-10 years" is only recognizable as the answer to 7 beside its sibling
+      // bands; the plan made that choice with them in view.
+      expect(fake.events).toContain("check");
+    });
+
+    it("ticks the 'Other' box the plan chose for an answer the list does not name", async () => {
+      const fake = fakeRepairPage();
+      const label = "Which province or territory do you live in?";
+      await repairReportedFields(
+        fake.page,
+        [option(label, "checkbox", "Other", "British Columbia", { name: "province-other", groupKey: "province" })],
+        [`Missing entry for required field: ${label}`],
+      );
+      expect(fake.events).toContain("check");
+    });
+
+    it("does not tick a lone box the answer does not name", async () => {
+      const fake = fakeRepairPage();
+      const label = "Have you previously worked at Adobe in any of the following capacities?";
+      await repairReportedFields(
+        fake.page,
+        [option(label, "checkbox", "Employee", "None of the above", { name: "employee" })],
+        [`Missing entry for required field: ${label}`],
+      );
+      expect(fake.events).not.toContain("check");
+    });
+  });
 });
 
 describe("fillCombobox", () => {
@@ -438,5 +534,38 @@ describe("fillCombobox", () => {
     const fake = fakeCombobox({ Yes: ["Yes"] });
     await fillCombobox(fake.page, fake.locator, ["Yes"]);
     expect(fake.events.at(-1)).toBe("key:Escape");
+  });
+
+  // Greenhouse keeps the phone field's country picker rendered, so a page-wide
+  // option query read "Afghanistan+93" for every dropdown on Chime and Navan.
+  it("reads and clicks options only in the listbox the combobox controls", async () => {
+    const events: string[] = [];
+    const stray = ["Afghanistan+93", "Albania+355", "Canada+1"];
+    const own = ["Yes", "No"];
+    const optionsFor = (selector: string) => (selector.includes('[id="react-select-7-listbox"]') ? own : stray);
+    const page = {
+      locator: (selector: string) => ({
+        count: async () => optionsFor(selector).length,
+        allInnerTexts: async () => optionsFor(selector),
+        nth: (index: number) => ({ click: async () => events.push(`click-option:${optionsFor(selector)[index]}`) }),
+      }),
+      waitForTimeout: async () => undefined,
+      keyboard: { press: async (key: string) => events.push(`key:${key}`) },
+    };
+    const locator = {
+      locator: () => ({ count: async () => 0, click: async () => undefined }),
+      fill: async (value: string) => events.push(`fill:${value}`),
+      click: async () => events.push("click-input"),
+      getAttribute: async (name: string) => (name === "aria-controls" ? "react-select-7-listbox" : null),
+    };
+
+    await fillCombobox(
+      page as unknown as Parameters<typeof fillCombobox>[0],
+      locator as unknown as Parameters<typeof fillCombobox>[1],
+      ["No"],
+    );
+
+    expect(events).toContain("click-option:No");
+    expect(events.some((event) => event.includes("Afghanistan"))).toBe(false);
   });
 });

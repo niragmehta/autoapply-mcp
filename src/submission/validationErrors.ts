@@ -28,8 +28,18 @@ export const READ_VALIDATION_ERRORS = `(() => {
     if (visible(el) && (failure.test(text) ||
       (!conditionalHint.test(text) && (request.test(text) || (urgent && !informational.test(text)))))) push(text);
   }
-  for (const el of Array.from(document.querySelectorAll('[class*="error" i], [class*="invalid" i]'))) {
-    if (el.querySelector('[class*="error" i], [class*="invalid" i]')) continue;
+  // Word Online leaves proofing marks such as SpellingErrorV2 and
+  // ContextualSpellingAndGrammarErrorV2 in descriptions pasted from it. They
+  // flag a word in the posting, not a field the form refused.
+  const proofing = /spelling|grammar|proofing/i;
+  const errorMarked = (el) => {
+    const tokens = String(el.getAttribute("class") || "").split(/\\s+/).filter(Boolean);
+    return tokens.length === 0 || tokens.some((token) => /error|invalid/i.test(token) && !proofing.test(token));
+  };
+  const errorSelector = '[class*="error" i], [class*="invalid" i]';
+  for (const el of Array.from(document.querySelectorAll(errorSelector))) {
+    if (!errorMarked(el)) continue;
+    if (Array.from(el.querySelectorAll(errorSelector)).some(errorMarked)) continue;
     if (visible(el)) push(el.textContent);
   }
   for (const el of Array.from(document.querySelectorAll('[aria-invalid="true"]'))) {

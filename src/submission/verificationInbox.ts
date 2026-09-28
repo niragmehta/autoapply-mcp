@@ -84,15 +84,16 @@ function parseMailboxes(raw: string | undefined): string[] {
  *
  * Demanding two capitals of a labelled code discards roughly one code in
  * eleven, and the failure is silent: the run waits out its whole timeout on a
- * code sitting unread in the inbox.
+ * code sitting unread in the inbox. Demanding a lowercase letter did the same
+ * to Chime's all-capital code, so a labelled code needs no particular case.
  */
 function looksLikeCode(token: string, labelled = false): boolean {
   if (NOT_A_CODE.test(token)) return false;
   if (/^\d{4,12}$/.test(token)) return true;
   if (!/^[A-Za-z0-9]{6,12}$/.test(token)) return false;
-  if (!/[a-z]/.test(token)) return false;
   const capitals = (token.match(/[A-Z]/g) ?? []).length;
   if (labelled) return capitals >= 1 || /\d/.test(token);
+  if (!/[a-z]/.test(token)) return false;
   return capitals >= 2;
 }
 
