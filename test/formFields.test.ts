@@ -693,6 +693,39 @@ describe("optionSearchCandidates", () => {
       ),
     ).toBe(1);
   });
+
+  // Palo Alto Networks' race question is a "choose all that apply" list whose
+  // only decline reads "Wish Not To Answer" - a refusal worded as a wish.
+  it("covers a decline worded as a wish not to answer", () => {
+    const candidates = optionSearchCandidates(
+      field("Please indicate your race / ethnic group (choose all that apply).", {
+        type: "checkbox",
+        optionLabel: "Wish Not To Answer (United States of America)",
+      }),
+      answer("Ethnicity", "Decline to self-identify", { category: "demographic" }),
+    );
+    expect(
+      pickOptionIndex(
+        [
+          "Asian (Not Hispanic or Latino) (United States of America)",
+          "Hispanic or Latino (United States of America)",
+          "White (Not Hispanic or Latino) (United States of America)",
+          "Wish Not To Answer (United States of America)",
+        ],
+        candidates,
+      ),
+    ).toBe(3);
+  });
+
+  it("reads a stored wish not to answer as a decline", () => {
+    const candidates = optionSearchCandidates(
+      field("Do you consider yourself as a Military Spouse / Domestic Partner?", { role: "combobox" }),
+      answer("MilitarySpouse", "Wish not to answer", { category: "demographic" }),
+    );
+    expect(pickOptionIndex(["Select One", "Yes", "No", "I don't wish to answer"], candidates)).toBe(3);
+    expect(pickOptionIndex(["Yes", "No", "Decline to self-identify"], candidates)).toBe(2);
+    expect(pickOptionIndex(["Select One", "Yes", "No"], candidates)).toBe(-1);
+  });
 });
 
 describe("pickOptionIndex", () => {

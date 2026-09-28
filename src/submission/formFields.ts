@@ -716,7 +716,7 @@ function offersOptions(field: FieldDescriptor): boolean {
  * fields on their default, which for a veteran question means answering it.
  */
 const DECLINE_ANSWER_PATTERN =
-  /^(?:i\s+)?(?:decline to (?:self[\s-]?identify|answer|state)|(?:do not|don't) wish to (?:answer|self[\s-]?identify)|prefer not to (?:answer|say|disclose))\b/i;
+  /^(?:i\s+)?(?:decline to (?:self[\s-]?identify|answer|state)|(?:do not|don't) wish to (?:answer|self[\s-]?identify)|wish not to (?:answer|self[\s-]?identify|disclose)|prefer not to (?:answer|say|disclose))\b/i;
 
 /**
  * Boards word the "decline to answer" option differently — Greenhouse alone
@@ -735,6 +735,10 @@ const DECLINE_ANSWER_PATTERN =
 const DECLINE_OPTION_CANDIDATES = [
   "wish to answer",
   "want to answer",
+  // Palo Alto Networks words the refusal as a wish: "Wish Not To Answer (United
+  // States of America)". None of the entries above is a substring of it, so a
+  // decline could not recognise its own option and the race list stayed empty.
+  "wish not to answer",
   // Negated: "wish to self identify" is also a substring of the affirmative
   // "I wish to self-identify", which a decline then selected.
   "not wish to self identify",
