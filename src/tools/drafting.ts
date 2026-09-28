@@ -202,7 +202,7 @@ export function registerDraftingTools(server: McpServer): void {
       const questions: FormQuestion[] = application.answers.map((answer) => ({
         key: answer.questionKey,
         label: answer.label,
-        required: answer.requiresHuman,
+        required: answer.requiresHuman && answer.required,
         type: "input_text",
       }));
 

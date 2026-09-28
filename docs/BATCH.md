@@ -241,7 +241,13 @@ Optional free-text fields such as "Additional Information" are often better empt
 
 ## Submission
 
-`submit_batch` re-runs every guard per application and respects `dailyLimit` and `minDelaySeconds`. When the daily cap is hit it stops cleanly and marks the rest `deferred`; call it again the next day to continue.
+`submit_batch` re-runs every guard per application and respects a configured
+`dailyLimit` and `minDelaySeconds`. With a positive daily limit, reaching the cap
+marks the remainder `deferred`; continue when the daily allowance resets.
+Set `submission.dailyLimit` to `null` for unlimited daily submissions. That
+disables only the daily ceiling: `maxBatchSize`, `maxSubmissions`, per-company
+limits, pacing and all approval/destination checks still apply. Continue through
+additional reviewed batches rather than making a single unbounded batch.
 
 | Mode | Result |
 |---|---|

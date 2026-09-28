@@ -61,6 +61,13 @@ Keep `alwaysReviewManually` true unless counsel has reviewed your exact wording.
 ### compensation
 Your targets, plus a `disclosurePolicy` of `decline`, `range` or `exact`. Compensation questions are a blocked category by default regardless.
 
+### preferences
+Relocation, workplace and notice-period preferences. `roleSearchNotes` preserves
+the candidate's role-selection guidance, such as openness to non-security roles
+and exclusion of frontend work. It is guidance, not an ATS answer or permission
+to invent experience. Enforce explicit title exclusions separately with
+`campaign.exclusions.titlePatterns`; notes alone do not change the hard gates.
+
 ### resumes
 At least one variant. Bind variants to campaign tracks:
 
@@ -180,6 +187,18 @@ Thresholds set the tiers. Calibrate them against your own pool: run `discover_jo
 ```
 
 `mode` is a ceiling: a tool call may request a weaker mode but never a stronger one. `blockedQuestionCategories` defaults to the full sensitive set; removing an entry is a deliberate, consequential choice.
+
+`dailyLimit` accepts a positive integer or `null`. Set `"dailyLimit": null` to
+disable the daily submission ceiling; omitting it retains the default of 25.
+Zero, negative numbers, and strings such as `"unlimited"` are invalid. JSON
+cannot represent `Infinity`, so use `null`, not a very large placeholder number.
+Unlimited daily mode does not disable pacing, per-company or per-batch limits,
+destination restrictions, duplicate checks, or approval requirements.
+`campaign_status` reports `dailyLimit: null` in this mode.
+
+After upgrading server code to support this setting, restart existing MCP
+connections so they load the new schema. Once the new code is running,
+`reload_config` applies configuration-only changes without another restart.
 
 `allowedCompanies` is an allowlist, not a filter: an empty list blocks every employer. A company must be added by name before any application to it can be submitted, which is what stops a mis-scoped batch from contacting people you never intended to apply to.
 

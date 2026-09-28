@@ -172,13 +172,16 @@ Every application in the batch with company, role, compensation, readiness and w
 Approves every ready application. Requires `batchId`, `manifestHash` and `expectedCount`; a mismatch in either fails with `manifest_mismatch` or `count_mismatch`.
 
 ### `submit_batch`
-Submits the approved set in `manual`, `assisted` or `auto` mode, re-running all guards per application and honouring the daily limit and pacing. Stops cleanly at the cap so the remainder can continue later.
+Submits the approved set in `manual`, `assisted` or `auto` mode, re-running all
+guards per application and honouring pacing and any configured daily limit.
+`submission.dailyLimit: null` removes the daily ceiling, not per-batch,
+per-company, approval or destination checks.
 
 | Input | Type |
 |---|---|
 | `batchId` | `string` |
 | `mode` | `"manual" \| "assisted" \| "auto"` |
-| `maxSubmissions` | `number?` — defaults to the campaign daily limit |
+| `maxSubmissions` | `number?` — defaults to `submission.maxBatchSize`; always capped by that setting |
 | `headless` | `boolean?` |
 
 ### `list_batches`
