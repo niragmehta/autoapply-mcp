@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
+import { classifyQuestion } from "../src/drafting/blockedQuestions.js";
 import { autoFillableFields, resolvePersonal } from "../src/drafting/personal.js";
 import { computeManifestHash } from "../src/db/repositories/batches.js";
 import { ProfileSchema } from "../src/domain/profile.js";
@@ -50,6 +51,19 @@ describe("resolvePersonal", () => {
     expect(result?.authorized).toBe(false);
   });
 
+  it("does not answer a requirement that only exempts disability with the disability status", () => {
+    // SCAN Health Plan's tuberculosis-screening question names disability only
+    // as an exemption. It asks whether the candidate can meet the requirement,
+    // and his disability status is no answer to that.
+    const opted = withPersonal({
+      demographics: { disabilityStatus: { value: "I do not wish to answer", autoFill: true } },
+    });
+    const label =
+      "The job description will reflect if this role is member facing, if selected you will need to provide confirmation of Tuberculosis screening, unless you have a disability / medical reason or sincerely held religious belief. Are you able to meet this requirement?";
+    expect(resolvePersonal(label, opted)).toBeNull();
+    expect(resolvePersonal("Do you have a disability?", opted)?.citation).toBe("personal.demographics.disabilityStatus");
+  });
+
   it("formats a full address", () => {
     expect(resolvePersonal("Street Address", profile)?.answer).toContain("1 Main St");
   });
@@ -77,6 +91,30 @@ describe("resolvePersonal", () => {
 
   it("still answers a bare state field with the region alone", () => {
     expect(resolvePersonal("State/Province", profile)?.citation).toBe("personal.address.region");
+    const { answers } = draftAnswers([question("State/Province")], profile, campaign);
+    expect(answers[0]?.answer).toBe("BC");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("preserves present-residence answers without asserting inverse or authorization claims", () => {
+    expect(resolvePersonal("Are you located in Canada?", profile)?.answer).toBe("Yes");
+    expect(resolvePersonal("Are you located outside Canada?", profile)).toBeNull();
+    expect(resolvePersonal("Are you located in or authorized to work in Canada?", profile)).toBeNull();
+  });
+
+  it.each([
+    "Are you or have you been entrusted with a position or function in any government, international organization (such as the UN or World Bank), or state-controlled or state-owned bank, brokerage firm, or other enterprise?",
+    "Have you worked for a state owned enterprise?",
+    "Have you worked for a StateControlled enterprise?",
+    "Have you worked for a state\u2011owned bank?",
+    "Describe your state-machine design experience.",
+  ])("never treats a non-postal use of state as an address: %s", (label) => {
+    expect(classifyQuestion(label)).not.toBe("contact");
+    expect(resolvePersonal(label, profile)).toBeNull();
+
+    const { answers } = draftAnswers([question(label, { required: true })], profile, campaign);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
   });
 
   it("answers numbered address lines with the street only", () => {

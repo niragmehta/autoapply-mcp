@@ -12,9 +12,24 @@ import {
   WORK_AUTHORITY_TEXT as SHARED_WORK_AUTHORITY_TEXT,
   namesCandidateLocation,
 } from "./residence.js";
-import { canonicalizeWorkPermission } from "../text/workPermission.js";
+import {
+  asksWhetherSponsorshipRequired,
+  canonicalizeWorkPermission,
+  sponsorshipIntentMismatch,
+  workPermissionScopeMismatch,
+} from "../text/workPermission.js";
+import {
+  aboutRelocation,
+  acceptsRelocationInstead,
+  decidesRelocation,
+  relocationAssistanceMismatch,
+  relocationOption,
+  writtenForChoiceList,
+} from "../text/questionIntent.js";
 import { statesUnrelatedExperience } from "./experienceSubject.js";
+import { ratingSubjectMismatch } from "./ratingSubject.js";
 import { consentsToDocument } from "./documentConsent.js";
+import { valueShapeMismatch, type TextControl } from "./valueShape.js";
 
 /**
  * Answer policy engine.
@@ -38,6 +53,14 @@ export type FormQuestion = {
 };
 
 const CONTACT_RESOLVERS: ReadonlyArray<readonly [RegExp, (profile: Profile) => string, string]> = [
+  // One box for the whole name. "What is your preferred first and last name?"
+  // contains "last name", so the surname resolver below answered it with the
+  // surname alone (Customer.io, 2026-09-28).
+  [
+    /\bfirst\s*(?:,|&|\/|\+|and)\s*(?:middle\s*(?:,|&|\/|\+|and)?\s*)?(?:and\s+)?last\s+names?\b/i,
+    (p) => p.identity.fullName,
+    "identity.fullName",
+  ],
   [/\bfirst name\b/i, (p) => p.identity.fullName.split(/\s+/)[0] ?? "", "identity.fullName"],
   [/\blast name\b|\bsurname\b|\bfamily name\b/i, (p) => p.identity.fullName.split(/\s+/).slice(1).join(" "), "identity.fullName"],
   [/\bfull name\b|\bpreferred name\b|^name$/i, (p) => p.identity.fullName, "identity.fullName"],
@@ -74,10 +97,49 @@ function formatLocation(profile: Profile): string {
 }
 
 /**
+ * A contact field asking for someone else's details: a referrer, a reference, a
+ * recruiter, a manager or an emergency contact. The profile holds only the
+ * candidate's own details, so none of its values can answer one. Tubi's
+ * optional "please include the referrer's Tubi or Fox email address" matched the
+ * email resolver and was given the candidate's own address, which claims a
+ * referral that never happened.
+ *
+ * The third party has to own the detail asked for, either directly before it
+ * ("Recruiter's email") or after it ("phone number of your manager"), so a
+ * label such as "your email, so the hiring manager can reach you" still wants
+ * the candidate's address.
+ */
+const THIRD_PARTY =
+  "(?:referr(?:er|ers|ing|al)|references?|recruiter|(?:hiring\\s+)?manager|supervisor|emergency\\s+contact|next\\s+of\\s+kin)";
+const CONTACT_NOUN = "(?:e-?mail|phone|mobile|telephone|number|name|linkedin)";
+// "Phone number for the recruiter to contact you" is the candidate's own number.
+const REACHES_CANDIDATE =
+  "(?!\\s+(?:to|can|could|will|may|should|would)\\s+(?:reach|contact|call|text|e-?mail|message)\\s+you\\b)";
+const THIRD_PARTY_CONTACT = new RegExp(
+  `\\b${THIRD_PARTY}(?:'s|\u2019s|s')?(?:\\s+\\S+){0,3}?\\s+${CONTACT_NOUN}\\b` +
+    `|\\b${CONTACT_NOUN}\\b[^?.]{0,40}?\\b(?:of|for)\\s+(?:the\\s+|your\\s+|a\\s+)?` +
+    `(?:${THIRD_PARTY}|(?:person|employee|colleague)\\s+who\\s+referred)\\b${REACHES_CANDIDATE}`,
+  "i",
+);
+
+/**
  * A bracketed aside is not the subject of the question; see `withoutAsides`.
  */
+/**
+ * Anysphere asks "Has someone at Cursor or Graphite referred you for this role?
+ * If so, please include their email here", and the candidate's own address was
+ * filled in, naming him as his own referrer. "Their" details belong to the
+ * person the question is about; it only counts when the label names another
+ * person, because "Applicants must provide their phone number" is his own.
+ */
+const THEIR_CONTACT = new RegExp(`\\btheir(?:\\s+\\S+){0,2}?\\s+${CONTACT_NOUN}\\b`, "i");
+const NAMES_ANOTHER_PERSON =
+  /\b(?:refer\w*|someone|somebody|anyone|anybody|employee|colleague|friend|recruiter|manager|references?)\b/i;
+
 function contactResolverFor(label: string) {
   const subject = withoutAsides(label);
+  if (THIRD_PARTY_CONTACT.test(subject)) return undefined;
+  if (THEIR_CONTACT.test(subject) && NAMES_ANOTHER_PERSON.test(subject)) return undefined;
   return CONTACT_RESOLVERS.find(([pattern]) => pattern.test(subject));
 }
 
@@ -89,16 +151,34 @@ function contactResolverFor(label: string) {
  * answer written for "...require sponsorship (e.g. H-1B, E-3, TN, O-1...)",
  * which names a route the candidate would in fact use.
  */
-function matchApprovedAnswer(profile: Profile, label: string) {
+function matchApprovedAnswer(profile: Profile, label: string, offered?: Pick<FormQuestion, "type" | "options">) {
   const haystack = canonicalizeWorkPermission(label.toLowerCase());
   const residenceAsked = CURRENT_RESIDENCE_QUESTION.test(haystack) && !WORK_AUTHORITY_TEXT.test(haystack);
   const asksAboutHome = residenceAsked && namesCandidateLocation(haystack, profile);
+  // Watershed's "Are you located in, or willing to relocate to the SF area?" is
+  // satisfied by either condition. On a bare Yes/No control the stored "No -
+  // based in Vancouver, Canada and willing to relocate." keeps only its "No",
+  // so the relocation decision answers instead. Free text keeps the qualified
+  // denial, and a richer option list is left to the option matcher, because
+  // "Yes" there may be the option claiming he already lives there.
+  const relocationAnswers = residenceAsked && offersOnlyYesNo(offered) && acceptsRelocationInstead(haystack);
+  const freeText = offered !== undefined && isFreeTextQuestion(offered);
   let best: { entry: Profile["answers"][number]; length: number } | null = null;
   for (const entry of profile.answers) {
-    if (residenceAsked && !statesWhereCandidateLives(entry)) continue;
+    if (relocationAnswers) {
+      // Only the residence denial is set aside here; a stored "No" to
+      // relocating to the place named is the answer to this very question.
+      if (deniesResidence(entry) && !aboutRelocation(entry)) continue;
+      if (!statesWhereCandidateLives(entry) && !aboutRelocation(entry)) continue;
+    } else if (residenceAsked && !statesWhereCandidateLives(entry)) continue;
+    if (freeText && writtenForChoiceList(entry)) continue;
+    if (relocationAssistanceMismatch(label, [entry.key, entry.label, ...entry.patterns])) continue;
     // A question naming a subject may only be answered by an entry naming the
     // same subject; see experienceSubject.ts.
     if (statesUnrelatedExperience(haystack, [entry.label, ...entry.patterns])) continue;
+    if (ratingSubjectMismatch(haystack, [entry.label, ...entry.patterns])) continue;
+    if (workPermissionScopeMismatch(haystack, [entry.label, ...entry.patterns])) continue;
+    if (sponsorshipIntentMismatch(label, [entry.key, entry.label, ...entry.patterns])) continue;
     // "Are you located in <somewhere he is not>" is stored once, as a blanket
     // "No - based in Vancouver, Canada". That is true of everywhere except the
     // one place he actually lives, so when the question names Canada, British
@@ -112,12 +192,74 @@ function matchApprovedAnswer(profile: Profile, label: string) {
       if (!best || needle.length > best.length) best = { entry, length: needle.length };
     }
   }
+  // Brex words the alternative "or plan to relocate to", which no stored pattern
+  // covers; the question itself names relocation, so the standing decision applies.
+  if (!best && relocationAnswers) return profile.answers.find((entry) => decidesRelocation(entry) && canAutoFill(entry));
   return best?.entry;
 }
 
 /** True when the answer opens by denying it, however it then qualifies itself. */
 function deniesResidence(entry: Profile["answers"][number]): boolean {
   return /^\s*no\b/i.test(entry.answer.trim());
+}
+
+function offersOnlyYesNo(offered: Pick<FormQuestion, "options"> | undefined): boolean {
+  const options = offered?.options ?? [];
+  return options.length === 2 && options.every((option) => /^(?:yes|no)$/i.test(option.trim()));
+}
+
+function isFreeTextQuestion(offered: Pick<FormQuestion, "type" | "options">): boolean {
+  return (offered.type === "input_text" || offered.type === "textarea") && !(offered.options?.length);
+}
+
+/**
+ * Brex asks "Do you currently live in, or plan to relocate to, the specified
+ * location?" and offers "Yes, I live here", "Yes, I plan to relocate" and "No".
+ * Ridgeline asks whether he is "located in either area or open to relocation"
+ * and offers "Yes, I am located in/near the Reno, NV area.", the same for San
+ * Ramon, "I am open to relocation." and "I am not open to relocation.". Each
+ * stored answer speaks to one half of such a question: the residence denial
+ * took Brex's "No", telling the employer he would not relocate, and the bare
+ * "Yes" of the based-or-relocating answer took Ridgeline's first option,
+ * claiming he lives near Reno. Both were submitted.
+ *
+ * He lives in neither place and has decided to relocate, so the answer is the
+ * option that commits to relocating without claiming residence, and a person
+ * chooses when no single option does. A bare Yes/No list stays with
+ * matchApprovedAnswer, as does a question naming where he lives.
+ */
+function relocationChoice(
+  question: FormQuestion,
+  profile: Profile,
+  category: string,
+): Omit<DraftAnswer, "required"> | undefined {
+  const options = question.options ?? [];
+  if (options.length === 0 || offersOnlyYesNo(question) || isFreeTextQuestion(question)) return undefined;
+  const haystack = canonicalizeWorkPermission(question.label.toLowerCase());
+  if (!CURRENT_RESIDENCE_QUESTION.test(haystack) || WORK_AUTHORITY_TEXT.test(haystack)) return undefined;
+  if (!acceptsRelocationInstead(haystack) || namesCandidateLocation(haystack, profile)) return undefined;
+  const decision = profile.answers.find((entry) => decidesRelocation(entry) && canAutoFill(entry));
+  const option = decision ? relocationOption(options) : undefined;
+  if (!decision || !option) {
+    return blocked(
+      question,
+      category,
+      decision
+        ? "residence-or-relocation question: no single option commits to relocating without claiming residence"
+        : "residence-or-relocation question: no relocation decision on file",
+      `Options: ${options.join(" | ")}`,
+    );
+  }
+  return {
+    questionKey: question.key,
+    label: question.label,
+    answer: option,
+    source: "approved-answer",
+    citation: `profile.answers.${decision.key}`,
+    requiresHuman: false,
+    category,
+    guidance: "",
+  };
 }
 
 /**
@@ -190,6 +332,54 @@ function namesTnRoute(entry: Profile["answers"][number]): boolean {
   return entry.patterns.some((pattern) => TN_DEFINED_SPONSORSHIP.test(pattern)) || TN_DEFINED_SPONSORSHIP.test(entry.label);
 }
 
+/**
+ * Whether the form counts TN as sponsorship, in its wording or in one of its
+ * choices. Waymo labels the question only "Work Authorization" and puts the
+ * definition in an option - "...Waymo's sponsorship to obtain work
+ * authorization... (e.g. H-1B, TN, etc.)" - so reading the label alone handed
+ * that form the generic "authorized to work for any employer" statement.
+ */
+function definesSponsorshipWithTn(question: FormQuestion): boolean {
+  const texts = [question.label, ...(question.options ?? [])];
+  if (texts.some((text) => TN_DEFINED_SPONSORSHIP.test(text) && /sponsor/i.test(text))) return true;
+  // Mintlify asks "...require visa sponsorship? If yes, select the type of
+  // sponsorship." and lists "Yes, TN" as one of the types. A bare "TN" is a
+  // state abbreviation, not a visa choice. GitLab lists "Yes, USMCA Professional
+  // (TN) Visa (USA)" under "...a visa to remain in your current location?" -
+  // that asks about where he lives now, which needs no visa at all.
+  return (
+    /sponsor/i.test(question.label) &&
+    !ABOUT_CURRENT_LOCATION.test(question.label) &&
+    (question.options ?? []).some(namesTnChoice)
+  );
+}
+
+const ABOUT_CURRENT_LOCATION =
+  /\b(?:current(?:ly)?\s+(?:location|country|residence|city)|remain in|stay in|where you (?:currently )?(?:live|reside|are (?:based|located)))\b/i;
+
+function namesTnChoice(option: string): boolean {
+  return TN_DEFINED_SPONSORSHIP.test(option) && option.trim().length > 2;
+}
+
+/** The one offered choice that affirms needing sponsorship as TN, such as Mintlify's "Yes, TN". */
+function tnAffirmingChoice(question: FormQuestion): string | undefined {
+  const choices = (question.options ?? []).filter(
+    (option) => namesTnChoice(option) && /^\s*yes\b/i.test(option) && !NEGATED.test(option),
+  );
+  return choices.length === 1 ? choices[0] : undefined;
+}
+
+const NEGATED = /\b(?:not|don't|do not|doesn't|does not|never|no longer|won't|will not)\b/i;
+
+function tnSponsorshipGuidance(question: FormQuestion): string {
+  const affirming = (question.options ?? []).filter(
+    (option) => TN_DEFINED_SPONSORSHIP.test(option) && /sponsor/i.test(option) && !NEGATED.test(option),
+  );
+  const choice = affirming.length === 1 ? affirming[0] : tnAffirmingChoice(question);
+  const base = "This form counts TN as sponsorship, which the generic sponsorship answer does not cover.";
+  return choice ? `${base} The choice that counts TN: ${choice}` : base;
+}
+
 function canonicalSponsorshipDecision(
   profile: Profile,
   question: FormQuestion,
@@ -204,12 +394,64 @@ function canonicalSponsorshipDecision(
   if (NAMED_IMMIGRATION_CLASS.test(withoutAsides(question.label))) return undefined;
   const options = question.options ?? [];
   if (options.length !== 2 || !options.every((option) => YES_OR_NO.test(option.trim()))) return undefined;
+  // The TN decision is the opposite of the generic one, so it must never be the
+  // entry this fallback happens to find first.
   return profile.answers.find(
     (entry) =>
       canAutoFill(entry) &&
       YES_OR_NO.test(entry.answer.trim()) &&
+      !namesTnRoute(entry) &&
       entry.patterns.some((pattern) => /sponsor/i.test(pattern)),
   );
+}
+
+/**
+ * The candidate's standing decision for a form that counts TN as sponsorship.
+ * It was stored under one employer's wording, so CoreWeave's "(e.g. H1-B, H1B1,
+ * TN, E3...)" and Ridgeline's "(e.g. H-1B, TN, F1, OPT, etc)" matched only the
+ * generic "No", which a TN definition may not take, and went to a person to
+ * repeat a decision already on file.
+ *
+ * Held to the limits of the generic fallback and three more. The question must
+ * ask whether sponsorship will be required - "authorized without sponsorship
+ * (e.g. H-1B, TN)" takes the opposite answer. It must offer only Yes and No. And
+ * a form saying TN is not counted is asking the generic question, so any
+ * negation in the sentence naming TN leaves the answer to a person.
+ */
+function canonicalTnSponsorshipDecision(
+  profile: Profile,
+  question: FormQuestion,
+): Profile["answers"][number] | undefined {
+  if (!asksWhetherSponsorshipRequired(question.label)) return undefined;
+  const namingTn = question.label.split(/[.?;]/).filter((clause) => TN_DEFINED_SPONSORSHIP.test(clause));
+  if (namingTn.some((clause) => NEGATED.test(clause))) return undefined;
+  const options = question.options ?? [];
+  const yesOrNo = options.length === 2 && options.every((option) => YES_OR_NO.test(option.trim()));
+  // Either the wording names TN over a plain yes/no, or the choices offer TN as
+  // one kind of yes; resolveTnChoice then selects that choice.
+  if (!(namingTn.length > 0 && yesOrNo) && tnAffirmingChoice(question) === undefined) return undefined;
+  return profile.answers.find(
+    (entry) =>
+      canAutoFill(entry) &&
+      YES_OR_NO.test(entry.answer.trim()) &&
+      namesTnRoute(entry) &&
+      /sponsor/i.test([entry.key, entry.label, ...entry.patterns].join(" ")),
+  );
+}
+
+/**
+ * The TN decision is a plain "Yes", which a list of visa types offers several
+ * times over ("Yes, H1B Transfer", "Yes, TN"); only the choice naming TN states it.
+ */
+function resolveTnChoice(
+  entry: Profile["answers"][number],
+  question: FormQuestion,
+): { value: string; unmatchedChoice: boolean } | undefined {
+  if (!namesTnRoute(entry) || !/^\s*yes\b/i.test(entry.answer)) return undefined;
+  const options = question.options ?? [];
+  if (options.every((option) => YES_OR_NO.test(option.trim()))) return undefined;
+  const choice = tnAffirmingChoice(question);
+  return choice ? { value: choice, unmatchedChoice: false } : { value: entry.answer, unmatchedChoice: true };
 }
 
 /**
@@ -264,7 +506,7 @@ export function draftAnswers(
 ): { answers: DraftAnswer[]; blockedQuestions: string[]; blockingQuestions: string[] } {
   const blockedCategories = campaign.submission.blockedQuestionCategories;
   const drafted = questions.map((question) => ({
-    ...answerOne(question, profile, blockedCategories, context),
+    ...fitToQuestion(question, answerOne(question, profile, blockedCategories, context)),
     // Stamped in one place: answerOne returns from eleven branches and any one
     // of them forgetting this flag would silently make an optional field block
     // submission again.
@@ -284,6 +526,38 @@ export function draftAnswers(
   // applications behind a field the employer marked as skippable.
   const blockingQuestions = blockedQuestions.filter((label) => requiredLabels.has(label));
   return { answers, blockedQuestions, blockingQuestions };
+}
+
+function textControlOf(question: FormQuestion): TextControl | null {
+  if ((question.options?.length ?? 0) > 0) return null;
+  if (question.type === "textarea") return "multi-line";
+  if (question.type === "input_text") return "single-line";
+  return null;
+}
+
+/**
+ * Checked once over every branch of answerOne, because the value that does not
+ * fit can come from any of them: Jane Street's year question took the stored
+ * university from the answer bank, and its university-email question took it
+ * from the education resolver. See valueShape.ts. An optional field is left
+ * blank, which asserts nothing; a required one goes to a person.
+ */
+function fitToQuestion(
+  question: FormQuestion,
+  drafted: Omit<DraftAnswer, "required">,
+): Omit<DraftAnswer, "required"> {
+  const control = textControlOf(question);
+  const reason = control ? valueShapeMismatch(question.label, control, drafted.answer) : null;
+  if (!reason) return drafted;
+  return {
+    ...blocked(
+      question,
+      drafted.category,
+      `value does not fit the question: ${reason}`,
+      `"${drafted.answer.slice(0, 60)}" (from ${drafted.citation}) does not answer this question.`,
+    ),
+    requiresHuman: question.required,
+  };
 }
 
 function answerOne(
@@ -334,21 +608,28 @@ function answerOne(
   // Work authorization gets the verified statement as a suggestion, but the
   // candidate still confirms it: the wording is legally material.
   if (category === "work-authorization" || category === "sponsorship" || category === "citizenship") {
-    const matched = matchApprovedAnswer(profile, question.label);
+    const matched = matchApprovedAnswer(profile, question.label, question);
     const reviewAll = profile.workAuthorization.alwaysReviewManually;
     // A generic sponsorship answer cannot speak for a form that counts TN as
     // sponsorship; only an entry written for that wording may.
-    const tnDefined = TN_DEFINED_SPONSORSHIP.test(question.label) && /sponsor/i.test(question.label);
+    const tnDefined = definesSponsorshipWithTn(question);
     const eligible = matched && tnDefined && !namesTnRoute(matched) ? undefined : matched;
     // Fall back only when no stored pattern matched at all: an entry that
     // matched but is deliberately left blank is a standing request to be asked.
-    const approved = eligible ?? (reviewAll ? undefined : canonicalSponsorshipDecision(profile, question));
+    // The yes/no fallback reads the label with asides removed, so it cannot see
+    // a TN definition in brackets or in the choices and must not answer one; a
+    // TN definition falls back to the TN decision instead.
+    const proposed = eligible ?? (reviewAll
+      ? undefined
+      : tnDefined ? canonicalTnSponsorshipDecision(profile, question) : canonicalSponsorshipDecision(profile, question));
+    const approved = proposed && !workPermissionScopeMismatch(question.label, [proposed.label, ...proposed.patterns])
+      ? proposed : undefined;
     // This branch used to hand the stored answer straight to the form without
     // consulting the choices on offer. "Which countries would you need
     // sponsorship for?" matches the stored "need sponsorship" answer, so a bare
     // "No" was headed for a list of country names. A stored answer the question
     // does not offer is unusable, whatever its wording says.
-    const resolved = approved ? resolveApprovedValue(approved, question) : undefined;
+    const resolved = approved ? (resolveTnChoice(approved, question) ?? resolveApprovedValue(approved, question)) : undefined;
     const unusable = resolved?.unmatchedChoice === true;
     const useApproved = approved !== undefined && canAutoFill(approved) && !reviewAll && !unusable;
     return {
@@ -362,7 +643,11 @@ function answerOne(
       guidance:
         unusable && approved
           ? `"${approved.answer}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
-          : "",
+          : !approved && tnDefined
+            ? tnSponsorshipGuidance(question)
+            : !approved && workPermissionScopeMismatch(question.label, [])
+              ? "This authorization scope needs an explicit matching decision; a generic work-permission answer does not establish it."
+              : "",
     };
   }
 
@@ -386,7 +671,9 @@ function answerOne(
   // A pre-approved answer is an explicit prior decision, so it can satisfy an
   // otherwise blocked category. Checked before the block so the candidate's own
   // stored choice is honoured.
-  const approvedEarly = matchApprovedAnswer(profile, asked.label);
+  const relocation = relocationChoice(asked, profile, category);
+  if (relocation) return { ...relocation, label: question.label };
+  const approvedEarly = matchApprovedAnswer(profile, asked.label, asked);
   // A stored answer that the form does not offer as a choice is unusable. When
   // the question is also a contact field, the profile holds the literal value it
   // wants, so preferring the stored answer blocks the application over a fact
@@ -574,7 +861,9 @@ function answerOne(
     };
   }
 
-  if (category === "contact") {
+  if (category === "contact" && question.type !== "textarea") {
+    // A contact detail is one line; an essay box whose label says "mobile" or
+    // "email" is asking about the subject, not for a number or an address.
     const resolver = contactResolverFor(question.label);
     if (resolver) {
       const plain = resolver[1](profile);

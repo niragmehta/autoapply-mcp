@@ -51,3 +51,48 @@ describe("a state-of-residence list that offers an outside-the-US option", () =>
     expect(pickOptionIndex(noEscape, ["British Columbia"])).toBe(-1);
   });
 });
+
+/**
+ * Garner lists every state and Washington, D.C., then "Other". Nothing reads as
+ * "outside the US", so the province matched no option and a complete Senior
+ * Software Engineer application aborted on the one question whose answer was
+ * already known. For someone living in none of the listed places, "Other" is
+ * the only true choice.
+ */
+const GARNER_OPTIONS = [
+  ...FAIRE_OPTIONS.filter((option) => option !== "Not in the US"),
+  "Washington, D.C.",
+  "Other",
+];
+
+describe("a state-of-residence list whose only way out is Other", () => {
+  it("takes Other for a Canadian province", () => {
+    const index = pickOptionIndex(GARNER_OPTIONS, ["British Columbia"]);
+    expect(GARNER_OPTIONS[index]).toBe("Other");
+  });
+
+  it("still picks the real state when he lives in one", () => {
+    const index = pickOptionIndex(GARNER_OPTIONS, ["California"]);
+    expect(GARNER_OPTIONS[index]).toBe("California");
+  });
+
+  it("prefers an explicit outside-the-US option over Other", () => {
+    const options = [...FAIRE_OPTIONS, "Other"];
+    const index = pickOptionIndex(options, ["British Columbia"]);
+    expect(options[index]).toBe("Not in the US");
+  });
+
+  it("never reads a two-letter state code as living somewhere unlisted", () => {
+    const index = pickOptionIndex(GARNER_OPTIONS, ["CA"]);
+    expect(GARNER_OPTIONS[index]).not.toBe("Other");
+  });
+
+  it("does not take Other for a yes/no answer or a decline", () => {
+    expect(pickOptionIndex(GARNER_OPTIONS, ["Yes"])).toBe(-1);
+    expect(pickOptionIndex(GARNER_OPTIONS, ["Decline to self-identify"])).toBe(-1);
+  });
+
+  it("leaves Other alone in a list that is not US states", () => {
+    expect(pickOptionIndex(["Engineering", "Design", "Other"], ["British Columbia"])).toBe(-1);
+  });
+});

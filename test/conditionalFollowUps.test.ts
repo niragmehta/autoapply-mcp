@@ -51,6 +51,16 @@ describe("conditional follow-ups", () => {
     expect(isNegativeAnswer("No, but I held a similar role at Microsoft")).toBe(false);
   });
 
+  // Waymo's parent is a select whose negative option reads "Never worked at
+  // Alphabet", which left its "If yes, please provide your LDAP." blocked.
+  it("reads an unqualified 'never' option as negative", () => {
+    expect(isNegativeAnswer("Never")).toBe(true);
+    expect(isNegativeAnswer("Never worked at Alphabet")).toBe(true);
+    expect(isNegativeAnswer("Never, but I interviewed there in 2021")).toBe(false);
+    expect(isNegativeAnswer("Never worked there but applied in 2023")).toBe(false);
+    expect(isNegativeAnswer("Never until last year")).toBe(false);
+  });
+
   it("resolves Okta's three follow-ups because each parent was answered No", () => {
     const questions = [
       question("q_relations", "To the best of your knowledge, do you have any family members at Okta?"),

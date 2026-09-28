@@ -44,6 +44,15 @@ export function isFreeTextFollowUp(label: string, fieldType: string): boolean {
 const NEGATIVE_ANSWER = /^(?:no|none|n\/?a|nope|false|not applicable|i have not|i do not|no\.)$/i;
 
 /**
+ * Select options often phrase the negative choice as a sentence, such as
+ * Waymo's "Never worked at Alphabet". Only an unqualified phrase counts: a
+ * comma or a "but"/"until" clause may carry the very disclosure the follow-up
+ * asks for, so those stay blocked.
+ */
+const NEVER_ANSWER = /^never(?:\s+[a-z0-9&'./-]+){0,6}$/i;
+const QUALIFIER = /\b(?:but|except|however|although|though|until|unless|once|previously)\b/i;
+
+/**
  * What to write when the governing question was answered negatively. Okta's
  * form marks these follow-ups required and refuses a blank, so leaving them
  * empty fails client-side validation on a form that is otherwise complete.
@@ -57,7 +66,9 @@ export function isConditionalFollowUp(label: string): boolean {
 }
 
 export function isNegativeAnswer(answer: string): boolean {
-  return NEGATIVE_ANSWER.test(answer.trim().replace(/[.,;]+$/, ""));
+  const clean = answer.trim().replace(/[.,;]+$/, "");
+  if (NEGATIVE_ANSWER.test(clean)) return true;
+  return NEVER_ANSWER.test(clean) && !QUALIFIER.test(clean);
 }
 
 /**
