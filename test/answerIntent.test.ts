@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import { fallbackAnswersForFields, type FieldDescriptor } from "../src/submission/formFields.js";
+import { buildFillPlan, fallbackAnswersForFields, type FieldDescriptor } from "../src/submission/formFields.js";
 import type { Profile } from "../src/domain/profile.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 
@@ -206,6 +206,64 @@ describe("live residence-or-relocation fields", () => {
     const live = fallbackAnswersForFields([field(BREX, "text")], [], [basedIn, relocate]);
 
     expect(live[0]?.answer).toContain("willing to relocate");
+  });
+});
+
+/**
+ * Juicebox asks "If you are not currently located in the San Francisco Bay
+ * Area, would you be willing to relocate?" over the options "Yes, I'm already
+ * planning to relocate", "Yes", "Unsure" and "No". The residence words sit in
+ * the condition, so only the willingness to relocate is asked - but they made
+ * the question read as a residence claim, the relocation decision was refused
+ * as an answer to it, and the required group was left blank.
+ */
+describe("a relocation question conditioned on not living there", () => {
+  const JUICEBOX =
+    "If you are not currently located in the San Francisco Bay Area, would you be willing to relocate?";
+  const OPTIONS = ["Yes, I'm already planning to relocate", "Yes", "Unsure", "No"];
+
+  function radios(label: string, options: readonly string[]): FieldDescriptor[] {
+    return options.map((option, index) => ({
+      selectorIndex: index,
+      label,
+      optionLabel: option,
+      type: "radio",
+      name: "relocate",
+      required: true,
+    }));
+  }
+
+  it("answers the live radio group from the relocation decision", () => {
+    const fields = radios(JUICEBOX, OPTIONS);
+    const live = fallbackAnswersForFields(fields, [], [basedIn, relocate]);
+    const plan = buildFillPlan(fields, live);
+
+    expect(live.map((answer) => answer.questionKey)).toEqual(["relocation-willing"]);
+    expect(plan.toFill.map((match) => match.field.optionLabel)).toEqual(["Yes"]);
+    expect(plan.unmatchedRequired).toEqual([]);
+  });
+
+  it("drafts the plain Yes rather than claiming a move is already planned", () => {
+    const { answers } = draftAnswers([choice(JUICEBOX, OPTIONS)], profileWith([basedIn, relocate]), makeCampaign());
+
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("drafts a Yes/No version from the relocation decision", () => {
+    const { answers } = draftAnswers([yesNo(JUICEBOX)], profileWith([basedIn, relocate]), makeCampaign());
+
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.citation).toBe("profile.answers.relocation-willing");
+  });
+
+  it.each([
+    "Are you currently located in the San Francisco Bay Area?",
+    "Are you currently located in the San Francisco Bay Area? If not, would you be willing to relocate?",
+  ])("still treats a question that asks where he lives as a residence question: %s", (label) => {
+    const live = fallbackAnswersForFields(radios(label, ["Yes", "No"]), [], [relocate]);
+
+    expect(live).toEqual([]);
   });
 });
 
