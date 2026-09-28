@@ -5,6 +5,7 @@ import { ashbyStructuredPay } from "../src/sources/ashbyCompensation.js";
 import { openDatabase } from "../src/db/database.js";
 import { listQueue, saveEvaluation, upsertJobs } from "../src/db/repositories/jobs.js";
 import { evaluateGates } from "../src/ranking/gates.js";
+import { logger } from "../src/util/logger.js";
 import { makeCampaign, makeJob, makeProfile } from "./factories.js";
 
 const company = CompanySchema.parse({ name: "Acme", ats: "ashby", board: "acme" });
@@ -23,6 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 async function posting(locations: string[], tiers: unknown, summary: unknown = cadSalary) {
@@ -120,6 +122,35 @@ describe("Ashby location-specific compensation", () => {
       expect(job.compensation).toMatchObject({ currency: "CAD", max: 310000 });
     },
   );
+
+  describe("untitled tiers, which Ashby sends as title: null on most postings", () => {
+    const equity = { compensationType: "EquityCashValue", interval: "1 YEAR", currencyCode: "USD", minValue: null, maxValue: null };
+    const untitled = (salary: unknown) => ({
+      id: "tier", title: null, tierSummary: "$257K – $335K • Offers Equity", additionalInformation: null,
+      components: [salary, equity],
+    });
+
+    it("reads a posting's only, untitled tier without reporting the tiers invalid", async () => {
+      const warn = vi.spyOn(logger, "warn");
+      const band = { ...usdSalary, minValue: 257000, maxValue: 335000 };
+      const job = await posting(["San Francisco"], [untitled(band)], band);
+      expect(job.compensation).toMatchObject({ min: 257000, max: 335000, currency: "USD", period: "year" });
+      expect(warn.mock.calls.map(([message]) => message)).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/invalid Ashby compensation tiers|geographic compensation unresolved/)]),
+      );
+    });
+
+    it("still matches a titled regional tier when another tier is untitled", async () => {
+      const job = await posting(["San Francisco"], [untitled(cadSalary), california]);
+      expect(job.compensation).toMatchObject({ currency: "USD", max: 260000 });
+    });
+
+    it("accepts a tier whose summary is null", async () => {
+      const job = await posting(["San Francisco"], [canada, { ...california, tierSummary: null }]);
+      expect(job.compensation).toMatchObject({ currency: "USD", max: 260000 });
+      expect(job.compensation?.raw).toContain("USA - California, New York and Washington");
+    });
+  });
 
   it("keeps an unsupported interval unknown instead of manufacturing annual pay", async () => {
     const job = await posting(["San Francisco"], [{

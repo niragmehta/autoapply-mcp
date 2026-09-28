@@ -63,6 +63,9 @@ When tier geography or seniority is ambiguous, the published API summary is
 retained with a warning and still needs manual location/pay verification; the
 largest range is never selected merely because it pays more. The chosen tier's
 label is retained in salary evidence. Unsupported Ashby intervals stay unknown.
+Most postings carry a single tier whose title is `null`; that tier names no
+geography, so its band is read directly, and an untitled tier among titled ones
+never matches a location.
 
 For explicitly remote API postings whose display location is only `Remote` (or
 empty), the job location's own structured postal-country field can establish US

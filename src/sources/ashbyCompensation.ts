@@ -13,8 +13,9 @@ const ComponentSchema = z.object({
   maxValue: z.unknown().optional(),
 });
 const TierSchema = z.object({
-  title: z.string(),
-  tierSummary: z.string().optional(),
+  // Ashby sends title: null on most postings, which carry a single band.
+  title: z.string().nullish(),
+  tierSummary: z.string().nullish(),
   components: z.array(ComponentSchema),
 });
 
@@ -78,12 +79,21 @@ export function ashbyStructuredPay(
   if (compensation.compensationTiers === undefined) return summary;
   const parsed = z.array(TierSchema).safeParse(compensation.compensationTiers);
   if (!parsed.success) {
-    logger.warn("invalid Ashby compensation tiers; retaining published summary");
+    const issue = parsed.error.issues[0];
+    logger.warn("invalid Ashby compensation tiers; retaining published summary", {
+      path: issue?.path.join("."), issue: issue?.message,
+    });
     return summary;
   }
   if (parsed.data.length === 0) return summary;
+  const [only] = parsed.data;
+  if (parsed.data.length === 1 && !only!.title) {
+    return summary ?? salaryRange(only!.components, only!.tierSummary ?? "ashby compensation");
+  }
   const location = analyzeLocation(locations, hints);
-  const scored = parsed.data.map((tier) => ({ tier, specificity: geographicSpecificity(tier.title, location) }));
+  const scored = parsed.data.map((tier) => ({
+    tier, specificity: tier.title ? geographicSpecificity(tier.title, location) : 0,
+  }));
   const highest = Math.max(...scored.map((entry) => entry.specificity));
   const matches = scored.filter((entry) => entry.specificity > 0 && entry.specificity === highest);
   if (matches.length !== 1) {
