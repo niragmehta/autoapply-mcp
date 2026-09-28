@@ -1,6 +1,31 @@
 import { describe, expect, it } from "vitest";
 
-import { isDeadPostingText, isSignInStepLabel } from "../src/submission/workdayFlow.js";
+import { isAccountGateUrl, isDeadPostingText, isSignInStepLabel } from "../src/submission/workdayFlow.js";
+
+describe("isAccountGateUrl", () => {
+  // Guidewire answered a registration by redirecting to its standalone login
+  // page with "An email has been sent to you. Please verify your account." That
+  // page has formField- divs but no progress bar, so it was read as the
+  // application: the run then tried to fill "Password*" as a question.
+  it("recognises the standalone login page a registration redirects to", () => {
+    expect(
+      isAccountGateUrl(
+        "https://guidewire.wd5.myworkdayjobs.com/en-US/external/login?redirect=%2Fen-US%2Fexternal%2Fjob%2FUnited-States---San-Mateo%252C-CA%2FSenior-Software-Engineer",
+      ),
+    ).toBe(true);
+    expect(isAccountGateUrl("https://acme.wd1.myworkdayjobs.com/External/login")).toBe(true);
+  });
+
+  it("does not fire on the application wizard or on a job whose title says login", () => {
+    expect(
+      isAccountGateUrl(
+        "https://guidewire.wd5.myworkdayjobs.com/en-US/external/job/United-States---San-Mateo-CA/Senior-Software-Engineer_JR_15208/apply/applyManually",
+      ),
+    ).toBe(false);
+    expect(isAccountGateUrl("https://acme.wd1.myworkdayjobs.com/External/job/Remote/Login-Platform-Engineer_R1/apply")).toBe(false);
+    expect(isAccountGateUrl("not a url")).toBe(false);
+  });
+});
 
 describe("isDeadPostingText", () => {
   it("does not mistake the account gate for the application form", () => {
