@@ -3,7 +3,16 @@ import { pickNumericBandIndex } from "../drafting/numericBands.js";
 import { statesUnrelatedExperience } from "../drafting/experienceSubject.js";
 import { ratingSubjectMismatch } from "../drafting/ratingSubject.js";
 import { valueShapeMismatch } from "../drafting/valueShape.js";
-import { canonicalizeWorkPermission, sponsorshipIntentMismatch, workPermissionScopeMismatch } from "../text/workPermission.js";
+import {
+  asksWhetherSponsorshipRequired,
+  canonicalizeWorkPermission,
+  definesSponsorshipWithTn,
+  excludesTnFromSponsorship,
+  namesTnRoute,
+  sponsorshipIntentMismatch,
+  tnSponsorshipMismatch,
+  workPermissionScopeMismatch,
+} from "../text/workPermission.js";
 import { asksAbilityToMeetRequirement } from "../text/requirementQuestion.js";
 import {
   aboutRelocation,
@@ -469,6 +478,17 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   if (fieldLabel !== answerLabel && sponsorshipIntentMismatch(field.label, [answer.questionKey, answer.label])) {
     return true;
   }
+  // A form that counts TN as sponsorship asks a different question from the
+  // usual one and takes the opposite answer, so only an answer written for that
+  // definition may answer it. Ashby packets carry just the baseline sponsorship
+  // question, and its generic "No" bound to Persona's "(e.g., H-1B, ... TN)".
+  if (
+    fieldLabel !== answerLabel &&
+    [field.label, field.questionLabel ?? ""].some((text) =>
+      tnSponsorshipMismatch(text, [answer.questionKey, answer.label]))
+  ) {
+    return true;
+  }
   // A question asking whether a requirement can be met may name disability only
   // to exempt it, as SCAN's tuberculosis screening does. It is not a
   // self-identification question, and no demographic answer can meet it.
@@ -596,17 +616,23 @@ function contactFieldRejectsValue(field: FieldDescriptor, value: string): boolea
  * question. Two answers beginning the same way leave the page's words unable to
  * say which one is meant, so neither is chosen. Short labels are excluded: a
  * brief prompt that merely starts another question is not evidence of a cut.
+ *
+ * The cut can also sit on the answer's side. Ashby labels were cut at 200
+ * characters until they were kept whole, and a question a run could not fill
+ * was recorded for a person under the label the page gave it then.
  */
 const TRUNCATED_LABEL_MIN_LENGTH = 150;
 
 function truncatedLabelAnswer(field: FieldDescriptor, answers: readonly DraftAnswer[]): DraftAnswer | undefined {
   const fieldLabel = normalizeLabel(field.label);
-  if (fieldLabel.length < TRUNCATED_LABEL_MIN_LENGTH) return undefined;
-  const extending = answers.filter((answer) => {
+  const cutOff = answers.filter((answer) => {
     const answerLabel = normalizeLabel(answer.label);
-    return answerLabel.length > fieldLabel.length && answerLabel.startsWith(fieldLabel);
+    if (answerLabel.length === fieldLabel.length) return false;
+    const [shorter, longer] =
+      answerLabel.length < fieldLabel.length ? [answerLabel, fieldLabel] : [fieldLabel, answerLabel];
+    return shorter.length >= TRUNCATED_LABEL_MIN_LENGTH && longer.startsWith(shorter);
   });
-  return extending.length === 1 ? extending[0] : undefined;
+  return cutOff.length === 1 ? cutOff[0] : undefined;
 }
 
 /**
@@ -1807,6 +1833,54 @@ function sponsorshipBankEntry(
   );
 }
 
+const PLAIN_YES_OR_NO = /^(?:yes|no)$/i;
+
+/**
+ * Whether the control can only say yes or no. The TN decision is a bare yes or
+ * no, so a list of visa types or a free-text box asks more than it answers and
+ * is left to a person, as drafting does. Only a label is known for a synthetic
+ * field, so it never qualifies: were a blocked free-text TN question dropped as
+ * answered, every run would fail on it again with nobody asked.
+ */
+function yesNoControl(field: FieldDescriptor): boolean {
+  if (field.selectorIndex < 0) return false;
+  // Ashby renders a yes/no question as one box with Yes and No buttons.
+  if (field.type === "checkbox") return !field.optionLabel || PLAIN_YES_OR_NO.test(field.optionLabel.trim());
+  if (field.type === "radio") return PLAIN_YES_OR_NO.test((field.optionLabel ?? "").trim());
+  if (field.type !== "select") return false;
+  const choices = (field.options ?? [])
+    .map((option) => option.trim())
+    .filter((option) => option.length > 0 && !FIELD_PLACEHOLDER_VALUE.test(option));
+  return choices.length === 2 && choices.every((option) => PLAIN_YES_OR_NO.test(option));
+}
+
+/**
+ * The candidate's decision for a form that counts TN as sponsorship, for a
+ * wording none of its patterns covers. Only a question asking whether
+ * sponsorship is required qualifies, and not one that names TN only to exclude
+ * it. The general sponsorship fallback's scope test is not applied: it reads
+ * "permanent residency" in Hinge Health's list of kinds of support as a demand
+ * for permanent work authorization, a question this is not.
+ */
+function tnSponsorshipBankEntry(
+  field: FieldDescriptor,
+  rawTexts: readonly string[],
+  bank: readonly ApprovedAnswerEntry[],
+): ApprovedAnswerEntry | undefined {
+  const defining = rawTexts.filter((value) => definesSponsorshipWithTn(value));
+  if (!defining.some((value) => asksWhetherSponsorshipRequired(value))) return undefined;
+  if (defining.some((value) => excludesTnFromSponsorship(value))) return undefined;
+  if (!yesNoControl(field)) return undefined;
+  return bank.find((entry) => {
+    const descriptions = [entry.key, entry.label, ...entry.patterns];
+    return (
+      PLAIN_YES_OR_NO.test(entry.answer.trim()) &&
+      namesTnRoute(descriptions) &&
+      /sponsor/i.test(descriptions.join(" "))
+    );
+  });
+}
+
 function bestBankEntry(
   field: FieldDescriptor,
   bank: readonly ApprovedAnswerEntry[],
@@ -1843,6 +1917,7 @@ function bestBankEntry(
     if (candidates.some((value) => ratingSubjectMismatch(value, [entry.label, ...entry.patterns]))) continue;
     if (candidates.some((value) => workPermissionScopeMismatch(value, [entry.label, ...entry.patterns]))) continue;
     if (rawTexts.some((value) => sponsorshipIntentMismatch(value, [entry.key, entry.label, ...entry.patterns]))) continue;
+    if (rawTexts.some((value) => tnSponsorshipMismatch(value, [entry.key, entry.label, ...entry.patterns]))) continue;
     // A radio option reads only "Yes", so the assistance question may be asked by any one of the texts.
     if (rawTexts.every((value) => relocationAssistanceMismatch(value, [entry.key, entry.label, ...entry.patterns]))) continue;
     if (freeTextControl && writtenForChoiceList(entry)) continue;
@@ -1856,6 +1931,9 @@ function bestBankEntry(
       if (!hit) continue;
       if (!best || needle.length > best.length) best = { entry, length: needle.length };
     }
+  }
+  if (!best && rawTexts.some((value) => definesSponsorshipWithTn(value))) {
+    return tnSponsorshipBankEntry(field, rawTexts, bank);
   }
   if (!best && candidates.some((value) => asksForSponsorship(value))) {
     const fallback = sponsorshipBankEntry(bank);

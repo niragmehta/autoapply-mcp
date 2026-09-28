@@ -57,6 +57,24 @@ describe("COLLECT_FIELDS", () => {
     expect(field!.required).toBe(true);
   });
 
+  it("keeps an Ashby question whole when the words that decide it come after 200 characters", () => {
+    // Hinge Health names TN in its definition of sponsorship well past character
+    // 200. Cut there, the question read as the generic one and took the generic
+    // "No" - the opposite of the candidate's decision for a form counting TN.
+    const title = "Will you now or in the future require any immigration related support or sponsorship from "
+      + "Hinge Health? This could include support (such as J-1, F-1 CPT letter or STEM OPT Training Plan), "
+      + "visa sponsorship for employment (H-1B, H-1B1, E-3, O-1, or TN), and/or any EAD holders that will "
+      + "need longer term employment authorization (temporary work visa or permanent residency).";
+    const box = element({
+      type: "checkbox", name: "sponsorship", id: "", rect: { width: 16, height: 16 },
+      entry: ashbyFieldset(title, { required: true }),
+    });
+
+    const [field] = collect([box], {});
+
+    expect(field?.label).toBe(title);
+  });
+
   it("gives every box of one multi-select question the same group key", () => {
     // A required "select all that apply" is answered by ticking any one box.
     // Without a shared key each untouched box reads as its own unmet

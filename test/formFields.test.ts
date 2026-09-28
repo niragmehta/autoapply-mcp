@@ -2674,6 +2674,17 @@ describe("a label cut off at the extraction limit", () => {
     const [match] = matchFields([combobox("Are you open to reloc")], [answer("Are you open to relocating to San Francisco for this role?", "Yes")]);
     expect(match?.answer).toBeNull();
   });
+
+  it("pairs a whole question with the answer a person gave under its cut-off text", () => {
+    // Ashby labels were cut at 200 characters until they were kept whole, and a
+    // question a run could not fill is recorded for a person under the label the
+    // page gave it then.
+    const recorded = answer(truncated, "I acknowledge the above policies", { questionKey: "discovered-waymo-policy" });
+
+    const [match] = matchFields([combobox(full)], [answer("Email", "a@b.co"), recorded]);
+
+    expect(match?.answer?.answer).toBe("I acknowledge the above policies");
+  });
 });
 
 describe("free-text fields judged by the shape of the value", () => {

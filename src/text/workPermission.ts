@@ -81,3 +81,36 @@ export function sponsorshipIntentMismatch(question: string, descriptions: readon
   if (!asksWhetherSponsorshipRequired(question)) return false;
   return !descriptions.some(writtenAboutSponsorship);
 }
+
+/**
+ * This candidate needs no petition and no lottery, so his plain answer to
+ * whether he requires sponsorship is "No". TN status does need a support letter
+ * from the employer, though, so a form that counts TN as sponsorship is owed
+ * the answer he recorded for that definition. Hinge Health defines sponsorship
+ * as "(H-1B, H-1B1, E-3, O-1, or TN)" and asks the candidate to certify the
+ * answer is true; only an answer written for a definition naming TN may answer
+ * a question that uses one. Drafting applies the same rule to questions an
+ * employer publishes; these serve the live form, where most boards publish none.
+ */
+const TN_ROUTE = /\b(?:tn|usmca|nafta)\b/i;
+const NEGATED = /\b(?:not|don't|do not|doesn't|does not|never|no longer|won't|will not)\b/i;
+
+/** Whether the text counts TN status as sponsorship. */
+export function definesSponsorshipWithTn(text: string): boolean {
+  return TN_ROUTE.test(text) && SPONSORSHIP_SUBJECT.test(text.toLowerCase());
+}
+
+/** Whether any of an answer's descriptions names the TN route. */
+export function namesTnRoute(descriptions: readonly string[]): boolean {
+  return descriptions.some((text) => TN_ROUTE.test(text));
+}
+
+/** True when the question counts TN as sponsorship and the answer was not written for one that does. */
+export function tnSponsorshipMismatch(question: string, descriptions: readonly string[]): boolean {
+  return definesSponsorshipWithTn(question) && !namesTnRoute(descriptions);
+}
+
+/** "TN status is not considered sponsorship": a clause that names TN only to exclude it. */
+export function excludesTnFromSponsorship(question: string): boolean {
+  return question.split(/[.?;]/).some((clause) => TN_ROUTE.test(clause) && NEGATED.test(clause));
+}
