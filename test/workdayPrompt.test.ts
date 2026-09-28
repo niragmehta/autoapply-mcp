@@ -212,6 +212,8 @@ function fieldOf(prompt: FakePrompt) {
     fill: async () => undefined,
     click: async () => undefined,
     locator: (selector: string) => prompt.locator(selector),
+    // Stands in for the field's own node; a fake search box says for itself whether it sits inside.
+    elementHandle: async () => ({ dispose: async () => undefined }),
   } as never;
 }
 
@@ -1135,6 +1137,89 @@ class SearchablePrompt extends FakePrompt {
     };
   }
 }
+
+/**
+ * Palo Alto Networks' "My Experience" step: School or University and Field of
+ * Study each carry an inline search box, and the page's last visible box is
+ * Field of Study's. Typing a school there opened the list of majors, which read
+ * as the school search narrowing, and the school was reported as not on offer.
+ */
+class NeighbourSearchPrompt extends FakePrompt {
+  private query = "";
+  private target: "own" | "other" | null = null;
+
+  constructor(
+    private readonly schools: readonly string[],
+    private readonly majors: readonly string[],
+  ) {
+    super({ "No Items.": null });
+  }
+
+  override locator(selector: string) {
+    if (!selector.includes('placeholder="Search"')) return super.locator(selector);
+    // Both boxes are only visible to the page-wide query.
+    if (!selector.includes(":visible")) return { count: async () => 0 } as never;
+    const self = this;
+    const boxAt = (index: number) => {
+      const home = index === 0 ? "own" : "other";
+      const box = {
+        first: () => box,
+        nth: (at: number) => boxAt(at),
+        count: async () => 2,
+        isVisible: async () => true,
+        waitFor: async () => undefined,
+        allInnerTexts: async () => [] as string[],
+        // Asked with the field's node, a box names its home; asked alone, whether a prompt owns it.
+        evaluate: async (_script: unknown, owner?: unknown) => (owner === undefined ? true : home),
+        locator: (child: string) => self.locator(child),
+        click: async () => {
+          self.target = home;
+        },
+        fill: async () => {
+          self.query = "";
+        },
+      };
+      return box;
+    };
+    return boxAt(0) as never;
+  }
+
+  override asPage() {
+    return {
+      ...super.asPage(),
+      locator: (selector: string) => this.locator(selector),
+      keyboard: {
+        type: async (text: string) => {
+          if (this.target === "other") this.menu = [...this.majors];
+          else if (this.target === "own") this.query += text;
+        },
+        press: async (key: string) => {
+          if (key === "Enter" && this.target === "own") {
+            const words = this.query.toLowerCase().split(/\s+/).filter(Boolean);
+            this.menu = this.schools.filter((name) => words.every((word) => name.toLowerCase().includes(word)));
+            return;
+          }
+          this.target = null;
+          this.menu = [];
+        },
+      },
+    };
+  }
+}
+
+describe("a search box belonging to a neighbouring field", () => {
+  it("searches in the prompt's own box rather than the last one on the page", async () => {
+    const prompt = new NeighbourSearchPrompt(
+      ["Example State University", "University of British Columbia"],
+      ["Accounting", "Actuarial Science", "Advertising"],
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Example State University"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Example State University"]);
+  });
+});
 
 describe("isWorkdayPrompt", () => {
   it("recognises a picker widget", async () => {
