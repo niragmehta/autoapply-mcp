@@ -515,6 +515,77 @@ describe("repairReportedFields", () => {
       expect(fake.events).not.toContain("check");
     });
   });
+
+  describe("Ashby yes/no buttons", () => {
+    const LABEL = "Are you legally authorized to work in the United States?";
+
+    /**
+     * An Ashby toggle: clicking the selected option clears the answer, clicking
+     * any other state selects it. `painted` is the `_active_` class the button
+     * shows, which can disagree with the answer the board actually holds.
+     */
+    function ashbyToggle(initial: { held: boolean; painted: boolean }) {
+      const state = { held: initial.held, painted: initial.painted, clicks: 0 };
+      const button = {
+        count: async () => 1,
+        getAttribute: async (name: string) => (name === "class" ? (state.painted ? "_option_ _active_" : "_option_") : null),
+        click: async () => {
+          state.clicks += 1;
+          state.held = !state.held;
+          state.painted = state.held;
+        },
+      };
+      const field = {
+        first: () => field,
+        count: async () => 1,
+        locator: (selector: string) =>
+          selector.includes("ashby-application-form-field-entry") ? button : { count: async () => 0 },
+      };
+      const page = {
+        locator: () => field,
+        waitForTimeout: async () => undefined,
+        url: () => "https://jobs.ashbyhq.com/replit/0000/application",
+      } as unknown as Parameters<typeof repairReportedFields>[0];
+      return { page, state };
+    }
+
+    function booleanMatch() {
+      return {
+        field: { label: LABEL, type: "checkbox", selectorIndex: 0, required: true, name: "authorized" },
+        answer: { label: LABEL, answer: "Yes", questionKey: "authorized", source: "profile", required: true },
+        confidence: 1,
+      } as unknown as FillPlan["toFill"][number];
+    }
+
+    it("re-selects a Yes the board reports unanswered even though the button is painted selected", async () => {
+      // Replit: after Ashby's resume autofill re-rendered the form, the Yes button
+      // kept its selected class while the board held no answer, so four repair
+      // rounds each saw "already selected", clicked nothing, and the board kept
+      // reporting the question empty.
+      const fake = ashbyToggle({ held: false, painted: true });
+      const repaired = await repairReportedFields(fake.page, [booleanMatch()], [
+        `Missing entry for required field: ${LABEL}`,
+      ]);
+      expect(repaired).toEqual([LABEL]);
+      expect(fake.state.held).toBe(true);
+    });
+
+    it("ends on Yes when the painted selection was accurate after all", async () => {
+      const fake = ashbyToggle({ held: true, painted: true });
+      await repairReportedFields(fake.page, [booleanMatch()], [`Missing entry for required field: ${LABEL}`]);
+      // Clearing and re-selecting is two clicks; stopping after one would leave
+      // the question cleared.
+      expect(fake.state.held).toBe(true);
+      expect(fake.state.painted).toBe(true);
+    });
+
+    it("selects an unselected Yes with a single click", async () => {
+      const fake = ashbyToggle({ held: false, painted: false });
+      await repairReportedFields(fake.page, [booleanMatch()], [`Missing entry for required field: ${LABEL}`]);
+      expect(fake.state.held).toBe(true);
+      expect(fake.state.clicks).toBe(1);
+    });
+  });
 });
 
 describe("fillCombobox", () => {

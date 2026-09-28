@@ -1455,7 +1455,7 @@ export async function repairReportedFields(
         await page.keyboard.type(value, { delay: 25 });
         await page.keyboard.press("Tab");
       } else {
-        await fillControl(page, locator, match.field, value, candidates);
+        await fillControl(page, locator, match.field, value, candidates, undefined, { boardReportedEmpty: true });
       }
       repaired.push(match.field.label);
     } catch (error) {
@@ -1485,6 +1485,7 @@ async function fillControl(
   value: string,
   candidates: readonly string[] = [value],
   choiceLog?: ChoiceSelection[],
+  options: { boardReportedEmpty?: boolean } = {},
 ): Promise<void> {
   // Checked before the generic branches: Workday renders dropdowns as a widget
   // beside a hidden text input, and the collector only sees that input, so
@@ -1549,6 +1550,7 @@ async function fillControl(
         )
       : null;
     if (button && (await button.count()) === 1) {
+      if (options.boardReportedEmpty && (await isActive(button))) await resyncPaintedChoice(page, button);
       await clickUntilActive(page, button, field.label, ashbyChoice!);
       choiceLog?.push({ button, label: field.label, choice: ashbyChoice! });
       return;
@@ -1668,6 +1670,23 @@ async function waitForActive(page: AnyPage, button: AnyLocator): Promise<boolean
 async function isActive(button: AnyLocator): Promise<boolean> {
   const className = (await button.getAttribute("class")) ?? "";
   return className.includes("_active_");
+}
+
+/**
+ * The board named this question as unanswered while its wanted option is
+ * painted selected, so the paint and the board's own state disagree: after
+ * Ashby's resume autofill re-rendered Replit's form, Yes stayed selected on
+ * screen with no answer held, and a toggle that is never clicked while it looks
+ * selected could not repair it. One real click settles the disagreement either
+ * way - it selects the answer the board was not holding, or clears the one it
+ * was, which clickUntilActive then selects again.
+ */
+async function resyncPaintedChoice(page: AnyPage, button: AnyLocator): Promise<void> {
+  await button.click({ timeout: 4000 });
+  for (let waited = 0; waited < 2000; waited += 200) {
+    await page.waitForTimeout(200);
+    if (!(await isActive(button))) return;
+  }
 }
 
 /**
