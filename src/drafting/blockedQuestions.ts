@@ -1,3 +1,5 @@
+import { NON_POSTAL_STATE } from "./residence.js";
+
 /**
  * Question classification.
  *
@@ -108,6 +110,7 @@ export function classifyQuestion(label: string): string {
   // labels but would break single-token names such as "LinkedIn".
   const normalized = normalizeQuestionLabel(raw);
   for (const [category, pattern] of CATEGORY_PATTERNS) {
+    if (category === "contact" && (NON_POSTAL_STATE.test(raw) || NON_POSTAL_STATE.test(normalized))) continue;
     if (!pattern.test(raw) && !pattern.test(normalized)) continue;
     // A category may only come from a conditional clause when the clause is all
     // the label offers. Anything the label says outside its conditions is the

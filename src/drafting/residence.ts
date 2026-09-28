@@ -19,6 +19,8 @@ export const CURRENT_RESIDENCE_QUESTION =
 
 export const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligible to work)/;
 
+export const NON_POSTAL_STATE = /\bstate[\s\u2010-\u2015-]+(?:owned|controlled|machines?)\b/i;
+
 /**
  * A question asking the inverse names the same place to mean the opposite, so
  * it is excluded and left to a person rather than answered backwards.

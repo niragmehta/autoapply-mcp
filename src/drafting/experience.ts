@@ -96,7 +96,34 @@ function exact(...labels: readonly string[]): (label: string) => boolean {
  */
 function component(part: "start" | "end", unit: "month" | "year"): (label: string) => boolean {
   const date = part === "start" ? /\b(start(?:ed|ing)?|from)\b/ : /\b(end(?:ed|ing)?|finish(?:ed)?|to|last)\b/;
-  return (label: string) => date.test(label) && new RegExp(`\\b${unit}\\b`).test(label) && /\bdate\b|\b(month|year)\b/.test(label);
+  return (label: string) => !/\b(education|school|university|college|graduation|attended)\b/.test(label) &&
+    date.test(label) && new RegExp(`\\b${unit}\\b`).test(label) && /\bdate\b|\b(month|year)\b/.test(label);
+}
+
+/**
+ * Workday renders employment dates as one segmented control labelled
+ * "Employment start date" rather than as separate month and year boxes, so the
+ * component tests above never match it and the step cannot advance.
+ *
+ * The match is deliberately narrow. "Desired start date", "earliest start date"
+ * and notice-period questions are about the *vacancy*, not the CV, and putting
+ * a past employment date in one of those would misstate availability.
+ */
+function employmentDate(part: "start" | "end"): (label: string) => boolean {
+  const word = part === "start" ? /\b(start|from|began|joined)\b/ : /\b(end|to|left|finish(?:ed)?)\b/;
+  return (label: string) =>
+    /\bemployment\b/.test(label) &&
+    !/\b(education|school|university|college|graduation)\b/.test(label) &&
+    !/\b(desired|available|availability|earliest|soonest|notice|expected|preferred|anticipated|proposed|requested|target|ideal|potential|planned|intended)\b/.test(label) &&
+    word.test(label) &&
+    /\bdate\b/.test(label) &&
+    !/\b(month|year)\b/.test(label);
+}
+
+/** A profile "YYYY-MM" as the "MM/YYYY" a Workday date control accepts. */
+function numericPeriod(period: string): string {
+  const match = /^(\d{4})-(\d{2})/.exec(period);
+  return match ? `${match[2]}/${match[1]}` : "";
 }
 
 /**
@@ -119,10 +146,60 @@ const WORK_ELIGIBILITY_TEXT =
 const NAMES_AN_ATTRIBUTE =
   /\b(title|name|company|employer|organisation|organization|salary|compensation|date|month|year|level|team|manager|location|description|duration|responsibilities)\b/;
 
+/**
+ * "Are you currently employed by Maven Clinic in any capacity?" asks about the
+ * employer it names, not whether the candidate holds a current job. The label
+ * is normalized, so the name ends at the words that follow it rather than at
+ * punctuation. "work with" is excluded: "Do you currently work with Python?"
+ * names a skill, not an employer.
+ */
+const EMPLOYER_CLAUSE =
+  /\b(?:employed\s+(?:by|at|with)|employee\s+(?:of|at)|work(?:ing)?\s+for)\s+(.+?)(?=\s+(?:in|if|or|and|as|on|either|currently|today|now)\b|$)/;
+
+/** A description of an employer rather than a name: who is meant cannot be known here. */
+const DESCRIBED_EMPLOYER =
+  /^(?:a|an|any|another|other|the|your|our|us|this|that|these|those|one|some|here|federal|government|state|public)\b/;
+
+function namedEmployer(label: string): string | null {
+  const name = EMPLOYER_CLAUSE.exec(label)?.[1]?.trim() ?? "";
+  if (name.length === 0 || DESCRIBED_EMPLOYER.test(name)) return null;
+  return name;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sameEmployer(named: string, company: string): boolean {
+  const own = normalizeLabel(company);
+  if (own.length === 0) return false;
+  return (
+    new RegExp(`\\b${escapeRegExp(own)}\\b`).test(named) || new RegExp(`\\b${escapeRegExp(named)}\\b`).test(own)
+  );
+}
+
+/**
+ * Wording that reaches past the current job ("current or former", "have you
+ * ever been") or asks about willingness rather than employment ("open to
+ * working for"). The current job alone cannot answer either, and "No" to them
+ * denied a past job or declined the role.
+ */
+const BEYOND_CURRENT_EMPLOYMENT =
+  /\b(former(ly)?|previous(ly)?|ever|past|prior|before|have been|has been|had been|were|was|willing|open|interested|able|comfortable|want|wish|like|prefer|consider|plan|intend|would)\b/;
+
+/** "Are you currently employed by X?" in the present tense, with X a name. */
+function asksCurrentNamedEmployer(label: string): boolean {
+  if (namedEmployer(label) === null || BEYOND_CURRENT_EMPLOYMENT.test(label)) return false;
+  return /\b(current(ly)?|presently)\b|^are you\s+(?:(?:an?\s+)?employee|employed|working)\b/.test(label);
+}
+
 function currentRoleBoolean(label: string): boolean {
   if (exact("current role", "current position", "current job", "currently work here", "i currently work here")(label)) {
     return true;
   }
+  // Employment by a named or described employer is a different question, and
+  // Yes to it can claim a job at the hiring company that does not exist.
+  if (EMPLOYER_CLAUSE.test(label)) return false;
   // Whether the candidate may lawfully work is never a fact about their current
   // employer. Abnormal Security asks "Are you currently eligible to work in the
   // country in which this job is posted?" - "currently", "job" and a leading
@@ -214,6 +291,29 @@ const RESOLVERS: readonly Resolver[] = [
     category: "employment-history",
     citation: "experience[0].end",
     resolve: (entry) => (isCurrent(entry) ? "" : (splitPeriod(entry.end)?.year ?? "")),
+  },
+  {
+    test: employmentDate("start"),
+    category: "employment-history",
+    citation: "experience[0].start",
+    resolve: (entry) => numericPeriod(entry.start),
+  },
+  {
+    test: employmentDate("end"),
+    category: "employment-history",
+    citation: "experience[0].end",
+    // A current role has no end date; ticking "I currently work here" is the
+    // truthful answer and inventing an end date would not be.
+    resolve: (entry) => (isCurrent(entry) ? "" : numericPeriod(entry.end)),
+  },
+  {
+    test: asksCurrentNamedEmployer,
+    category: "employment-history",
+    citation: "experience[].company",
+    resolve: (_entry, profile, label) => {
+      const named = namedEmployer(label) ?? "";
+      return profile.experience.some((job) => isCurrent(job) && sameEmployer(named, job.company)) ? "Yes" : "No";
+    },
   },
   {
     test: (label) => currentRoleBoolean(label),

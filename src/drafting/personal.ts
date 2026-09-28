@@ -1,6 +1,7 @@
 import type { Personal, Profile, StoredAnswer } from "../domain/profile.js";
+import { asksAbilityToMeetRequirement } from "../text/requirementQuestion.js";
 import { normalizeQuestionLabel } from "./blockedQuestions.js";
-import { asksAboutOwnResidence } from "./residence.js";
+import { asksAboutOwnResidence, NON_POSTAL_STATE } from "./residence.js";
 
 /**
  * Resolvers for personal and demographic form fields.
@@ -123,6 +124,19 @@ const RESOLVERS: readonly Resolver[] = [
     category: "contact",
     resolve: (personal) => ({ value: personal.address.street, autoFill: personal.addressAutoFill }),
     citation: "personal.address.street",
+  },
+  {
+    // One box naming all three parts of a location - Customer.io's "What
+    // location are you based in? (city, state, and country)". The city-and-state
+    // rule below excludes "country", so this fell to the region rule and was
+    // answered with the province alone. Where he is based is the identity
+    // location, as for Greenhouse's own location field; a home-address box
+    // names the street or postal code and keeps going to the address rules.
+    pattern:
+      /^(?!.*\bunited states\b)(?!.*\b(?:authoriz|sponsor|visa|work permit|eligible to work))(?=.*\b(?:city|town)\b)(?=.*\b(?:state|province|region)\b)(?=.*\bcountry\b)(?!.*\b(?:street|postal|zip)\b)/i,
+    category: "contact",
+    resolve: (_personal, profile) => ({ value: formatLocation(profile), autoFill: true }),
+    citation: "identity.location",
   },
   {
     // One box asking for both parts of a location - "In what city and state is
@@ -276,7 +290,7 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "education[0].field",
   },
   {
-    pattern: /\b(graduation (?:year|date)|year of graduation|graduated)\b/i,
+    pattern: /\b(graduation (?:year|date)|year of graduation|graduated|education end year)\b/i,
     category: "education",
     resolve: education("end"),
     citation: "education[0].end",
@@ -308,6 +322,8 @@ const RESOLVERS: readonly Resolver[] = [
  * in the profile addresses it. `authorized` reports whether the candidate
  * opted this field in for automatic use.
  */
+const SELF_ID_CATEGORIES: ReadonlySet<string> = new Set(["demographic", "veteran", "disability"]);
+
 export function resolvePersonal(label: string, profile: Profile): (PersonalResolution & { category: string }) | null {
   const normalized = normalizeQuestionLabel(label);
   // "Are you located in or willing to relocate to Canada?" is a question about
@@ -316,7 +332,17 @@ export function resolvePersonal(label: string, profile: Profile): (PersonalResol
   if (asksAboutOwnResidence(label.toLowerCase(), profile) || asksAboutOwnResidence(normalized, profile)) {
     return { answer: "Yes", citation: "identity.location", authorized: true, category: "contact" };
   }
+  // SCAN asks whether the candidate can meet a tuberculosis-screening
+  // requirement "unless you have a disability / medical reason". A question
+  // about meeting a requirement never asks for a characteristic, so no
+  // self-identification resolver may answer it.
+  const requirementQuestion = asksAbilityToMeetRequirement(label) || asksAbilityToMeetRequirement(normalized);
   for (const resolver of RESOLVERS) {
+    if (requirementQuestion && SELF_ID_CATEGORIES.has(resolver.category)) continue;
+    if (
+      (resolver.citation.startsWith("personal.address") || resolver.category === "contact") &&
+      (NON_POSTAL_STATE.test(label) || NON_POSTAL_STATE.test(normalized))
+    ) continue;
     if (!resolver.pattern.test(label) && !resolver.pattern.test(normalized)) continue;
     const raw = resolver.resolve(profile.personal, profile);
     const stored: StoredAnswer = typeof raw === "string" ? { value: raw, autoFill: false } : raw;

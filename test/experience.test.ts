@@ -30,6 +30,39 @@ function answer(label: string, value: string): DraftAnswer {
 const profile = makeProfile();
 
 describe("resolveExperience", () => {
+  it("answers Workday's combined employment start date", () => {
+    expect(resolveExperience("Employment start date", profile)?.answer).toBe("02/2021");
+  });
+
+  it("offers no employment end date for a current role", () => {
+    // Workday hides the control once "I currently work here" is ticked, and
+    // inventing an end date for a job still held would be false.
+    expect(resolveExperience("Employment end date", profile)?.answer ?? "").toBe("");
+  });
+
+  it.each([
+    "Desired employment start date",
+    "Earliest employment start date",
+    "Expected employment start date",
+    "Preferred employment start date",
+    "Anticipated employment start date",
+    "Proposed employment start date",
+    "Target employment start date",
+  ])("does not answer %s with a past employment date", (label) => {
+    expect(resolveExperience(label, profile)?.answer).not.toBe("02/2021");
+  });
+
+  it.each(["Education start date", "School employment start date"])(
+    "does not answer %s from employment", (label) => {
+      expect(resolveExperience(label, profile)?.answer).not.toBe("02/2021");
+    },
+  );
+
+  it.each(["Education start month", "Education start year", "School start year", "University start month"])(
+    "does not substitute employment dates for %s", (label) => {
+      expect(resolveExperience(label, profile)).toBeNull();
+    },
+  );
   it("answers the employment block from the current position", () => {
     expect(resolveExperience("Company name", profile)?.answer).toBe("Acme");
     expect(resolveExperience("Title", profile)?.answer).toBe("Software Engineer III - Security");
@@ -59,6 +92,49 @@ describe("resolveExperience", () => {
     expect(resolveExperience("I currently work here", profile)?.answer).toBe("Yes");
     expect(resolveExperience("Is this your current position?", profile)?.answer).toBe("Yes");
     expect(resolveExperience("Do you currently work here?", profile)?.answer).toBe("Yes");
+  });
+
+  // Maven Clinic asked "Are you currently employed by Maven Clinic in any
+  // capacity? If so, please list current role." It contains "currently" and
+  // "current role", so the is-this-your-current-role boolean answered Yes: a
+  // false claim of already working for the hiring company.
+  it("answers a named-employer question from who the candidate actually works for", () => {
+    expect(
+      resolveExperience(
+        "Are you currently employed by Maven Clinic in any capacity? If so, please list current role.",
+        profile,
+      )?.answer,
+    ).toBe("No");
+    expect(resolveExperience("Do you currently work for Maven Clinic or any of its affiliates?", profile)?.answer).toBe("No");
+    expect(resolveExperience("Are you currently employed by Acme?", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("Are you currently an employee of Acme Corporation?", profile)?.answer).toBe("Yes");
+  });
+
+  it.each([
+    "Are you currently employed by us in any capacity? If so, please list current role.",
+    "Are you currently employed by a federal contractor?",
+    "Are you currently employed by any other company in your current role?",
+    "Have you ever been employed by Maven Clinic in any role?",
+  ])("leaves %s for a person rather than guessing who is meant", (label) => {
+    expect(resolveExperience(label, profile)).toBeNull();
+  });
+
+  // "Current or former" also asks about past jobs, and a willingness question
+  // is not about employment at all. Answering either from the current job
+  // alone said "No" for the candidate, so both still go to a person.
+  it.each([
+    "Are you a current or former employee of Stripe?",
+    "Are you currently or have you ever been employed by Stripe?",
+    "Were you previously employed by Stripe?",
+    "Are you open to working for Stripe on a contract basis?",
+    "Are you willing to work for Acme in our SF office?",
+    "Are you interested in working for Acme's security team?",
+  ])("does not answer %s from the current job alone", (label) => {
+    expect(resolveExperience(label, profile)).toBeNull();
+  });
+
+  it("does not read a skills question as a named employer", () => {
+    expect(resolveExperience("Do you currently work with Python in your current role?", profile)?.answer).not.toBe("No");
   });
 
   it("gives the end date once a position has one", () => {    const past = makeProfile({

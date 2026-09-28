@@ -315,6 +315,63 @@ describe("a location field that names the city as a hint", () => {
   });
 });
 
+describe("one box asking for the whole name or the whole location", () => {
+  // Customer.io, 2026-09-28. "What is your preferred first and last name?"
+  // matched the last-name resolver and drafted the surname alone, and "What
+  // location are you based in? (city, state, and country)" matched the address
+  // region rule on the word "state" and drafted the province alone.
+  const coquitlam = ProfileSchema.parse({
+    ...profile,
+    personal: {
+      ...profile.personal,
+      address: { street: "1 Main St", city: "Coquitlam", region: "BC", postalCode: "V3J 1A1", country: "Canada" },
+      addressAutoFill: true,
+    },
+  });
+
+  it.each([
+    "What is your preferred first and last name?",
+    "First and Last Name",
+    "Legal first & last name",
+    "Please enter your first/last name",
+    "Please enter your first, middle and last name",
+  ])("answers %s with the whole name", (label) => {
+    const { answers } = draftAnswers([question(label, { required: true })], profile, campaign);
+    expect(answers[0]?.answer).toBe("Alex Candidate");
+    expect(answers[0]?.citation).toBe("identity.fullName");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("still answers the separate name boxes with their own parts", () => {
+    const { answers } = draftAnswers([question("First Name"), question("Last Name")], profile, campaign);
+    expect(answers.map((answer) => answer.answer)).toEqual(["Alex", "Candidate"]);
+  });
+
+  it.each([
+    "What location are you based in? (city, state, and country)",
+    "Where are you located? (City, State/Province, Country)",
+    "City, province and country",
+  ])("answers %s with the whole location", (label) => {
+    const { answers } = draftAnswers([question(label, { required: true })], coquitlam, campaign);
+    expect(answers[0]?.answer).toBe("Vancouver, BC, Canada");
+    expect(answers[0]?.citation).toBe("identity.location");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("still answers a city-and-state residence box from the home address", () => {
+    const label = "In what city and state is your primary residence? (e.g. San Jose, CA)";
+    const { answers } = draftAnswers([question(label, { required: true })], coquitlam, campaign);
+    expect(answers[0]?.answer).toBe("Coquitlam, BC");
+  });
+
+  it("never answers a work authorization question naming the parts of a place", () => {
+    const label = "In which city, state and country are you authorized to work?";
+    const { answers } = draftAnswers([question(label, { required: true })], coquitlam, campaign);
+    expect(answers[0]?.answer).not.toBe("Vancouver, BC, Canada");
+    expect(answers[0]?.answer).not.toBe("BC");
+  });
+});
+
 describe("the location field Greenhouse renders but does not publish", () => {
   const schemaWithoutLocation = [
     { label: "First Name", required: true, fields: [{ name: "first_name", type: "input_text" }] },
@@ -867,8 +924,22 @@ describe("sponsorship questions phrased outside the stored patterns", () => {
     expect(answers[0]?.citation).toBe("profile.answers.visa-sponsorship");
   });
 
-  it("leaves a sponsorship question that names an immigration class alone", () => {
+  it("answers a sponsorship question that names TN from the TN decision, never the generic one", () => {
     const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Will you now or in the future need sponsorship such as H-1B or TN status to work for us?",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("leaves a sponsorship question that names TN to a person when no TN decision is stored", () => {
+    const p = ProfileSchema.parse({
+      ...sponsorshipProfile,
+      answers: sponsorshipProfile.answers.filter((entry) => entry.key !== "sponsorship-named-tn"),
+    });
     const asked = question(
       "Will you now or in the future need sponsorship such as H-1B or TN status to work for us?",
       { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
@@ -899,6 +970,49 @@ describe("sponsorship questions phrased outside the stored patterns", () => {
     const { answers } = draftAnswers([asked], p, campaign);
     expect(answers[0]?.requiresHuman).toBe(true);
   });
+
+  it("does not hand the generic No to a question defining sponsorship with a bracketed TN", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Will you now or in the future require sponsorship for employment visa status (e.g., H-1B, H-4, TN, OPT, CPT etc.)?",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).not.toBe("No");
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("does not answer a generic authorization question whose choices count TN as sponsorship", () => {
+    const p = ProfileSchema.parse({
+      ...sponsorshipProfile,
+      answers: [
+        ...sponsorshipProfile.answers,
+        {
+          key: "work-authorization-statement",
+          label: "Work authorization statement",
+          patterns: ["work authorization"],
+          answer: "I am authorized to work for any employer in the country in which this position is based.",
+          alternatives: [],
+          allowAutoFill: true,
+        },
+      ],
+    });
+    const tnOption =
+      "I require, or in the future will require, Waymo's sponsorship to obtain work authorization in the country in which this position is based (e.g. H-1B, TN, etc.)";
+    const asked = question("Work Authorization", {
+      required: true,
+      type: "multi_value_single_select",
+      options: [
+        "I am authorized to work for any employer in the country in which this position is based.",
+        tnOption,
+        "My status to work in the country in which this position is based is unknown.",
+      ],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(answers[0]?.guidance).toContain(tnOption);
+  });
 });
 
 describe("bracketed conditional instructions inside a question", () => {
@@ -911,6 +1025,43 @@ describe("bracketed conditional instructions inside a question", () => {
     const { answers } = draftAnswers([asked], p, campaign);
     expect(answers[0]?.answer).not.toContain("@");
     expect(answers[0]?.category).not.toBe("contact");
+  });
+});
+
+describe("contact fields asking for someone else's details", () => {
+  it("does not put the candidate's own email in the referrer's email field", () => {
+    // Tubi's optional follow-up had the candidate's address entered as the
+    // referring employee's, which claims a referral that never happened.
+    const asked = question(
+      "If referred by a Tubi or Fox employee, please include the referrer's Tubi or Fox email address.",
+    );
+    const { answers, blockingQuestions } = draftAnswers([asked], profile, campaign);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.source).not.toBe("profile");
+    expect(blockingQuestions).toEqual([]);
+  });
+
+  it.each([
+    "Referrer Email",
+    "Referring employee's phone number",
+    "Recruiter's email address",
+    "Emergency contact phone",
+    "Hiring manager's email",
+  ])("leaves %s for a person rather than filling the candidate's details", (label) => {
+    const { answers } = draftAnswers([question(label, { required: true })], profile, campaign);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("still fills the candidate's own email and phone", () => {
+    const { answers } = draftAnswers(
+      [question("Your email address"), question("Phone number"), question("Personal email")],
+      profile,
+      campaign,
+    );
+    expect(answers[0]?.answer).toBe("alex@example.com");
+    expect(answers[1]?.answer).not.toBe("");
+    expect(answers[2]?.answer).toBe("alex@example.com");
   });
 });
 
@@ -930,5 +1081,61 @@ describe("work eligibility is never inferred from employment history", () => {
     const p = ProfileSchema.parse(profile);
     const { answers } = draftAnswers([question("I currently work here", { type: "boolean" })], p, campaign);
     expect(answers[0]?.answer).toBe("Yes");
+  });
+});
+
+describe("drafted values must fit the question asked", () => {
+  // Jane Street's form asks questions the stored values only resemble: the word
+  // "school" matched the stored university for a year question, the institution
+  // resolver answered "University Email Address", and the additional-information
+  // essay filled one-line boxes qualified to mean something else.
+  const essay = "First paragraph.\n\nSecond paragraph.";
+  const educated = makeProfile({
+    education: [
+      { institution: "Example State University", credential: "Bachelor of Science (BSc)", field: "Computer Science", end: "2020-04" },
+    ],
+    answers: [
+      { key: "school", label: "School", patterns: ["school", "college"], answer: "Example State University", allowAutoFill: true },
+      { key: "additional-information", label: "Additional information", patterns: ["additional information"], answer: essay, allowAutoFill: true },
+    ],
+  });
+
+  it("leaves an optional year question blank rather than naming a school", () => {
+    const { answers, blockingQuestions } = draftAnswers(
+      [question("What year did you graduate high school?")],
+      educated,
+      campaign,
+    );
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(blockingQuestions).toEqual([]);
+  });
+
+  it("does not answer an email question with a school name", () => {
+    const { answers } = draftAnswers([question("University Email Address")], educated, campaign);
+    expect(answers[0]?.answer).toBe("");
+  });
+
+  it("does not put a multi-paragraph answer into a single-line field", () => {
+    const { answers } = draftAnswers([question("Additional information (for source)")], educated, campaign);
+    expect(answers[0]?.answer).toBe("");
+  });
+
+  it("still puts the same answer into a text area", () => {
+    const { answers } = draftAnswers([question("Additional information", { type: "textarea" })], educated, campaign);
+    expect(answers[0]?.answer).toBe(essay);
+  });
+
+  it("still answers a graduation year from the profile", () => {
+    const { answers } = draftAnswers([question("Graduation year")], educated, campaign);
+    expect(answers[0]?.answer).toBe("2020");
+  });
+
+  it("asks a person when a required question would get a value of the wrong shape", () => {
+    const label = "What year did you graduate high school?";
+    const { answers, blockingQuestions } = draftAnswers([question(label, { required: true })], educated, campaign);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(blockingQuestions).toEqual([label]);
   });
 });
