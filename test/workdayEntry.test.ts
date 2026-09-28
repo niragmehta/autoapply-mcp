@@ -21,9 +21,13 @@ class FakeTenant {
    */
   bodyText =
     "Senior Software Engineer. San Jose, California. Apply. We are hiring engineers to build and operate large scale services, and this advert is long enough to be told apart from the bare careers shell that a tenant paints before its content arrives.";
-  private readonly transitions: Record<string, string[]>;
+  /** Text of the error banner, shown only while `errorMessage` is visible. */
+  errorText = "";
+  /** Runs on every wait, so a test can make a screen paint late. */
+  onWait?: () => void;
+  private readonly transitions: Record<string, string[] | (() => string[])>;
 
-  constructor(initial: string[], transitions: Record<string, string[]>) {
+  constructor(initial: string[], transitions: Record<string, string[] | (() => string[])>) {
     this.visible = new Set(initial);
     this.transitions = transitions;
   }
@@ -46,7 +50,8 @@ class FakeTenant {
       click: async () => {
         if (!self.visible.has(id)) throw new Error(`not visible: ${id}`);
         self.clicks.push(id);
-        const next = self.transitions[id];
+        const transition = self.transitions[id];
+        const next = typeof transition === "function" ? transition() : transition;
         if (next) self.visible = new Set(next);
       },
       fill: async (value: string) => {
@@ -62,9 +67,14 @@ class FakeTenant {
       goto: async () => undefined,
       locator: (selector: string) => this.locator(selector),
       url: () => "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/x",
-      waitForTimeout: async () => undefined,
+      waitForTimeout: async () => {
+        this.onWait?.();
+      },
       waitForLoadState: async () => undefined,
-      evaluate: async () => "",
+      evaluate: async (script?: unknown) =>
+        typeof script === "string" && script.includes("errorMessage") && this.visible.has("errorMessage")
+          ? this.errorText
+          : "",
     };
   }
 }
@@ -74,6 +84,7 @@ const MODAL = ["adventureButton", "applyManually", "autofillWithResume"];
 const CHOOSER = ["GoogleSignInButton", "SignInWithEmailButton", "backToJobPosting"];
 const CREDENTIALS = ["email", "password", "signInSubmitButton", "createAccountLink"];
 const FORM = ["bottom-navigation-next-button", "progressBarActiveStep"];
+const REGISTRATION = ["email", "password", "verifyPassword", "createAccountSubmitButton", "signInLink"];
 
 describe("enterWorkdayApplication", () => {
   beforeEach(() => {
@@ -182,6 +193,196 @@ describe("enterWorkdayApplication", () => {
     expect(result.reached).toBe("sign-in");
     expect(result.createdAccount).toBe(false);
     expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+  });
+
+  it("names the email-verification gate a tenant raises after registering the account", async () => {
+    // Observed live on Guidewire: registration succeeds, then the tenant sends
+    // the browser back to Sign In with "An email has been sent to you. Please
+    // verify your account." Reading that as the open form filled the sign-in
+    // box as if it were My Information and blamed an unfillable Password field.
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: CREDENTIALS,
+    });
+    tenant.bodyText += " Sign In An email has been sent to you. Please verify your account.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(tenant.clicks).toContain("createAccountSubmitButton");
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(true);
+    expect(result.detail).toMatch(/verif/i);
+    expect(result.detail).toContain("candidate@example.com");
+  });
+
+  it("signs in with the new account when registration returns to the provider chooser", async () => {
+    // Observed live on Palo Alto Networks: registering sends the browser back to
+    // the Sign In provider chooser (Apple, Google, LinkedIn, "Sign in with
+    // email"), which carries no password field. That absence was read as the
+    // open form, so the run filled the sign-in page and blamed the posting.
+    let signInAttempts = 0;
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: () => (++signInAttempts === 1 ? CREDENTIALS : FORM),
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: CHOOSER,
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(tenant.clicks).toContain("createAccountSubmitButton");
+    expect(signInAttempts).toBe(2);
+    expect(result.reached).toBe("form");
+    expect(result.createdAccount).toBe(true);
+  });
+
+  it("does not claim the form when registration returns to the chooser and sign-in fails", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: CHOOSER,
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(true);
+    expect(result.detail).toMatch(/created an account/i);
+  });
+
+  it("names the verification gate when registration returns to the chooser with a notice", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: CHOOSER,
+    });
+    tenant.bodyText += " Sign In An email has been sent to you. Please verify your account.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(true);
+    expect(result.detail).toMatch(/verif/i);
+    expect(result.detail).toContain("candidate@example.com");
+  });
+
+  it("does not read a return to the provider chooser after sign-in as being signed in", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CHOOSER,
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+    });
+
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(false);
+  });
+
+  it("does not register again when sign-in is refused until the account is verified", async () => {
+    // Observed live on Palo Alto Networks: a rerun after registering was refused
+    // with "Verify your account before you sign in", and the flow then submitted
+    // the registration form a second time instead of naming the gate.
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: [...CREDENTIALS, "errorMessage"],
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: FORM,
+    });
+    tenant.errorText = "Verify your account before you sign in or request a verification email.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(tenant.clicks).not.toContain("createAccountLink");
+    expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(false);
+    expect(result.detail).toMatch(/verif/i);
+    expect(result.detail).toContain("candidate@example.com");
+  });
+
+  it("waits out a blank screen after registration instead of calling it the form", async () => {
+    // Observed live on Palo Alto Networks: after registering, the wizard shows
+    // neither the form nor a sign-in control for several seconds, then paints
+    // the provider chooser. Judging the blank interval read it as the open form.
+    let registered = false;
+    let waitsSinceRegistration = 0;
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: () => {
+        tenant.errorText = registered
+          ? "Verify your account before you sign in or request a verification email."
+          : "Wrong email address or password.";
+        return [...CREDENTIALS, "errorMessage"];
+      },
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: () => {
+        registered = true;
+        return [];
+      },
+    });
+    tenant.onWait = () => {
+      if (!registered) return;
+      waitsSinceRegistration += 1;
+      if (waitsSinceRegistration === 3) tenant.visible = new Set(CHOOSER);
+    };
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(tenant.clicks).toContain("createAccountSubmitButton");
+    expect(result.reached).toBe("sign-in");
+    expect(result.createdAccount).toBe(true);
+    expect(result.detail).toMatch(/verif/i);
+    expect(result.detail).toContain("candidate@example.com");
+  });
+
+  it("reports the form reached when registration opens the application directly", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: FORM,
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("form");
+    expect(result.createdAccount).toBe(true);
   });
 });
 
