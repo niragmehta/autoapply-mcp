@@ -850,6 +850,63 @@ describe("an approved answer under a sibling category", () => {
   });
 });
 
+/**
+ * Salesforce files every source under "Current or Former Employee", "External
+ * Career Site Sources" or "Referral". None of them shares a word with "Company
+ * Careers Page" or any careers-page fallback, so no category was ever opened,
+ * the employer's name was typed into the next prompt's search instead, and the
+ * first step would not advance.
+ */
+describe("a careers-page answer under a career-site category", () => {
+  const label = "How Did You Hear About Us?*";
+  const candidates = optionSearchCandidates(
+    { selectorIndex: 0, label, type: "select", name: "", required: true },
+    {
+      questionKey: "how-did-you-hear",
+      label,
+      answer: "Company Careers Page",
+      source: "approved-answer",
+      citation: "profile.answers.how-did-you-hear",
+      requiresHuman: false,
+      category: "general",
+    },
+    "Salesforce",
+  );
+
+  it("opens the career-site category and takes the employer's site inside it", async () => {
+    // A single-select, which the per-candidate category probe skips.
+    const prompt = new FakePrompt(
+      {
+        "Current or Former Employee": ["Current Salesforce Employee", "Former Salesforce Employee"],
+        "External Career Site Sources": ["Glassdoor", "LinkedIn", "Salesforce Careers Website"],
+        Referral: ["Employee Referral"],
+      },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Salesforce Careers Website"]);
+  });
+
+  it("claims no referral when the career-site category holds nothing approved", async () => {
+    const prompt = new FakePrompt(
+      {
+        "Current or Former Employee": ["Current Salesforce Employee"],
+        "External Career Site Sources": ["Glassdoor", "LinkedIn"],
+        Referral: ["Employee Referral"],
+      },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(false);
+    expect(prompt.selected).toEqual([]);
+  });
+});
+
 const CATALOGUE = [
   "Accounting",
   "Computer Engineering",
