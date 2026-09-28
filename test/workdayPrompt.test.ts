@@ -23,6 +23,10 @@ class FakePrompt {
   announces = false;
   /** Models keyboard selection: the row Enter commits, and what the cursor is read back as. */
   keys?: { commits: string; readsAs: string };
+  /** How many rows a virtualized menu renders at once; unset renders every row. */
+  window?: number;
+  private offset = 0;
+  private shownMenu: string[] = [];
 
   constructor(
     private readonly tree: Tree,
@@ -36,6 +40,24 @@ class FakePrompt {
 
   private top(): string[] {
     return Object.keys(this.tree);
+  }
+
+  /** The rows the menu has rendered; a newly opened list starts at its top. */
+  private rendered(): string[] {
+    if (this.shownMenu !== this.menu) {
+      this.shownMenu = this.menu;
+      this.offset = 0;
+    }
+    return this.window === undefined ? this.menu : this.menu.slice(this.offset, this.offset + this.window);
+  }
+
+  /** Scrolls the open list the way a page script setting its scrollTop does; false when it cannot move. */
+  scroll(toTop: boolean): boolean {
+    this.rendered();
+    if (this.window === undefined) return false;
+    const before = this.offset;
+    this.offset = toTop ? 0 : Math.min(this.offset + this.window, Math.max(this.menu.length - this.window, 0));
+    return this.offset !== before;
   }
 
   private list(selector: string, items: string[]) {
@@ -66,7 +88,7 @@ class FakePrompt {
           self.menu = [];
           return;
         }
-        self.menu = children;
+        self.menu = [...children];
       },
     });
     return make(null);
@@ -83,7 +105,7 @@ class FakePrompt {
     if (selector.includes('role="option"')) {
       // The production selector excludes pills; the fake honours that by only
       // ever returning menu items here, and exposing pills separately.
-      return this.list(selector, this.menu);
+      return this.list(selector, this.rendered());
     }
     if (selector.includes("selectedItem")) {
       const pills = this.kind === "picker" ? this.selected : [];
@@ -145,7 +167,12 @@ class FakePrompt {
       url: () => "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/x",
       waitForTimeout: async () => undefined,
       waitForLoadState: async () => undefined,
-      evaluate: async () => this.keys?.readsAs ?? "",
+      evaluate: async (script: unknown) => {
+        if (typeof script === "string" && script.includes("scrollTop")) {
+          return this.scroll(script.includes("const toTop = true"));
+        }
+        return this.keys?.readsAs ?? "";
+      },
       keyboard: {
         press: async (key: string) => {
           if (this.keys && key === "ArrowDown") return;
@@ -899,6 +926,68 @@ describe("a careers-page answer under a career-site category", () => {
       },
       "dropdown",
     );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(false);
+    expect(prompt.selected).toEqual([]);
+  });
+});
+
+/**
+ * Workday renders a long category a screenful at a time. Salesforce's
+ * "External Career Site Sources" showed eleven sources, alphabetically, ending
+ * at "Indeed", so every approved answer further down read as not offered and
+ * the required source question stayed blank.
+ */
+describe("a category longer than the rows it renders", () => {
+  const label = "How Did You Hear About Us?*";
+  const candidates = optionSearchCandidates(
+    { selectorIndex: 0, label, type: "select", name: "", required: true },
+    {
+      questionKey: "how-did-you-hear",
+      label,
+      answer: "Company Careers Page",
+      source: "approved-answer",
+      citation: "profile.answers.how-did-you-hear",
+      requiresHuman: false,
+      category: "general",
+    },
+    "Salesforce",
+  );
+  const salesforce = (sources: string[]) => {
+    const prompt = new FakePrompt(
+      {
+        "Current or Former Employee": ["Current Salesforce Employee"],
+        "External Career Site Sources": sources,
+        Referral: ["Employee Referral"],
+      },
+      "dropdown",
+    );
+    prompt.window = 3;
+    return prompt;
+  };
+
+  it("scrolls the category to reach the employer's site", async () => {
+    const prompt = salesforce(["Alumni Network", "Anthropic", "Glassdoor", "Indeed", "LinkedIn", "Salesforce Careers Website", "YouTube"]);
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Salesforce Careers Website"]);
+  });
+
+  it("takes a weaker approved answer from the unrendered rows when nothing closer is offered", async () => {
+    const prompt = salesforce(["Alumni Network", "Anthropic", "Glassdoor", "Indeed", "LinkedIn", "Other", "YouTube"]);
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Other"]);
+  });
+
+  it("still claims nothing when no row of the category is approved", async () => {
+    const prompt = salesforce(["Alumni Network", "Anthropic", "Glassdoor", "Indeed", "LinkedIn", "YouTube"]);
 
     const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
 
