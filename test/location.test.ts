@@ -67,6 +67,19 @@ describe("analyzeLocation", () => {
     expect(analyzeLocation(["Silicon Valley"]).locationClass).toBe("bay-area");
   });
 
+  it("recognizes SF and NYC office shorthand", () => {
+    for (const value of ["SF Office", "Strava SF", "SF", "SF or NYC"]) {
+      expect(analyzeLocation([value]).locationClass, value).toBe("bay-area");
+    }
+    const hybrid = analyzeLocation(["Hybrid - SF Office"]);
+    expect(hybrid.locationClass).toBe("bay-area");
+    expect(hybrid.workplaceType).toBe("hybrid");
+    for (const value of ["NYC Office", "NYC", "NYC (SoHo)"]) {
+      expect(analyzeLocation([value]).locationClass, value).toBe("us-other");
+    }
+    expect(analyzeLocation(["Sfax, Tunisia"]).locationClass).toBe("other");
+  });
+
   it("requires California context for ambiguous US city names", () => {
     expect(analyzeLocation(["Newark, CA"]).locationClass).toBe("bay-area");
     expect(analyzeLocation(["Newark, NJ"]).locationClass).toBe("us-other");

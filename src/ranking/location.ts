@@ -23,6 +23,7 @@ const BAY_AREA_REGIONS = [
 
 const BAY_AREA_UNAMBIGUOUS = [
   "san francisco",
+  "sf",
   "palo alto",
   "mountain view",
   "sunnyvale",
@@ -260,6 +261,7 @@ const US_SIGNALS = [
   "san diego",
   "portland",
   "new york city",
+  "nyc",
   ...US_STATE_NAMES,
   ...US_STATE_ABBREVIATIONS.map((code) => `\\b${code.toLowerCase()}\\b`),
 ];
