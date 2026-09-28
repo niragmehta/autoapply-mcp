@@ -954,12 +954,19 @@ function majorCandidates(field: FieldDescriptor, value: string): string[] {
  * also tries the employer's domain and its careers-site wordings, right after
  * the approved wording itself. The bare employer name is never offered - it
  * matches "Adobe MAX" and "Adobe Recruiting Team" as readily as the site.
+ *
+ * "Career site" is the impersonal name Workday tenants give that channel.
+ * Salesforce's single-select offers only "Current or Former Employee",
+ * "External Career Site Sources" and "Referral" at its top level, and no
+ * careers-page wording shares a word with any of them, so the category holding
+ * the employer's site was never opened.
  */
 const SOCIAL_SOURCE_PATTERN = /\b(friend|referr|colleague|employee|recruiter|word of mouth)\b/i;
 const OWN_SITE_SOURCE = /\b(careers?|company (?:website|site)|website)\b/i;
 
 const IMPERSONAL_SOURCE_CANDIDATES = [
   "Careers page",
+  "Career site",
   "Company website",
   "Website",
   "Job board",

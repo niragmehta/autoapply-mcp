@@ -2413,6 +2413,14 @@ describe("the employer's own site answers a careers-page source", () => {
     expect(optionSearchCandidates(source, careers, "Palo Alto Networks")).toContain("paloaltonetworks.com");
   });
 
+  it("offers the career-site wording that Workday tenants file the employer's site under", () => {
+    // Salesforce's top level is "Current or Former Employee", "External Career
+    // Site Sources" and "Referral"; only the career-site wording leads inward.
+    const candidates = optionSearchCandidates(source, careers, "Salesforce");
+    expect(candidates).toContain("Career site");
+    expect(candidates.indexOf("Career site")).toBeLessThan(candidates.indexOf("Job board"));
+  });
+
   it("never offers the bare employer name, which also names its events and teams", () => {
     expect(optionSearchCandidates(source, careers, "Adobe")).not.toContain("Adobe");
   });
