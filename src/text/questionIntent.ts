@@ -55,6 +55,25 @@ export function acceptsRelocationInstead(question: string): boolean {
   return RELOCATION_ALTERNATIVE.test(question);
 }
 
+const NOT_RESIDENT = String.raw`\bif\s+(?:you\s+)?(?:are|do)?\s*(?:not|n['\u2019\s]?t)\s+(?:currently\s+)?(?:located|based|living|residing|live|reside)\b`;
+const WILLING_TO_RELOCATE = String.raw`\b(?:willing|open|ready|able|happy|prepared)\s+(?:to\s+)?relocat\w*`;
+const RESIDENCE_AS_CONDITION = new RegExp(
+  `${NOT_RESIDENT}[^?]*?${WILLING_TO_RELOCATE}|${WILLING_TO_RELOCATE}[^?]*?${NOT_RESIDENT}`,
+  "i",
+);
+
+/**
+ * Juicebox asks "If you are not currently located in the San Francisco Bay
+ * Area, would you be willing to relocate?". The residence words are the
+ * condition, not the question: only the willingness to relocate is asked, so
+ * the guards that keep a residence claim from being answered with a relocation
+ * decision do not apply. A question that also asks where he lives - "Are you
+ * located there? If not, ..." - has no residence in its condition.
+ */
+export function residenceOnlyInCondition(question: string): boolean {
+  return askedSentences(question).every((sentence) => RESIDENCE_AS_CONDITION.test(sentence));
+}
+
 const RELOCATION_SUPPORT = /assist|package|support|stipend|reimburs/i;
 
 /** A decision about relocating, as opposed to relocation assistance. */

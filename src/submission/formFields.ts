@@ -20,6 +20,7 @@ import {
   decidesRelocation,
   relocationAssistanceMismatch,
   relocationOption,
+  residenceOnlyInCondition,
   writtenForChoiceList,
 } from "../text/questionIntent.js";
 import { isRecruitingSourceLabel, sourceAnswerMismatch } from "./sourceQuestion.js";
@@ -558,6 +559,7 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   if (
     offersOptions(field) &&
     CURRENT_RESIDENCE_QUESTION.test(fieldLabel) &&
+    !residenceOnlyInCondition(field.label) &&
     !WORK_AUTHORITY_TEXT.test(fieldLabel) &&
     !RESIDENCE_ANSWER.test(answerLabel) &&
     !(acceptsRelocationInstead(fieldLabel) && aboutRelocation({ key: answer.questionKey, label: answer.label }))
