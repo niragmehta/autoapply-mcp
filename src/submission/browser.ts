@@ -35,6 +35,7 @@ import { hasVisibleCaptchaChallenge } from "./captcha.js";
 import { workdayDateParts } from "./workdayDates.js";
 import { inertControlIndexes } from "./inertControls.js";
 import { READ_VALIDATION_ERRORS } from "./validationErrors.js";
+import { recordStepFailures, stepFailureList, wizardStepKey, type StepFailures } from "./wizardFailures.js";
 export { READ_VALIDATION_ERRORS } from "./validationErrors.js";
 import { redactSecrets } from "./credentials.js";
 import {
@@ -687,6 +688,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // needs a walk-in step before there is anything to fill.
     const priorFilled: Array<{ label: string; source: string }> = [];
     const priorFailedRequired: string[] = [];
+    let stepFailures: StepFailures = new Map();
     let workdayRetries = 0;
     let resumeAttached = false;
     if (isWorkdayUrl(page.url())) {
@@ -771,7 +773,6 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           continue;
         }
         priorFilled.push(...stepFill.filled);
-        priorFailedRequired.push(...stepFill.failedRequired);
         // A required question left unmatched on an earlier wizard page is just
         // as blocking as one on the last page, but only the last page's plan
         // reaches the report. Without this the run ends "unmatched required: []"
@@ -800,7 +801,10 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
             : "";
           stepUnmatched.push(shape ? `${entry.label} [${shape}]` : entry.label);
         }
-        priorFailedRequired.push(...stepUnmatched);
+        stepFailures = recordStepFailures(stepFailures, wizardStepKey(name, step), [
+          ...stepFill.failedRequired,
+          ...stepUnmatched,
+        ]);
         logger.info("workday step filled", {
           step: name || `step ${step + 1}`,
           filled: stepFill.filled.length,
@@ -892,7 +896,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // Pages saved earlier in a multi-step wizard are part of this application,
     // so what they filled has to survive into the final report.
     const filled = [...priorFilled, ...pageFill.filled, ...letterFilled];
-    const failedRequired = [...priorFailedRequired, ...pageFill.failedRequired];
+    const failedRequired = [...stepFailureList(stepFailures), ...priorFailedRequired, ...pageFill.failedRequired];
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
     const inertIndexes = await inertControlIndexes(
