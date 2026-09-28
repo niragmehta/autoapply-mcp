@@ -33,7 +33,7 @@ High-volume workflow:
   2. prepare_batch        - prepare many applications at once from a filter
   3. preview_batch        - review the set and the grouped blocking questions
   4. approve_batch        - authorize the whole manifest in one decision
-  5. submit_batch         - submit the set, respecting daily limits and pacing
+  5. submit_batch         - submit the set, respecting configured limits and pacing
   6. list_batches         - track progress
 
 Rules this server enforces and you must respect:

@@ -164,8 +164,43 @@ describe("checkSubmissionAllowed", () => {
   });
 
   it("enforces the daily limit", () => {
-    const result = checkSubmissionAllowed({ ...baseInput, submittedToday: campaign.submission.dailyLimit });
+    const result = checkSubmissionAllowed({
+      ...baseInput,
+      campaign: makeCampaign({ submission: { dailyLimit: 15 } }),
+      submittedToday: 15,
+    });
     expect(result.code).toBe("daily_limit_reached");
+  });
+
+  it.each([0, 15, 101, Number.MAX_SAFE_INTEGER])(
+    "does not apply a daily ceiling when explicitly unlimited, after %s submissions",
+    (submittedToday) => {
+      const result = checkSubmissionAllowed({
+        ...baseInput,
+        campaign: makeCampaign({ submission: { dailyLimit: null } }),
+        submittedToday,
+      });
+      expect(result.code).toBe("ok");
+    },
+  );
+
+  it("retains company caps, pacing and approval requirements with an unlimited daily limit", () => {
+    const unlimited = {
+      ...baseInput,
+      campaign: makeCampaign({ submission: { dailyLimit: null, maxPerCompany: 3, minDelaySeconds: 90 } }),
+      submittedToday: 101,
+    };
+    expect(checkSubmissionAllowed({ ...unlimited, companyApplicationCount: 4 }).code).toBe("company_cap_reached");
+    expect(checkSubmissionAllowed({ ...unlimited, lastSubmissionAt: new Date().toISOString() }).code).toBe("pacing");
+    expect(checkSubmissionAllowed({ ...unlimited, approval: null }).code).toBe("not_approved");
+    expect(checkSubmissionAllowed({
+      ...unlimited,
+      application: application({ resumePath: `${fixtureResumePath()}.missing` }),
+    }).code).toBe("resume_unusable");
+    expect(checkSubmissionAllowed({
+      ...unlimited,
+      application: application({ answers: [answer({ answer: "", required: true, requiresHuman: true })] }),
+    }).code).toBe("unresolved_questions");
   });
 
   it("enforces the per-company ceiling", () => {

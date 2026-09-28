@@ -118,7 +118,7 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
     }
   }
 
-  if (input.submittedToday >= policy.dailyLimit) {
+  if (policy.dailyLimit !== null && input.submittedToday >= policy.dailyLimit) {
     return deny("daily_limit_reached", `daily submission limit of ${policy.dailyLimit} reached`);
   }
 

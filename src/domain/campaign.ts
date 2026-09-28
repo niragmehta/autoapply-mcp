@@ -73,7 +73,8 @@ export const SubmissionPolicySchema = z.object({
     "jobs.ashbyhq.com",
   ]),
   allowedCompanies: z.array(nonEmpty).default([]),
-  dailyLimit: z.number().int().positive().default(25),
+  /** Null explicitly disables the daily ceiling; other submission guards still apply. */
+  dailyLimit: z.number().int().positive().nullable().default(25),
   /**
    * Hard ceiling on how many applications may be prepared or submitted in a
    * single batch. Keeps a run reviewable by a human and avoids tripping ATS

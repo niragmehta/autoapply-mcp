@@ -217,7 +217,11 @@ export function registerSubmissionTools(server: McpServer): void {
           ...application,
           packetHash: currentHash,
           status: "needs_human",
-          answers: mergeDiscoveredQuestions(application.answers, result.unmatchedRequired),
+          answers: mergeDiscoveredQuestions(
+            application.answers,
+            result.unmatchedRequired,
+            workspace.profile.answers,
+          ),
           notes: `${application.notes}\n[${nowIso()}] aborted: ${result.reason}`.trim(),
           artifactPath: result.screenshotPath,
         });

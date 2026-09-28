@@ -152,7 +152,7 @@ High volume:
 prepare_batch  {tiers:["A","B"], locationClasses:["bay-area"], minCompensation:250000}
 preview_batch                  -> the set, plus grouped blocking questions
 approve_batch  + manifestHash + expectedCount
-submit_batch   mode            -> honours daily limit and pacing
+submit_batch   mode            -> honours configured limits and pacing
 list_batches                   -> progress
 ```
 

@@ -260,6 +260,10 @@ describe("MCP server", () => {
     // The optional question is still unanswered; it is reported, not blocking.
     expect(updated.outstandingQuestions).toEqual([]);
     expect(updated.optionalUnanswered).toContain("(Optional) Personal Preferences");
+    // The preview must agree with the submit guard: a blank optional field is
+    // reported elsewhere, never listed as a missing required answer.
+    const preview = await callTool("preview_application", { applicationId });
+    expect(preview.text).toContain("Unresolved required answers: none");
     const packetHash = String(updated.packetHash);
 
     // A stale hash must not be accepted as approval.

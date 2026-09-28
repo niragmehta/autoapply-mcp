@@ -17,7 +17,7 @@ Discovery, gating, scoring and drafting are fully automated. Submission is not.
 | A question needing a human is still unanswered | `unresolved_questions` |
 | Destination host is not allowlisted | `destination_not_allowed` |
 | Auto mode for a company that is not allowlisted | `company_not_allowlisted` |
-| Daily submission cap reached | `daily_limit_reached` |
+| Configured daily submission cap reached | `daily_limit_reached` |
 | Minimum interval between submissions not elapsed | `pacing` |
 
 Approval binds to a SHA-256 hash of the exact packet: job, apply URL, resume, cover letter and every answer. Change one character and the previous approval no longer applies.
@@ -38,6 +38,75 @@ Narrative templates fill `{topics}` only from keywords the posting asks for **an
 Storing a personal value is not consent to send it. Each field carries its own `autoFill` flag, and the flag is the consent.
 
 Where question phrasings overlap, the longest matching pattern wins. This matters for sponsorship: a generic "do you require sponsorship" answer must not pre-empt one written for a form that defines sponsorship to include TN.
+
+A generic work-authorization answer cannot establish permission for any/all
+employers, unrestricted authorization, or indefinite/permanent authorization.
+Those qualifiers require a matching explicit approval in the answer bank.
+Drafting and live-form fallbacks apply the same scope check; a generic
+sponsorship fallback cannot bypass it. Existing profile facts are not changed.
+
+A derived residence-country value can fill a country/address-country control,
+not a legal-age, citizenship, documentation or work-permission attestation that
+merely mentions "country". Those questions need their own supported answers.
+
+Recruiting-source questions only match answers about the recruiting source.
+A personal website or LinkedIn URL cannot answer "How did you hear about this
+job?", even when a checkbox is named `website` or offers a LinkedIn option.
+Without an explicit source answer, the question remains unresolved.
+
+Lever controls are associated with their enclosing question, not just a generic
+choice such as "Yes" or "No". The complete question is retained up to 2,000
+characters so trailing sponsorship definitions and consent terms are not lost.
+When Lever is still analyzing the uploaded resume, field filling waits for its
+native processing indicator to finish so late autofill cannot overwrite reviewed
+answers. A processing timeout is surfaced rather than silently ignored.
+Lever's current-location autocomplete is selected through its native suggestions
+and verified against both the visible label and its native selected-location
+record. Searching by a shorter city name never authorizes selecting a different
+country, and the browser does not manufacture hidden location data or CAPTCHA
+tokens. An interactive challenge during lookup stops the run.
+
+Job-location classification does not treat office floor markers such as `FL 7`
+as Florida, while retaining state abbreviations followed by real ZIP codes.
+`NL` alone cannot establish a Canadian location because it also denotes the
+Netherlands; Canadian city names, full province names, or explicit country
+context still identify Newfoundland and Labrador. Check the actual role's
+geography before submission rather than relying on a short location code alone.
+
+An employer-impression rating cannot answer a candidate skill self-assessment.
+Shared wording such as "how would you rate" does not authorize a new personal
+qualification claim.
+
+Institutional or technical uses of "state", such as state-owned enterprises and
+state machines, do not resolve to the candidate's postal province or address.
+Unanswered political-exposure and experience questions remain blocked.
+
+Workday employment month/year and education year controls are distinguished by
+their native history identifiers, so two fields labelled "From" cannot exchange
+values. Month-level history does not invent a day, current employment does not
+invent an end date, and `MM/YYYY` or `YYYY` placeholders are not completed answers.
+
+Workday resumes saved drafts, so a prompt can still hold a value from an earlier
+run. That value is kept only when no approved answer is on offer. When one is on
+offer but will not select, or a probe's selection cannot be undone, the run stops
+even if the question is optional, because the form would otherwise be sent with
+a claim nobody approved. A selection is confirmed by reading the widget back; a
+single-select's unchanged "1 item selected" announcement is not evidence. The
+Review-page check does not count the employer's own name as confirming an
+answer, since it appears on every page.
+
+A bare "Yes" or "No" option stands only for an answer that opens with that word
+followed by punctuation, on every board. "Not Applicable/No Driving
+Requirements" therefore never selects "No", and a refusal never selects either.
+When several options match equally, one that says exactly what was approved
+beats a shorter one contained in it.
+
+A question that residence or relocation both satisfy ("Do you currently live
+in, or plan to relocate to...") is answered from the relocation decision, not
+from the residence denial. When the options are spelled out, only an option
+that commits to relocating without claiming a residence may be chosen, and a
+person decides when no single option does. Free text keeps the qualified
+residence answer, which states the relocation itself.
 
 Match reports include a `claimsToAvoid` list: requirements the posting asks for that your profile cannot support. An agent writing your cover letter is told explicitly not to claim them.
 
@@ -77,6 +146,13 @@ Job descriptions, careers pages and form labels are third-party input. The serve
 
 If a CAPTCHA, hCaptcha, reCAPTCHA or Turnstile challenge is detected, the browser run aborts, captures a screenshot and marks the application `needs_human`. There is no solving, bypassing, proxying or fingerprint spoofing, and none will be added.
 
+Challenge detection checks every matching iframe, not just the first one, because
+providers may retain hidden frames alongside a visible puzzle. The browser
+rechecks after uploads, while filling, before reporting a prepared form, and
+immediately before a submit click. A late challenge must not be reported as a
+successfully prepared form. Hidden frames and passive badges alone are not
+interactive challenges.
+
 Requests are throttled per host, retried with backoff only on 429 and 5xx, and identify themselves honestly through the User-Agent.
 
 ## Privacy
@@ -89,9 +165,16 @@ Requests are throttled per host, retried with backoff only on 429 and 5xx, and i
 
 ## Rate and volume discipline
 
-`dailyLimit` and `minDelaySeconds` exist to keep a campaign within the bounds of a person applying diligently. High-volume, low-quality applications are counterproductive for senior roles: recruiters increasingly filter for them, and a poorly targeted application is a wasted first impression at a company you may want later.
+`dailyLimit` is a configurable campaign preference, not a universal employer or
+ATS requirement. Positive integers impose a daily ceiling; `null` explicitly
+disables it. The finite default remains 25 when the setting is omitted.
 
-The intended shape of a campaign is roughly 20 to 30 well-targeted submissions per week, not 100 in a day.
+Unlimited daily mode does not remove `minDelaySeconds`, per-company limits,
+per-batch limits, employer restrictions, duplicate protection, or the approval
+boundary. It also does not override employer rate limits or anti-bot controls.
+Choose volume deliberately and keep every application relevant and truthful;
+removing a daily ceiling does not guarantee a particular number of successful
+submissions.
 
 ## What this server will not do
 

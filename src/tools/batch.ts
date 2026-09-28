@@ -367,7 +367,7 @@ export function registerBatchTools(server: McpServer): void {
     {
       title: "Submit an approved batch",
       description:
-        "Submits every approved application in the batch, re-running all per-application guards for each one and honouring the daily limit and pacing delay. Stops cleanly when the daily limit is reached so the rest can continue on the next run. The campaign's submission.maxBatchSize also caps how many are submitted per run.",
+        "Submits approved applications in the batch, re-running all per-application guards and honouring pacing and any configured daily limit. A null submission.dailyLimit disables only the daily ceiling. The campaign's submission.maxBatchSize still caps how many are submitted per run.",
       inputSchema: {
         batchId: z.string().min(1),
         mode: z.enum(["manual", "assisted", "auto"]).default("manual"),
@@ -386,7 +386,11 @@ export function registerBatchTools(server: McpServer): void {
 
       const mode = args.mode ?? "manual";
       const policy = workspace.campaign.submission;
-      const cap = Math.min(args.maxSubmissions ?? policy.maxBatchSize, policy.maxBatchSize, policy.dailyLimit);
+      const cap = Math.min(
+        args.maxSubmissions ?? policy.maxBatchSize,
+        policy.maxBatchSize,
+        policy.dailyLimit ?? Number.POSITIVE_INFINITY,
+      );
       const ready = listBatchItems(workspace.db, batch.id, "ready");
 
       setBatchStatus(workspace.db, batch.id, "submitting");
@@ -475,7 +479,11 @@ export function registerBatchTools(server: McpServer): void {
               ...application,
               packetHash: currentHash,
               status: "needs_human",
-              answers: mergeDiscoveredQuestions(application.answers, run.unmatchedRequired),
+              answers: mergeDiscoveredQuestions(
+                application.answers,
+                run.unmatchedRequired,
+                workspace.profile.answers,
+              ),
               notes: `${application.notes}\n[${nowIso()}] ${run.reason}`.trim(),
               artifactPath: run.screenshotPath,
             });
@@ -508,7 +516,7 @@ export function registerBatchTools(server: McpServer): void {
           mode === "manual"
             ? "Open each apply URL, submit it, then call record_submission for that application id."
             : remaining > 0
-              ? "Daily limit or pacing stopped the run. Call submit_batch again to continue."
+              ? "Approved applications remain. Call submit_batch again when their submission guards allow it."
               : "Batch complete. Track responses with record_outcome.",
       });
     }),

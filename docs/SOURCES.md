@@ -16,8 +16,8 @@ postings before saving a board; pass `save:false` for verification only.
 | ATS | Board token | Source |
 |---|---|---|
 | Greenhouse | Employer board token | Public Job Board API |
-| Lever | Employer slug and global/EU region | Public Postings API |
-| Ashby | Employer board name | Public job-board API |
+| Lever | Employer slug and global/EU region | Public Postings API, including opening/body, qualification lists, salary explanation and closing sections |
+| Ashby | Employer board name | Public job-board API, with public hosted-page fallback on 404 |
 | Workday | `tenant/datacenter/site` from the real careers URL | Public tenant listings and details |
 | SmartRecruiters | Employer identifier, preserving case, e.g. `ServiceNow` | Public company Posting API |
 | Workable | Employer slug, e.g. `rokt` | Public account feed with `details=true`, not employer SPI credentials |
@@ -33,10 +33,55 @@ After deciding to save the verified board, use `save:true`, then
 `discover_jobs {"companies":["ServiceNow"]}`. `query` narrows SmartRecruiters and
 Workday requests. Prefer it for large boards: SmartRecruiters list pages need
 detail requests for complete descriptions and salary evidence.
+Workday posting details use a validated absolute `startDate` when available,
+rather than resetting a `Posted 30+ Days Ago` label to thirty days before each
+refresh. An invalid absolute value emits a warning before the legacy relative
+fallback. Relative-only dates remain approximate: a capped age is not proof of
+the original publication date, and reposting must not override known earlier
+publication evidence.
 Non-text SmartRecruiters video sections are ignored, while an ad still needs
 real textual content. Workable may repeat a shortcode per job location:
 identical content is merged with all listed locations, but conflicting
 descriptions, salaries or other non-location fields fail explicitly.
+
+Free-text salary ranges introduced by `between following values:` (optionally
+`the following values:`) are retained as published pay, not mistaken for an
+unpublished-pay exception. Thousands may use commas or spaces (including
+nonbreaking spaces); attached currency codes such as `312 000PLN` are preserved.
+Explicit range currencies take precedence over nearby currencies. Parsing does
+not add FX rates or establish new pay-period or job-location evidence.
+Explicit annual ranges written `from $X/year in our lowest geographic market
+up to $Y/year` are also preserved, rather than admitted as unpublished pay.
+This does not establish which regional offer applies to a particular candidate.
+
+Ashby salary tiers are matched to the same location classification used for the
+posting, rather than blindly taking the first country's summary. A unique
+explicit city/region tier takes precedence over a countrywide tier; a Bay Area
+posting can use a California tier even when Canada is the primary office.
+Exclusion labels such as "all other states" are not positive location matches.
+When tier geography or seniority is ambiguous, the published API summary is
+retained with a warning and still needs manual location/pay verification; the
+largest range is never selected merely because it pays more. The chosen tier's
+label is retained in salary evidence. Unsupported Ashby intervals stay unknown.
+
+For explicitly remote API postings whose display location is only `Remote` (or
+empty), the job location's own structured postal-country field can establish US
+or Canadian eligibility. Each secondary location uses its own country, not the
+primary location's country. Explicit city, country, and worldwide labels remain
+unchanged. Salary currency and employer headquarters are never country evidence.
+
+Some live Ashby boards return 404 from the listing API. In that case discovery
+reads the public hosted board and each listed job, without executing scripts or
+using an employer API key. It validates board/posting identity and reads original
+publication dates and structured pay units from the job's JSON-LD. Missing dates
+remain unknown; unknown pay units are not annualized. Published pay without
+structured currency/units is explicitly held as unknown compensation, not
+misclassified as unpublished pay. Public-page requests are
+serial, host-restricted, throttled and size-bounded, with at most 500 listed jobs
+per fallback board; larger or malformed boards fail explicitly, not partially.
+Confidential/unlisted jobs are excluded. Access-denied responses do not trigger
+this fallback. Slug guessing still probes the API only, so use an employer's
+official hosted-board URL with `add_company_board` when that API is unavailable.
 
 SmartRecruiters, Workable and Recruitee **do not have browser submission
 integrations**. Their assisted/auto calls fail with `ats_browser_not_supported`,
@@ -106,6 +151,9 @@ shapes, including regional Lever boards.
 - Verify employer-owned salary and primary job locations. A shared headquarters
   tag is not proof of a Bay Area vacancy; missing salary on another city's
   posting is not permission to bypass a published Bay Area salary.
+- Bare `DE` is not sufficient US-location evidence: it can mean Germany or the
+  word "de" in places such as Rio de Janeiro and Ciudad de Mexico. Explicit
+  Delaware or US context still identifies US postings.
 - Unknown salary periods stay unknown; neither employer nor aggregate discovery
   should manufacture an annual salary or a fresh posting date. Published
   compensation with an unsupported period is held by
