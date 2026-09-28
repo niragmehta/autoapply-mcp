@@ -857,6 +857,48 @@ describe("location questions that ask which place, not whether", () => {
     expect(answers[0]?.answer).toBe("");
     expect(answers[0]?.requiresHuman).toBe(true);
   });
+
+  // Wiz, 2026-09-28: "Please select the state where you currently reside" lists
+  // only US states. With a home address on file the personal-field rule took
+  // the question and handed "British Columbia" to a list that cannot take it,
+  // so the draft looked complete and the application failed at submission.
+  describe("when the home address answers the question", () => {
+    const withAddress = ProfileSchema.parse({
+      ...profile,
+      answers: [residence],
+      personal: {
+        ...profile.personal,
+        address: { street: "1 Main St", city: "Coquitlam", region: "British Columbia", postalCode: "V3J 1A1", country: "Canada" },
+        addressAutoFill: true,
+      },
+    });
+    const US_STATES = ["California", "New York", "Washington", "Washington D.C."];
+    const stateQuestion = (options: string[], required = true) =>
+      question("Please select the state where you currently reside", {
+        required,
+        type: "multi_value_single_select",
+        options,
+      });
+
+    it("hands back a required list that does not offer the region on file", () => {
+      const { answers } = draftAnswers([stateQuestion(US_STATES)], withAddress, campaign);
+      expect(answers[0]?.answer).toBe("");
+      expect(answers[0]?.requiresHuman).toBe(true);
+      expect(answers[0]?.guidance).toContain("British Columbia");
+    });
+
+    it("leaves an optional list blank when it does not offer the region on file", () => {
+      const { answers } = draftAnswers([stateQuestion(US_STATES, false)], withAddress, campaign);
+      expect(answers[0]?.answer).toBe("");
+      expect(answers[0]?.requiresHuman).toBe(false);
+    });
+
+    it("answers with the offered spelling of the region on file", () => {
+      const { answers } = draftAnswers([stateQuestion(PROVINCES)], withAddress, campaign);
+      expect(answers[0]?.answer).toBe("(CAN) British Columbia");
+      expect(answers[0]?.requiresHuman).toBe(false);
+    });
+  });
 });
 
 describe("names used as examples inside a question", () => {

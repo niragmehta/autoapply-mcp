@@ -757,15 +757,26 @@ function answerOne(
   // and the question still stops for a decision.
   const personal = resolvePersonal(asked.label, profile);
   if (personal) {
+    // A stored address part handed to a closed list the form does not offer it
+    // in fails at submission, after the draft has already been reported
+    // complete. Resolved against the options as the contact rule below is, so
+    // a decorated entry is taken in its offered spelling and an absent one is
+    // handed back. Demographic fields are left to the decline handling at fill
+    // time, which knows each board's wording for declining.
+    const offered = personal.category === "contact" && personal.answer.trim().length > 0 && (question.options?.length ?? 0) > 0;
+    const resolved = offered ? resolveApprovedValue({ answer: personal.answer, alternatives: [] }, question) : undefined;
+    const unusable = resolved?.unmatchedChoice === true;
     return {
       questionKey: question.key,
       label: question.label,
-      answer: personal.answer,
+      answer: unusable ? "" : (resolved?.value ?? personal.answer),
       source: "profile",
       citation: personal.citation,
-      requiresHuman: !personal.authorized,
+      requiresHuman: unusable ? question.required === true : !personal.authorized,
       category: personal.category,
-      guidance: "",
+      guidance: unusable
+        ? `"${personal.answer}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
+        : "",
     };
   }
 
