@@ -191,6 +191,7 @@ const CANADA_AMBIGUOUS = [
   "burlington",
 ];
 
+// NL can mean the Netherlands; use Canadian city/province names or other context.
 const CANADA_SIGNALS = [
   "canada",
   "canadian",
@@ -217,7 +218,6 @@ const CANADA_SIGNALS = [
   "\\bsk\\b",
   "\\bns\\b",
   "\\bnb\\b",
-  "\\bnl\\b",
   "\\bpe\\b",
   "\\byt\\b",
   "\\bnu\\b",
@@ -235,11 +235,12 @@ const US_STATE_NAMES = [
 ];
 
 /**
- * State abbreviations, excluding IN, OR, ME, OK and HI: those collide with
- * common English words and full state names cover them instead.
+ * Exclude codes that collide with common words or foreign country codes.
+ * DE is also German country shorthand and a word in many foreign city names;
+ * explicit Delaware/US wording still identifies US postings.
  */
 const US_STATE_ABBREVIATIONS = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "IA", "ID", "IL", "KS", "KY",
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "FL", "GA", "IA", "ID", "IL", "KS", "KY",
   "LA", "MA", "MD", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY",
   "OH", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY",
 ];
@@ -307,7 +308,8 @@ function classifyOne(raw: string, hints: LocationHints): LocationAnalysis {
 
   const hasCanadaSignal = matchesAny(text, CANADA_SIGNALS);
   const hasCaliforniaSignal = matchesAny(text, CALIFORNIA_SIGNALS);
-  const hasUsSignal = matchesAny(text, US_SIGNALS);
+  // Office "FL 7" means floor, not Florida; five-digit ZIP codes remain intact.
+  const hasUsSignal = matchesAny(text.replace(/\bfl\.?\s*\d{1,3}\b/g, ""), US_SIGNALS);
 
   const bayHit =
     matchesAny(text, BAY_AREA_REGIONS) ??
@@ -363,6 +365,35 @@ export function analyzeLocation(rawLocations: readonly string[], hints: Location
   return analyses.reduce((best, current) =>
     CLASS_PRIORITY[current.locationClass] > CLASS_PRIORITY[best.locationClass] ? current : best,
   );
+}
+
+const SCOPE_SEPARATOR = "[\\s\\-\\u2013\\u2014:,/()\\[\\]]*";
+const US_SCOPE_TOKEN = "(?:u\\.?s\\.?a?\\.?|united states)(?![a-z])";
+const CANADA_SCOPE_TOKEN = "canada(?![a-z])";
+
+function remoteScopePattern(countryToken: string): RegExp {
+  return new RegExp(
+    `(?<![a-z])remote${SCOPE_SEPARATOR}${countryToken}|(?<![a-z])${countryToken}${SCOPE_SEPARATOR}remote(?![a-z])`,
+    "i",
+  );
+}
+
+const TITLE_REMOTE_US = remoteScopePattern(US_SCOPE_TOKEN);
+const TITLE_REMOTE_CANADA = remoteScopePattern(CANADA_SCOPE_TOKEN);
+
+/**
+ * A bare "Remote" location reads as worldwide, but some boards carry the
+ * country scope in the title instead ("Senior Back End Engineer [Remote-US]").
+ * Only a country attached to a remote marker counts; "US Payments" is a team.
+ */
+export function refineRemoteScopeFromTitle(analysis: LocationAnalysis, title: string): LocationAnalysis {
+  if (analysis.locationClass !== "remote-global") return analysis;
+  const text = title.toLowerCase();
+  if (TITLE_REMOTE_US.test(text)) return { ...analysis, locationClass: "remote-us", country: "US", matched: "title remote-us" };
+  if (TITLE_REMOTE_CANADA.test(text)) {
+    return { ...analysis, locationClass: "remote-canada", country: "CA", matched: "title remote-canada" };
+  }
+  return analysis;
 }
 
 export function allLocationClasses(rawLocations: readonly string[], hints: LocationHints = {}): LocationClass[] {

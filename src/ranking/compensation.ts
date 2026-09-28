@@ -22,9 +22,10 @@ const SALARY_CONTEXT = /(salary|compensation|pay range|base pay|base salary|annu
  * suffix form is what large US pay-transparency filers publish, and without it
  * the separator never lines up, so such a range parses as no range at all.
  */
-const CURRENCY_PREFIX = String.raw`(?:us\$|c\$|cad|usd|cdn|\$)`;
-const CURRENCY_SUFFIX = String.raw`(?:usd|cad|cdn|us\$|c\$)`;
-const AMOUNT = String.raw`\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?`;
+const CURRENCY_PREFIX = String.raw`(?:us\$|c\$|cad|usd|cdn|pln|\$)`;
+const CURRENCY_SUFFIX = String.raw`(?:usd|cad|cdn|pln|us\$|c\$)`;
+const GROUPED_AMOUNT = String.raw`\d{1,3}(?:(?:,\d{3})+|(?:[ \u00a0\u202f]\d{3})+)(?:\.\d+)?`;
+const AMOUNT = String.raw`${GROUPED_AMOUNT}|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?`;
 
 const RANGE_START = String.raw`(?<c1>${CURRENCY_PREFIX})?\s*(?<a>${AMOUNT})(?:\s*(?<s1>${CURRENCY_SUFFIX})\b)?`;
 const RANGE_END = String.raw`(?<c2>${CURRENCY_PREFIX})?\s*(?<b>${AMOUNT})(?:\s*(?<s2>${CURRENCY_SUFFIX})\b)?`;
@@ -32,7 +33,14 @@ const RANGE_PATTERN = new RegExp(
   String.raw`${RANGE_START}\s*(?:-|–|—|\bto\b|\bthrough\b|\band\s+up\s+to\b)\s*${RANGE_END}`,
   "gi",
 );
-const BETWEEN_RANGE_PATTERN = new RegExp(String.raw`\bbetween\s*${RANGE_START}\s+and\s+${RANGE_END}`, "gi");
+const BETWEEN_RANGE_PATTERN = new RegExp(
+  String.raw`\bbetween(?:\s+(?:the\s+)?following\s+values\s*:)?\s*${RANGE_START}\s+and\s+${RANGE_END}`,
+  "gi",
+);
+const ANNUAL_GEOGRAPHIC_RANGE_PATTERN = new RegExp(
+  String.raw`\bfrom\s+${RANGE_START}\s*\/(?:year|yr)\s+in\s+(?:our|the)\s+lowest\s+geographic\s+market\s+up\s+to\s+${RANGE_END}(?=\s*\/(?:year|yr)\b)`,
+  "gi",
+);
 
 const PERIOD_UNIT = String.raw`(?:(?:per|a|an|each)\s+(?:hour|month|year)|\/\s*(?:hour|hr|month|mo|year|yr)|hourly|monthly|annually|annual|yearly)`;
 const PAY_HEADING_WORD = String.raw`(?:base|salary|compensation|pay|range|rate|for|the|this|role|position|is|of|between|from|expected|will|be|at|a|an|usd|cad|cdn)`;
@@ -46,7 +54,7 @@ const PERIOD_BEFORE_RANGE = new RegExp(
 );
 
 function parseAmount(token: string): number | null {
-  const cleaned = token.replace(/,/g, "").trim().toLowerCase();
+  const cleaned = token.replace(/[, \u00a0\u202f]/g, "").trim().toLowerCase();
   const kMatch = /^(\d+(?:\.\d+)?)\s*k$/.exec(cleaned);
   if (kMatch?.[1]) return Number.parseFloat(kMatch[1]) * 1000;
   const value = Number.parseFloat(cleaned);
@@ -54,11 +62,14 @@ function parseAmount(token: string): number | null {
 }
 
 function detectCurrency(markers: ReadonlyArray<string | undefined>, window: string, fallback: string): string {
-  const joined = `${markers.filter(Boolean).join(" ")} ${window}`.toLowerCase();
-  if (/\bcad\b|\bc\$|\bcdn\b|canadian dollar/.test(joined)) return "CAD";
-  if (/\busd\b|\bus\$|american dollar/.test(joined)) return "USD";
-  if (/[£]|\bgbp\b/.test(joined)) return "GBP";
-  if (/[€]|\beur\b/.test(joined)) return "EUR";
+  for (const evidence of [markers.filter(Boolean).join(" "), window]) {
+    const text = evidence.toLowerCase();
+    if (/\bcad\b|\bc\$|\bcdn\b|canadian dollar/.test(text)) return "CAD";
+    if (/\busd\b|\bus\$|american dollar/.test(text)) return "USD";
+    if (/[£]|\bgbp\b/.test(text)) return "GBP";
+    if (/[€]|\beur\b/.test(text)) return "EUR";
+    if (/\bpln\b/.test(text)) return "PLN";
+  }
   return fallback;
 }
 
@@ -85,7 +96,11 @@ export function parseCompensationFromText(text: string, fallbackCurrency = "USD"
   if (!text) return null;
   const candidates: Array<{ range: CompensationRange; score: number }> = [];
 
-  const matches = [...text.matchAll(RANGE_PATTERN), ...text.matchAll(BETWEEN_RANGE_PATTERN)];
+  const matches = [
+    ...text.matchAll(RANGE_PATTERN),
+    ...text.matchAll(BETWEEN_RANGE_PATTERN),
+    ...text.matchAll(ANNUAL_GEOGRAPHIC_RANGE_PATTERN),
+  ];
   for (const match of matches) {
     const groups = match.groups;
     if (!groups?.a || !groups?.b) continue;

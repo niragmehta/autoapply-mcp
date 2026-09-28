@@ -4,6 +4,7 @@ import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { fetchJson } from "./http.js";
 import { asString, asStringArray, normalizeJob } from "./normalize.js";
+import { publishedDate } from "./sourceValidation.js";
 import type { BoardVerification, SourceAdapter } from "./types.js";
 
 /**
@@ -82,6 +83,7 @@ type WorkdayDetail = {
   jobDescription?: unknown;
   location?: unknown;
   additionalLocations?: unknown;
+  startDate?: unknown;
   postedOn?: unknown;
   timeType?: unknown;
   jobReqId?: unknown;
@@ -94,10 +96,8 @@ type WorkdayDetail = {
 /**
  * Converts Workday's relative posting age to an ISO date.
  *
- * Workday publishes no absolute posting date anywhere in either payload, only
- * strings like "Posted 11 Days Ago". This is therefore an approximation to the
- * day, and deliberately returns null rather than a fabricated date when the
- * phrasing is not understood.
+ * Used only when the detail has no valid absolute startDate. Relative labels
+ * are approximate, and a capped "30+ Days Ago" value is only a lower age bound.
  */
 export function postedOnToIso(postedOn: string, now: Date): string | null {
   const text = postedOn.toLowerCase();
@@ -108,6 +108,17 @@ export function postedOnToIso(postedOn: string, now: Date): string | null {
   const months = /(\d+)\+?\s*month/.exec(text);
   if (months?.[1]) return isoDay(now, Number.parseInt(months[1], 10) * 30);
   return null;
+}
+
+function postingDate(detail: WorkdayDetail, now: Date): string | null {
+  const absolute = publishedDate(asString(detail.startDate));
+  if (absolute) return new Date(absolute).toISOString();
+  if (detail.startDate != null && detail.startDate !== "") {
+    logger.warn("invalid Workday startDate; using approximate relative posting age", {
+      jobReqId: asString(detail.jobReqId),
+    });
+  }
+  return postedOnToIso(asString(detail.postedOn), now);
 }
 
 function isoDay(now: Date, daysAgo: number): string {
@@ -123,6 +134,22 @@ function locations(detail: WorkdayDetail): string[] {
 function isRemote(detail: WorkdayDetail, locationValues: string[]): boolean {
   if (asString(detail.remoteType).toLowerCase().includes("remote")) return true;
   return locationValues.some((value) => /\bremote\b/i.test(value));
+}
+
+/**
+ * Some tenants publish postings on myworkdaysite.com. The same requisition is
+ * served on the tenant's myworkdayjobs.com host, which is the host the
+ * submission driver and the ATS allowlist recognise.
+ */
+function tenantHostUrl(externalUrl: string, board: WorkdayBoard, path: string): string {
+  let host = "";
+  try {
+    host = new URL(externalUrl).hostname;
+  } catch {
+    return externalUrl;
+  }
+  if (!/(^|\.)myworkdaysite\.com$/i.test(host)) return externalUrl;
+  return `https://${board.tenant}.${board.datacenter}.myworkdayjobs.com/${board.site}${path}`;
 }
 
 /** Walks the paginated list endpoint, collecting posting paths. */
@@ -184,7 +211,7 @@ export const workdayAdapter: SourceAdapter = {
       if (detail.posted === false || detail.canApply === false) continue;
 
       const locationValues = locations(detail);
-      const applyUrl = asString(detail.externalUrl);
+      const applyUrl = tenantHostUrl(asString(detail.externalUrl), board, path);
 
       jobs.push(
         normalizeJob(
@@ -196,7 +223,7 @@ export const workdayAdapter: SourceAdapter = {
             url: applyUrl,
             applyUrl,
             descriptionHtml: asString(detail.jobDescription),
-            postedAt: postedOnToIso(asString(detail.postedOn), now),
+            postedAt: postingDate(detail, now),
             isRemote: isRemote(detail, locationValues),
             employmentType: asString(detail.timeType),
           },
