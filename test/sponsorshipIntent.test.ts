@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import { fallbackAnswersForFields, pickOptionIndex, type FieldDescriptor } from "../src/submission/formFields.js";
+import {
+  bankAnswerFor,
+  buildFillPlan,
+  fallbackAnswersForFields,
+  pickOptionIndex,
+  type FieldDescriptor,
+} from "../src/submission/formFields.js";
+import type { DraftAnswer } from "../src/domain/job.js";
 import type { Profile } from "../src/domain/profile.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 
@@ -192,6 +199,120 @@ describe("sponsorship defined to include TN", () => {
 
     expect(answers[0]?.answer).toBe("No");
     expect(answers[0]?.citation).toBe("profile.answers.visa-sponsorship");
+  });
+});
+
+/**
+ * Drafting refuses the generic "No" for a question that counts TN as
+ * sponsorship, but Ashby publishes no question schema, so its packets carry
+ * only the baseline sponsorship question and the live form was answered by the
+ * browser's own matcher - which had no such rule. Persona asks "(e.g., H-1B,
+ * STEM OPT, J-1, O-1, TN, etc.)" and Hinge Health "(H-1B, H-1B1, E-3, O-1, or
+ * TN)" under a certification that the answer is true; both took the generic
+ * "No", the opposite of the candidate's decision for exactly that wording.
+ */
+describe("a live form that counts TN as sponsorship", () => {
+  const namedTn = {
+    key: "sponsorship-named-tn",
+    label: "Sponsorship where the employer explicitly lists TN",
+    patterns: ["h-1b, e-3, tn, o-1", 'commence ("sponsor") an immigration case'],
+    answer: "Yes",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+  const usAuthorization = {
+    key: "us-work-authorization-now",
+    label: "Currently authorized to work in the United States",
+    patterns: ["authorized to work in the united states"],
+    answer: "Yes",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+  const PERSONA =
+    "Please help us work effectively with our immigration team: Will you now or in the future require sponsorship for employment visa status (e.g., H-1B, STEM OPT, J-1, O-1, TN, etc.)?";
+  const HINGE =
+    "Will you now or in the future require any immigration related support or sponsorship from Hinge Health? This could include support (such as J-1, F-1 CPT letter or STEM OPT Training Plan), visa sponsorship for employment (H-1B, H-1B1, E-3, O-1, or TN), and/or any EAD holders that will need longer term employment authorization (temporary work visa or permanent residency).";
+  // Ashby renders a yes/no question as a single box with Yes and No buttons.
+  const yesNoBox = (label: string): FieldDescriptor => ({
+    selectorIndex: 0, label, type: "checkbox", name: "sponsorship", required: true,
+  });
+  const baselineNo: DraftAnswer = {
+    questionKey: "visa_sponsorship",
+    label: "Will you now or in the future require visa sponsorship?",
+    answer: "No",
+    source: "approved-answer",
+    citation: "profile.answers.visa-sponsorship",
+    requiresHuman: false,
+    required: true,
+    category: "sponsorship",
+    guidance: "",
+  };
+
+  it("answers it from the stored TN decision, not the generic No", () => {
+    const answers = fallbackAnswersForFields([yesNoBox(PERSONA)], [], [sponsorship, namedTn]);
+
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("does the same when TN comes last in a long definition", () => {
+    const answers = fallbackAnswersForFields([yesNoBox(HINGE)], [], [sponsorship, namedTn]);
+
+    expect(answers[0]?.answer).toBe("Yes");
+  });
+
+  it("does not let the packet's baseline sponsorship answer bind to it", () => {
+    const fields = [yesNoBox(PERSONA)];
+
+    const plan = buildFillPlan(fields, [baselineNo, ...fallbackAnswersForFields(fields, [baselineNo], [sponsorship, namedTn])]);
+
+    expect(plan.toFill.map((match) => match.answer?.answer)).toEqual(["Yes"]);
+  });
+
+  it("leaves it to a person when no TN decision is on file", () => {
+    const fields = [yesNoBox(PERSONA)];
+
+    const plan = buildFillPlan(fields, [baselineNo, ...fallbackAnswersForFields(fields, [baselineNo], [sponsorship])]);
+
+    expect(plan.toFill).toHaveLength(0);
+    expect(plan.unmatchedRequired).toHaveLength(1);
+  });
+
+  it("does not answer authorization asked as 'without sponsorship' from either decision", () => {
+    const label = "Are you authorized to work in the United States without sponsorship (e.g. H-1B, TN)?";
+
+    const answers = fallbackAnswersForFields([yesNoBox(label)], [], [usAuthorization, sponsorship, namedTn]);
+
+    expect(answers).toHaveLength(0);
+  });
+
+  it("does not apply it when the form says TN is not counted", () => {
+    const label =
+      "Will you now or in the future require sponsorship to work in the United States? TN status is not considered sponsorship for this question.";
+
+    const answers = fallbackAnswersForFields([yesNoBox(label)], [], [sponsorship, namedTn]);
+
+    expect(answers.map((answer) => answer.answer)).not.toContain("Yes");
+  });
+
+  it("leaves a free-text box to an answer written for that wording", () => {
+    const label = "Will you now, or in the future, require sponsorship for employment visa status (e.g. H-1B, TN visa status)?";
+    const box: FieldDescriptor = { selectorIndex: 0, label, type: "textarea", name: "sponsorship", required: true };
+
+    expect(fallbackAnswersForFields([box], [], [sponsorship, namedTn])).toHaveLength(0);
+  });
+
+  it("still answers a definition that leaves TN out from the generic answer", () => {
+    const label = "Will you now or in the future require sponsorship for employment visa status (e.g., H-1B visa status)?";
+
+    const answers = fallbackAnswersForFields([yesNoBox(label)], [], [namedTn, sponsorship]);
+
+    expect(answers[0]?.answer).toBe("No");
+  });
+
+  it("does not treat the generic answer as covering it when only the label is known", () => {
+    // A free-text TN question would be dropped as answered and fail every run.
+    expect(bankAnswerFor(PERSONA, [sponsorship, namedTn])).toBeUndefined();
   });
 });
 

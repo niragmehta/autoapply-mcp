@@ -422,10 +422,11 @@ export const COLLECT_FIELDS = `(() => {
   };
   controls.filter(visible).forEach((el) => {
     const leverLabel = leverTitle(el);
-    // Lever and Workday questions often put the part that decides them last:
-    // Snap's sponsorship question defines sponsorship, TN included or not,
-    // after the first 200 characters.
-    const labelLimit = leverLabel || workdayField(el) ? 2000 : 200;
+    const ashbyLabel = ashbyTitle(el);
+    // Lever, Ashby and Workday questions often put the part that decides them
+    // last: Snap's and Hinge Health's sponsorship questions define sponsorship,
+    // TN included or not, after the first 200 characters.
+    const labelLimit = leverLabel || ashbyLabel || workdayField(el) ? 2000 : 200;
     const isListbox = el.tagName.toLowerCase() === 'button';
     const isDateGroup = el.getAttribute('data-automation-id') === 'dateInputWrapper';
     const isRadio = el.type === 'radio';
@@ -444,7 +445,6 @@ export const COLLECT_FIELDS = `(() => {
     const label = group || optionLabel;
     const name = el.getAttribute('name') || '';
     const role = el.getAttribute('role') || '';
-    const ashbyLabel = ashbyTitle(el);
     const questionTitle = (ashbyLabel ? ashbyLabel.innerText.trim()
       : leverLabel ? leverLabel.innerText.trim() : workdayName(el)).slice(0, labelLimit);
     if (!label && !name && !el.id && role !== 'combobox') return;
