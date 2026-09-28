@@ -231,6 +231,7 @@ export const ProfileSchema = z.object({
       relocationTargets: z.array(nonEmpty).default([]),
       workplaceTypes: z.array(z.enum(["onsite", "hybrid", "remote"])).default(["onsite", "hybrid", "remote"]),
       noticePeriod: z.string().default(""),
+      roleSearchNotes: z.string().default(""),
     })
     .prefault({}),
   resumes: z.array(ResumeVariantSchema).min(1),

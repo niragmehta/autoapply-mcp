@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseBoard, postedOnToIso, workdayAdapter } from "../src/sources/workday.js";
 import { CompanySchema } from "../src/domain/campaign.js";
 import { AppError } from "../src/util/errors.js";
+import { logger } from "../src/util/logger.js";
 
 const capturedAt = "2026-08-08T00:00:00.000Z";
 
@@ -70,6 +71,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   delete process.env.AUTOAPPLY_WORKDAY_MAX_POSTINGS;
 });
 
@@ -129,6 +131,46 @@ describe("workday posting age", () => {
 });
 
 describe("workday adapter", () => {
+  it.each([
+    ["2026-07-01", "2026-07-01T00:00:00.000Z"],
+    ["2026-07-01T15:00:00-04:00", "2026-07-01T19:00:00.000Z"],
+  ])("prefers the native startDate %s over a capped relative posting age", async (startDate, expected) => {
+    stubBoard([[posting("/job/a/absolute-date")]], () =>
+      jsonResponse(detail({ startDate, postedOn: "Posted 30+ Days Ago" })),
+    );
+
+    const jobs = await workdayAdapter.listJobs(company(), capturedAt);
+
+    expect(jobs[0]!.postedAt).toBe(expected);
+  });
+
+  it("retains the same absolute publication when captured again on a different day", async () => {
+    stubBoard([[posting("/job/a/absolute-date")]], () =>
+      jsonResponse(detail({ startDate: "2026-07-01", postedOn: "Posted 30+ Days Ago" })),
+    );
+
+    const first = await workdayAdapter.listJobs(company(), capturedAt);
+    const later = await workdayAdapter.listJobs(company(), "2026-08-15T00:00:00.000Z");
+
+    expect(first[0]!.postedAt).toBe("2026-07-01T00:00:00.000Z");
+    expect(later[0]!.postedAt).toBe(first[0]!.postedAt);
+  });
+
+  it.each(["not-a-date", "2026-02-30", 123, {}])(
+    "reports an invalid absolute date %j before using the legacy relative fallback", async (startDate) => {
+      const warning = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+      stubBoard([[posting("/job/a/invalid-date")]], () => jsonResponse(detail({ startDate })));
+
+      const jobs = await workdayAdapter.listJobs(company(), capturedAt);
+
+      expect(jobs[0]!.postedAt).toBe("2026-07-28T00:00:00.000Z");
+      expect(warning).toHaveBeenCalledWith(
+        "invalid Workday startDate; using approximate relative posting age",
+        { jobReqId: "JR2021915" },
+      );
+    },
+  );
+
   it("fetches detail per posting and parses pay out of the description", async () => {
     stubBoard([[posting("/job/US-CA-Santa-Clara/IP-Security-Engineer_JR2021915")]], () =>
       jsonResponse(detail()),
@@ -148,6 +190,31 @@ describe("workday adapter", () => {
     expect(job.compensation?.max).toBe(356_500);
     expect(job.postedAt).toBe("2026-07-28T00:00:00.000Z");
     expect(job.applyUrl).toContain("NVIDIAExternalCareerSite");
+  });
+
+  it("points a myworkdaysite.com posting at the tenant's myworkdayjobs.com host", async () => {
+    // Some tenants publish on Workday's newer domain. The same requisition is
+    // served on the tenant host, which is the one the driver and allowlist know.
+    const path = "/job/United-States---San-Mateo-CA/Senior-Software-Engineer---Application-Platform_JR_15208";
+    stubBoard([[posting(path)]], () =>
+      jsonResponse(detail({ externalUrl: `https://wd5.myworkdaysite.com/recruiting/guidewire/external${path}` })),
+    );
+
+    const jobs = await workdayAdapter.listJobs(company({ name: "Guidewire", board: "guidewire/wd5/external" }), capturedAt);
+
+    const expected = `https://guidewire.wd5.myworkdayjobs.com/external${path}`;
+    expect(jobs[0]!.applyUrl).toBe(expected);
+    expect(jobs[0]!.url).toBe(expected);
+  });
+
+  it("keeps an apply url that is already on the tenant's myworkdayjobs.com host", async () => {
+    // A locale segment the rebuilt form would drop, so rewriting it shows.
+    const externalUrl = "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/x_JR2021915";
+    stubBoard([[posting("/job/x_JR2021915")]], () => jsonResponse(detail({ externalUrl })));
+
+    const jobs = await workdayAdapter.listJobs(company(), capturedAt);
+
+    expect(jobs[0]!.applyUrl).toBe(externalUrl);
   });
 
   it("sends the campaign query as the server-side search filter", async () => {

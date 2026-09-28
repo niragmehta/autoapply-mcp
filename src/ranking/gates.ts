@@ -19,8 +19,12 @@ const SENIORITY_RULES: ReadonlyArray<readonly [string, RegExp]> = [
   ["executive", /\b(chief|cto|ciso|cio|vp|vice president|head of|svp|evp)\b/i],
   ["director", /\bdirector\b/i],
   ["manager", /\b(engineering manager|people manager|\bmanager\b)\b/i],
+  // "Senior/Staff" or "Staff or Senior": a posting open at either level. The
+  // lookahead keeps "Staff/Senior Staff" and "Principal/Senior Principal",
+  // which name two levels above Senior.
+  ["senior", /\b(?:senior|sr)\b\.?\s*(?:\/|\bor\b|&)\s*(?:staff|principal)\b|\b(?:staff|principal)\s*(?:\/|\bor\b|&)\s*(?:senior|sr)\b(?!\.?\s*(?:staff|principal)\b)/i],
   ["principal", /\b(principal|distinguished|fellow|architect)\b/i],
-  ["staff", /\b(staff|lead engineer|tech lead|technical lead)\b/i],
+  ["staff", /\b(?:(?<!technical )staff|lead engineer|tech lead|technical lead)\b/i],
   ["senior", /\b(senior|sr\.?|snr)\b/i],
 ];
 
@@ -44,6 +48,8 @@ const CITIZENSHIP_PATTERNS: readonly RegExp[] = [
   /\b(?:must be|require[sd]?|only)\b[^.\n]{0,60}\bu\.?s\.?\s*citizen/i,
   /\bu\.?s\.?\s*citizenship\b[^.\n]{0,30}\b(?:is\s+)?(?:required|mandatory)/i,
   /\bmust be a (?:united states|u\.?s\.?) (?:citizen|person)/i,
+  /\bmust be (?:united states|u\.?s\.?) (?:citizens|persons)\b/i,
+  /\b(?:verification|proof|confirmation) of (?:united states|u\.?s\.?)\s*person\b/i,
   /\bu\.?s\.?\s*person(?:s)?\b[^.\n]{0,40}\b(?:itar|export control)/i,
   /\b(?:itar|export control)[^.\n]{0,60}\bu\.?s\.?\s*person/i,
 ];

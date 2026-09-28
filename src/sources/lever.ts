@@ -2,6 +2,7 @@ import type { Company } from "../domain/campaign.js";
 import type { CompensationRange, Job, WorkplaceType } from "../domain/job.js";
 import { fetchJson } from "./http.js";
 import { asString, epochToIso, normalizeJob } from "./normalize.js";
+import { leverDescription, type LeverDescription } from "./leverDescription.js";
 import type { SourceAdapter } from "./types.js";
 
 /**
@@ -16,15 +17,12 @@ function base(company: Company): string {
 }
 
 type LeverSalary = { min?: unknown; max?: unknown; currency?: unknown; interval?: unknown };
-type LeverPosting = {
+type LeverPosting = LeverDescription & {
   id?: unknown;
   text?: unknown;
   hostedUrl?: unknown;
   applyUrl?: unknown;
   createdAt?: unknown;
-  descriptionPlain?: unknown;
-  description?: unknown;
-  additionalPlain?: unknown;
   workplaceType?: unknown;
   salaryRange?: LeverSalary;
   categories?: {
@@ -88,9 +86,6 @@ export const leverAdapter: SourceAdapter = {
     const postings = await fetchJson<LeverPosting[]>(this.listUrl(company));
     if (!Array.isArray(postings)) return [];
     return postings.map((posting) => {
-      const description = [asString(posting.descriptionPlain), asString(posting.additionalPlain)]
-        .filter((value) => value.length > 0)
-        .join("\n\n");
       return normalizeJob(
         {
           company,
@@ -99,8 +94,7 @@ export const leverAdapter: SourceAdapter = {
           locations: locations(posting),
           url: asString(posting.hostedUrl),
           applyUrl: asString(posting.applyUrl) || asString(posting.hostedUrl),
-          descriptionPlain: description,
-          descriptionHtml: asString(posting.description),
+          descriptionPlain: leverDescription(posting),
           postedAt: epochToIso(posting.createdAt),
           workplaceType: workplaceType(posting),
           employmentType: asString(posting.categories?.commitment),

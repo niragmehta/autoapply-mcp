@@ -1,8 +1,13 @@
 import type { Company } from "../domain/campaign.js";
-import type { CompensationRange, Job, WorkplaceType } from "../domain/job.js";
+import type { Job, WorkplaceType } from "../domain/job.js";
+import { ashbyStructuredPay, type AshbyCompensation } from "./ashbyCompensation.js";
+import { listHostedAshbyJobs } from "./ashbyHosted.js";
+import { ashbyLocations, type AshbyLocation } from "./ashbyLocations.js";
 import { fetchJson } from "./http.js";
 import { asString, normalizeJob } from "./normalize.js";
 import type { SourceAdapter } from "./types.js";
+import { AppError } from "../util/errors.js";
+import { logger } from "../util/logger.js";
 
 /**
  * Ashby public job board API.
@@ -14,24 +19,23 @@ import type { SourceAdapter } from "./types.js";
 
 const BASE = "https://api.ashbyhq.com/posting-api/job-board";
 
-type AshbyComponent = {
-  compensationType?: unknown;
-  interval?: unknown;
-  currencyCode?: unknown;
-  minValue?: unknown;
-  maxValue?: unknown;
-};
-type AshbyCompensation = {
-  compensationTierSummary?: unknown;
-  scrapeableCompensationSalarySummary?: unknown;
-  summaryComponents?: AshbyComponent[];
-};
-type AshbySecondaryLocation = { location?: unknown };
+async function apiJobs(url: string): Promise<AshbyJob[] | null> {
+  try {
+    const payload = await fetchJson<{ jobs?: AshbyJob[] }>(url);
+    return (payload.jobs ?? []).filter((job) => job.isListed !== false);
+  } catch (error) {
+    if (!(error instanceof AppError) || error.code !== "not_found") throw error;
+    logger.warn("Ashby listing API returned 404; checking public hosted job pages");
+    return null;
+  }
+}
+
 type AshbyJob = {
   id?: unknown;
   title?: unknown;
   location?: unknown;
-  secondaryLocations?: AshbySecondaryLocation[];
+  address?: unknown;
+  secondaryLocations?: AshbyLocation[];
   department?: unknown;
   team?: unknown;
   isListed?: unknown;
@@ -46,42 +50,12 @@ type AshbyJob = {
   compensation?: AshbyCompensation;
 };
 
-const INTERVAL_MAP: Record<string, CompensationRange["period"]> = {
-  "1 year": "year",
-  "1 month": "month",
-  "1 hour": "hour",
-};
-
-function structuredPay(job: AshbyJob): CompensationRange | null {
-  const components = job.compensation?.summaryComponents ?? [];
-  const salary = components.find((component) => asString(component.compensationType).toLowerCase() === "salary");
-  if (!salary) return null;
-  const min = typeof salary.minValue === "number" ? salary.minValue : null;
-  const max = typeof salary.maxValue === "number" ? salary.maxValue : null;
-  if (min === null && max === null) return null;
-  return {
-    min,
-    max,
-    currency: (asString(salary.currencyCode, "USD") || "USD").toUpperCase().slice(0, 3),
-    period: INTERVAL_MAP[asString(salary.interval).toLowerCase()] ?? "year",
-    source: "ats-structured",
-    raw: asString(job.compensation?.compensationTierSummary, "ashby compensation"),
-  };
-}
-
 function workplaceType(job: AshbyJob): WorkplaceType {
   const value = asString(job.workplaceType).toLowerCase();
   if (value === "remote") return "remote";
   if (value === "hybrid") return "hybrid";
   if (value === "onsite") return "onsite";
   return job.isRemote === true ? "remote" : "unknown";
-}
-
-function locations(job: AshbyJob): string[] {
-  const secondary = (job.secondaryLocations ?? [])
-    .map((entry) => asString(entry.location))
-    .filter((value) => value.length > 0);
-  return [...new Set([asString(job.location), ...secondary].filter((value) => value.length > 0))];
 }
 
 export const ashbyAdapter: SourceAdapter = {
@@ -96,15 +70,16 @@ export const ashbyAdapter: SourceAdapter = {
   },
 
   async listJobs(company: Company, capturedAt: string): Promise<Job[]> {
-    const payload = await fetchJson<{ jobs?: AshbyJob[] }>(this.listUrl(company));
-    const jobs = (payload.jobs ?? []).filter((job) => job.isListed !== false);
-    return jobs.map((job) =>
-      normalizeJob(
+    const jobs = await apiJobs(this.listUrl(company));
+    if (jobs === null) return listHostedAshbyJobs(company, capturedAt);
+    return jobs.map((job) => {
+      const locations = ashbyLocations(job, job.secondaryLocations, workplaceType(job) === "remote");
+      return normalizeJob(
         {
           company,
           externalId: asString(job.id),
           title: asString(job.title),
-          locations: locations(job),
+          locations,
           url: asString(job.jobUrl),
           applyUrl: asString(job.applyUrl) || asString(job.jobUrl),
           descriptionPlain: asString(job.descriptionPlain),
@@ -113,11 +88,14 @@ export const ashbyAdapter: SourceAdapter = {
           workplaceType: workplaceType(job),
           isRemote: job.isRemote === true,
           employmentType: asString(job.employmentType),
-          structuredCompensation: structuredPay(job),
+          structuredCompensation: ashbyStructuredPay(job.compensation, locations, {
+            isRemote: job.isRemote === true,
+            workplaceType: workplaceType(job),
+          }),
         },
         capturedAt,
-      ),
-    );
+      );
+    });
   },
 
   probeUrls(slug: string): string[] {

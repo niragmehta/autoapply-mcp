@@ -88,10 +88,93 @@ describe("parseCompensationFromText", () => {
     expect(range?.period).toBe("year");
   });
 
+  it.each([
+    "The expected salary range for this role is between following values: $130,000 and $195,000.",
+    "The expected salary range for this role is between\n  the following values:\n$130,000 and $195,000.",
+  ])("preserves a published range with a following-values heading: %s", (text) => {
+    const range = parseCompensationFromText(text);
+
+    expect(range).toMatchObject({ min: 130000, max: 195000, currency: "USD", period: "year" });
+    expect(checkCompensationFloor(range, "US", policy).status).toBe("below");
+  });
+
+  it("preserves explicit currency and period around a following-values range", () => {
+    const text = "Monthly salary range is between the following values: C$18,000 and C$23,000.";
+
+    const range = parseCompensationFromText(text);
+
+    expect(range).toMatchObject({ min: 18000, max: 23000, currency: "CAD", period: "month" });
+  });
+
+  it.each([" ", "\u00a0", "\u202f"])("parses space-grouped dollar amounts using %j", (separator) => {
+    const text = `The salary range is between following values: $130${separator}000 and $195${separator}000.`;
+
+    const range = parseCompensationFromText(text);
+
+    expect(range).toMatchObject({ min: 130000, max: 195000, currency: "USD" });
+    expect(checkCompensationFloor(range, "US", policy).status).toBe("below");
+  });
+
+  it("retains an attached Polish currency instead of treating spaced amounts as dollars", () => {
+    const text = "Annual salary range is between following values: 208 000 and 312 000PLN.";
+
+    const range = parseCompensationFromText(text);
+
+    expect(range).toMatchObject({ min: 208000, max: 312000, currency: "PLN", period: "year" });
+  });
+
+  it.each([
+    ["Annual salary is between following values: 208 000 and 312 000PLN. A separate USD benefit is available.", "PLN"],
+    ["Annual salary is between following values: 130 000USD and 195 000USD. Other roles use PLN.", "USD"],
+  ])("prefers the range's explicit currency over nearby currencies: %s", (text, currency) => {
+    expect(parseCompensationFromText(text)?.currency).toBe(currency);
+  });
+
+  it.each(["GBP", "EUR"])("still recognizes %s from salary context without currency markers", (currency) => {
+    expect(parseCompensationFromText(`Annual salary range: 190,000 - 260,000; currency ${currency}.`)?.currency)
+      .toBe(currency);
+  });
+
+  it.each([
+    "Compensation: $180,000 and $250,000 equity.",
+    "Salary and equity are between the following values: $180,000 salary and $250,000 equity.",
+    "We serve between the following values: 10,000 and 20,000 customers daily.",
+    "Salary and equity are between following values: $180 000 salary and $250 000 equity.",
+    "We serve between following values: 10 000 and 20 000 customers daily.",
+    "Salary range is between following values: $130 00 and $195 000.",
+  ])("does not turn unrelated conjunctions into salary ranges: %s", (text) => {
+    expect(parseCompensationFromText(text)).toBeNull();
+  });
+
   it("recognizes a starting salary followed by and up to", () => {
     const range = parseCompensationFromText("The base salary will begin at $164,000 and up to $227,000.");
     expect(range?.max).toBe(227000);
     expect(range?.period).toBe("year");
+  });
+
+  it.each([
+    ["The US base salary for this position ranges from $115,000/year in our lowest geographic market up to $168,000/year in our highest geographic market.", 115000, 168000],
+    ["The US base salary for this position ranges from $160,000/year in our lowest geographic market up to $230,000/year in our highest geographic market.", 160000, 230000],
+    ["Base salary ranges from $210K/yr in the lowest geographic market up to $310K/yr in the highest geographic market.", 210000, 310000],
+  ])("retains annual pay across explicitly described geographic endpoints: %s", (text, min, max) => {
+    const range = parseCompensationFromText(text);
+
+    expect(range).toMatchObject({ min, max, currency: "USD", period: "year", source: "description-text" });
+    expect(checkCompensationFloor(range, "US", policy).status).toBe(max < 200000 ? "below" : "above");
+  });
+
+  it("preserves Canadian currency in an explicitly annual geographic range", () => {
+    const text = "Base salary ranges from C$160,000/year in our lowest geographic market up to C$230,000/year in our highest geographic market.";
+
+    expect(parseCompensationFromText(text)).toMatchObject({
+      min: 160000, max: 230000, currency: "CAD", period: "year",
+    });
+  });
+
+  it("does not combine annual salary with a different compensation component", () => {
+    const text = "Base salary ranges from $160,000/year in our lowest geographic market. Equity grants can be up to $400,000/year in our highest geographic market.";
+
+    expect(parseCompensationFromText(text)).toBeNull();
   });
 
   it("does not combine a salary and an equity award into a range", () => {

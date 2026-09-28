@@ -1,7 +1,7 @@
 import type { Company } from "../domain/campaign.js";
 import { exactFingerprint, roleFingerprint } from "../domain/fingerprint.js";
 import type { CompensationRange, Job, WorkplaceType } from "../domain/job.js";
-import { analyzeLocation } from "../ranking/location.js";
+import { analyzeLocation, refineRemoteScopeFromTitle } from "../ranking/location.js";
 import { parseCompensationFromText } from "../ranking/compensation.js";
 import { htmlToText } from "../text/html.js";
 import { shortHash } from "../util/hash.js";
@@ -33,10 +33,10 @@ export function normalizeJob(input: RawJobInput, capturedAt: string): Job {
     ? (input.descriptionPlain as string)
     : htmlToText(input.descriptionHtml ?? "");
 
-  const location = analyzeLocation(input.locations, {
-    isRemote: input.isRemote,
-    workplaceType: input.workplaceType,
-  });
+  const location = refineRemoteScopeFromTitle(
+    analyzeLocation(input.locations, { isRemote: input.isRemote, workplaceType: input.workplaceType }),
+    input.title,
+  );
 
   const compensation =
     input.structuredCompensation ?? parseCompensationFromText(descriptionText, fallbackCurrency(location.country));
