@@ -40,6 +40,7 @@ type Locator = {
   locator: (selector: string) => Locator;
   allInnerTexts: () => Promise<string[]>;
   evaluate?: (fn: unknown, arg?: unknown) => Promise<unknown>;
+  elementHandle?: () => Promise<{ dispose: () => Promise<void> } | null>;
 };
 
 export const WORKDAY_HOST_PATTERN = /(^|\.)myworkdayjobs\.com$/i;
@@ -422,7 +423,12 @@ async function searchMenu(page: Page, field: Locator, candidate: string): Promis
   const looseCount = Math.min(await loose.count(), 4);
   for (let index = looseCount - 1; index >= 0; index -= 1) {
     const box = loose.nth(index);
-    boxes.push({ box, where: `page[${index}/${looseCount}]`, ownsPrompt: await insidePopup(box) });
+    const home = await searchBoxHome(box, field);
+    // Another prompt's inline box. Typing there opens that prompt's list, which
+    // then reads as this one narrowing: Palo Alto Networks' school search was
+    // "narrowed" to Field of Study's majors, and its source search to phone codes.
+    if (home === "other") continue;
+    boxes.push({ box, where: `page[${index}/${looseCount}]`, ownsPrompt: home === "own" || (await insidePopup(box)) });
   }
   const scoped = field.locator(SEARCH_BOX);
   const scopedCount = Math.min(await scoped.count(), 3);
@@ -524,6 +530,38 @@ async function insidePopup(box: Locator): Promise<boolean> {
     )
     .catch(() => false);
   return owned === true;
+}
+
+/** Just what `searchBoxHome` reads from the field's own element. */
+type FieldElement = { contains: (node: unknown) => boolean };
+
+/**
+ * Where a page-level search box sits relative to the prompt being filled:
+ * inside the field itself, inside some other form field, or in neither - a
+ * popup rendered at the end of the document, or the page's own search.
+ */
+async function searchBoxHome(box: Locator, field: Locator): Promise<"own" | "other" | "free"> {
+  if (!box.evaluate) return "free";
+  const first = field.first();
+  if (typeof first.elementHandle !== "function") return "free";
+  const handle = await first.elementHandle().catch(() => null);
+  if (!handle) return "free";
+  try {
+    const home = await box.evaluate(
+      (el: SearchBoxElement, owner: unknown) =>
+        (owner as FieldElement).contains(el)
+          ? "own"
+          : el.closest('[data-automation-id^="formField-"]') === null
+            ? "free"
+            : "other",
+      handle,
+    );
+    return home === "own" || home === "other" ? home : "free";
+  } catch {
+    return "free";
+  } finally {
+    await handle.dispose().catch(() => undefined);
+  }
 }
 
 /** Describes the page's visible inputs so a failed search explains itself. */
