@@ -193,6 +193,9 @@ const WD_MAX_CATEGORIES = 8;
 const WD_MAX_SCROLL_PAGES = 30;
 /** Time a virtualized menu is given to render the rows a scroll brought into view. */
 const WD_SCROLL_SETTLE_MS = 500;
+/** Extra reads of a menu after a click, while an opened category's own list may still be rendering. */
+const WD_REVEAL_POLLS = 4;
+const WD_REVEAL_POLL_MS = 500;
 
 /**
  * How long one prompt may spend hunting for a value. Each candidate costs a
@@ -641,6 +644,38 @@ function sameValueSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value) => b.includes(value));
 }
 
+/** An opened category's entries, and the level-above entries still listed beside them. */
+type Revealed = { entries: string[]; exclude: string[] };
+
+/**
+ * What clicking a menu entry revealed, when the entry was a category rather
+ * than a value. Undefined when the click chose a value: the menu closed, or it
+ * still lists what it listed before.
+ *
+ * A category normally shows names the level above did not. Palo Alto Networks
+ * files its only "Career Site" under a category of the same name, so opening it
+ * adds no new name - the list just shrinks to the entry that was clicked.
+ * Judged by new names alone, that read as a value that would not take, and a
+ * required question was left blank. A multi-select that drops a chosen value
+ * from its list shrinks too, but loses the clicked entry instead of keeping it.
+ *
+ * An opened category's list can take a moment to render, so a list that has
+ * not changed yet is read again before it is believed.
+ */
+async function revealedByClick(page: Page, before: readonly string[], clicked: string): Promise<Revealed | undefined> {
+  for (let poll = 0; ; poll += 1) {
+    const now = await menuItems(page);
+    const fresh = now.filter((item) => !before.includes(item));
+    if (fresh.length > 0) return { entries: fresh, exclude: [...before] };
+    if (now.length > 0 && !sameValueSet(now, before)) {
+      return now.includes(clicked) ? { entries: now, exclude: [] } : undefined;
+    }
+    const open = now.length > 0 || (await page.locator(WD_POPUP).count().catch(() => 0)) > 0;
+    if (!open || poll >= WD_REVEAL_POLLS) return undefined;
+    await page.waitForTimeout(WD_REVEAL_POLL_MS);
+  }
+}
+
 /**
  * Whether the widget now holds a wanted answer it did not hold before.
  *
@@ -831,9 +866,9 @@ async function sweepSiblingCategories(
     if (!(await openMenu(page, field))) break;
     const shown = await menuItems(page);
     if (!(await clickExact(page, entry))) continue;
-    const rendered = (await menuItems(page)).filter((item) => !shown.includes(item));
-    if (rendered.length > 0) {
-      const local = bestRanked(await categoryEntries(page, rendered, shown, candidates), candidates);
+    const revealed = await revealedByClick(page, shown, entry);
+    if (revealed) {
+      const local = bestRanked(await categoryEntries(page, revealed.entries, revealed.exclude, candidates), candidates);
       if (local && (best === undefined || local.rank < best.rank)) best = { ...local, category: entry };
       continue;
     }
@@ -858,7 +893,10 @@ async function sweepSiblingCategories(
   await closeMenu(page);
   const found = best;
   if (found !== undefined && (await openMenu(page, field))) {
-    const reached = found.category === undefined || (await clickExact(page, found.category));
+    const top = await menuItems(page);
+    const reached =
+      found.category === undefined ||
+      ((await clickExact(page, found.category)) && (await revealedByClick(page, top, found.category)) !== undefined);
     if (reached && (await clickRevealed(page, found.option))) {
       const after = await chosenValues(field);
       if (after.some((value) => matches(value, found.option)) || tookAnswer(after, baseline, [found.option])) {
@@ -1077,9 +1115,9 @@ export async function fillWorkdayPrompt(
         // widget itself read as empty - so a category must be drilled into and
         // a leaf chosen explicitly. Check for expansion before accepting the
         // click, because the category also reads back as the selected value.
-        const rendered = (await menuItems(page)).filter((item) => !offered.includes(item));
-        if (rendered.length > 0) {
-          const children = await categoryEntries(page, rendered, offered, candidates);
+        const revealed = await revealedByClick(page, offered, hit);
+        if (revealed) {
+          const children = await categoryEntries(page, revealed.entries, revealed.exclude, candidates);
           const local = bestRanked(children, candidates);
           if (local?.rank === 0 && (await clickRevealed(page, local.option))) {
             const after = await chosenValues(field);

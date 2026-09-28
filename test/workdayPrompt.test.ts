@@ -27,6 +27,8 @@ class FakePrompt {
   window?: number;
   private offset = 0;
   private shownMenu: string[] = [];
+  /** Whether the open list is a category's rather than the top level. */
+  private inCategory = false;
 
   constructor(
     private readonly tree: Tree,
@@ -76,11 +78,14 @@ class FakePrompt {
         if (label === undefined) throw new Error(`nothing at ${index} for ${selector}`);
         self.clicked.push(label);
         if (self.refuses.includes(label)) return;
-        const children = self.tree[label];
+        // Inside an open category every entry is a value, even one named like
+        // a category above it - Palo Alto Networks nests "Career Site" in "Career Site".
+        const children = self.inCategory ? undefined : self.tree[label];
         if (children === undefined) {
           // A leaf inside an open category.
           self.selected = [label];
           self.menu = [];
+          self.inCategory = false;
           return;
         }
         if (children === null) {
@@ -89,6 +94,7 @@ class FakePrompt {
           return;
         }
         self.menu = [...children];
+        self.inCategory = true;
       },
     });
     return make(null);
@@ -153,6 +159,7 @@ class FakePrompt {
         fill: async () => undefined,
         click: async () => {
           self.menu = self.top();
+          self.inCategory = false;
         },
       };
       return target;
@@ -258,6 +265,35 @@ describe("fillWorkdayPrompt", () => {
     expect(result.filled).toBe(true);
     expect(prompt.selected).toEqual(["Company Website"]);
     expect(result.detail).toContain("under Website");
+  });
+
+  it("opens a category whose only entry shares its name", async () => {
+    // Palo Alto Networks files its "Career Site" answer under a "Career Site"
+    // category. Opening it added no name the top level lacked, so the click read
+    // as a value that would not take, the required question stayed blank, and
+    // step 1 of the wizard refused to advance.
+    const prompt = new FakePrompt(
+      {
+        "Career Site": ["Career Site"],
+        Event: ["Career Fair"],
+        "Paid Job Board": ["Glassdoor", "Indeed"],
+        "Recruiter Outreach": ["Email"],
+      },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), [
+      "Company Careers Page",
+      "Palo Alto Networks Career Site",
+      "Careers page",
+      "Career site",
+      "Job board",
+      "Other",
+    ]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Career Site"]);
+    expect(result.detail).toContain("under Career Site");
   });
 
   it("reports failure instead of claiming success when nothing matches", async () => {
