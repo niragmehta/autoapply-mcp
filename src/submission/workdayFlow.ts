@@ -189,6 +189,10 @@ const WD_MENU_ITEM = `[role="option"]:visible:not(${WD_PILL})`;
  */
 const WD_POPUP = "[data-popper-placement]:visible";
 const WD_MAX_CATEGORIES = 8;
+/** Screens of a virtualized menu scrolled through before it is taken as read. */
+const WD_MAX_SCROLL_PAGES = 30;
+/** Time a virtualized menu is given to render the rows a scroll brought into view. */
+const WD_SCROLL_SETTLE_MS = 500;
 
 /**
  * How long one prompt may spend hunting for a value. Each candidate costs a
@@ -562,6 +566,72 @@ async function menuItems(page: Page): Promise<string[]> {
     .filter(Boolean);
 }
 
+/**
+ * A page script that scrolls the open menu's list a screen down, or back to
+ * its top, and reports whether it moved.
+ *
+ * Workday virtualizes long menus: only the rows in view exist in the page, so
+ * reading the menu sees one screenful and nothing below it. Moving the list's
+ * own scroll container is what makes it render the next rows.
+ */
+function scrollMenuScript(toTop: boolean): string {
+  return `(() => {
+    const toTop = ${toTop};
+    const popups = [...document.querySelectorAll("[data-popper-placement]")].filter((node) => node.getClientRects().length > 0);
+    const popup = popups[popups.length - 1];
+    const option = popup && popup.querySelector('[role="option"]');
+    for (let node = option && option.parentElement; node && popup.contains(node); node = node.parentElement) {
+      const overflow = getComputedStyle(node).overflowY;
+      if ((overflow === "auto" || overflow === "scroll") && node.scrollHeight > node.clientHeight + 1) {
+        const before = node.scrollTop;
+        node.scrollTop = toTop ? 0 : before + Math.max(node.clientHeight * 0.8, 40);
+        return node.scrollTop !== before;
+      }
+    }
+    return false;
+  })()`;
+}
+
+async function scrollMenu(page: Page, toTop: boolean): Promise<boolean> {
+  const moved = (await page.evaluate(scrollMenuScript(toTop)).catch(() => false)) === true;
+  if (moved) await page.waitForTimeout(WD_SCROLL_SETTLE_MS);
+  return moved;
+}
+
+/**
+ * Every entry of the open menu, including rows a virtualized list has not
+ * rendered. Salesforce's "External Career Site Sources" showed eleven sources,
+ * alphabetically, ending at "Indeed", and every approved answer below them was
+ * reported as not offered.
+ */
+async function allMenuItems(page: Page): Promise<string[]> {
+  let seen = await menuItems(page);
+  for (let screen = 0; screen < WD_MAX_SCROLL_PAGES; screen += 1) {
+    if (!(await scrollMenu(page, false))) break;
+    const fresh = (await menuItems(page)).filter((item) => !seen.includes(item));
+    if (fresh.length === 0) break;
+    seen = [...seen, ...fresh];
+  }
+  await scrollMenu(page, true);
+  return seen;
+}
+
+/**
+ * An open category's entries. The rows in view are enough when one of them is
+ * the approved wording itself; otherwise the list is read to its end, because
+ * a closer answer than any in view may be waiting below.
+ */
+async function categoryEntries(
+  page: Page,
+  rendered: readonly string[],
+  exclude: readonly string[],
+  candidates: readonly string[],
+): Promise<string[]> {
+  if (bestRanked(rendered, candidates)?.rank === 0) return [...rendered];
+  const whole = (await allMenuItems(page)).filter((item) => !exclude.includes(item));
+  return [...rendered, ...whole.filter((item) => !rendered.includes(item))];
+}
+
 function sameOptions(before: readonly string[], after: readonly string[]): boolean {
   return before.length === after.length && before.every((text, index) => text === after[index]);
 }
@@ -635,6 +705,17 @@ async function clickExact(page: Page, text: string): Promise<boolean> {
   }
   await page.waitForTimeout(1_000);
   return true;
+}
+
+/** Clicks an entry a virtualized menu may not be rendering, scrolling down from the top until it is. */
+async function clickRevealed(page: Page, text: string): Promise<boolean> {
+  if (await clickExact(page, text)) return true;
+  await scrollMenu(page, true);
+  for (let screen = 0; screen < WD_MAX_SCROLL_PAGES; screen += 1) {
+    if (await clickExact(page, text)) return true;
+    if (!(await scrollMenu(page, false))) break;
+  }
+  return false;
 }
 
 /**
@@ -750,9 +831,9 @@ async function sweepSiblingCategories(
     if (!(await openMenu(page, field))) break;
     const shown = await menuItems(page);
     if (!(await clickExact(page, entry))) continue;
-    const children = (await menuItems(page)).filter((item) => !shown.includes(item));
-    if (children.length > 0) {
-      const local = bestRanked(children, candidates);
+    const rendered = (await menuItems(page)).filter((item) => !shown.includes(item));
+    if (rendered.length > 0) {
+      const local = bestRanked(await categoryEntries(page, rendered, shown, candidates), candidates);
       if (local && (best === undefined || local.rank < best.rank)) best = { ...local, category: entry };
       continue;
     }
@@ -778,7 +859,7 @@ async function sweepSiblingCategories(
   const found = best;
   if (found !== undefined && (await openMenu(page, field))) {
     const reached = found.category === undefined || (await clickExact(page, found.category));
-    if (reached && (await clickExact(page, found.option))) {
+    if (reached && (await clickRevealed(page, found.option))) {
       const after = await chosenValues(field);
       if (after.some((value) => matches(value, found.option)) || tookAnswer(after, baseline, [found.option])) {
         return {
@@ -996,10 +1077,11 @@ export async function fillWorkdayPrompt(
         // widget itself read as empty - so a category must be drilled into and
         // a leaf chosen explicitly. Check for expansion before accepting the
         // click, because the category also reads back as the selected value.
-        const children = (await menuItems(page)).filter((item) => !offered.includes(item));
-        if (children.length > 0) {
+        const rendered = (await menuItems(page)).filter((item) => !offered.includes(item));
+        if (rendered.length > 0) {
+          const children = await categoryEntries(page, rendered, offered, candidates);
           const local = bestRanked(children, candidates);
-          if (local?.rank === 0 && (await clickExact(page, local.option))) {
+          if (local?.rank === 0 && (await clickRevealed(page, local.option))) {
             const after = await chosenValues(field);
             if (after.some((value) => matches(value, local.option)) || tookAnswer(after, baseline, [local.option])) {
               return { filled: true, detail: `selected ${after.join(", ")} under ${hit}` };
