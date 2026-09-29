@@ -33,6 +33,7 @@ import { coverLetterFor, enterCoverLetter } from "./coverLetter.js";
 import { waitForResumeProcessing } from "./resumeProcessing.js";
 import { fillLeverLocation } from "./leverLocation.js";
 import { hasVisibleCaptchaChallenge } from "./captcha.js";
+import { ashbyEmbedFallbackUrl } from "./ashbyEmbed.js";
 import { workdayDateParts } from "./workdayDates.js";
 import { inertControlIndexes } from "./inertControls.js";
 import { READ_VALIDATION_ERRORS } from "./validationErrors.js";
@@ -660,6 +661,13 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const page = await context.newPage();
     await page.goto(packet.applyUrl, { waitUntil: "domcontentloaded", timeout });
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+
+    const embeddedForm = ashbyEmbedFallbackUrl(page.url(), await readBodyText(page));
+    if (embeddedForm) {
+      logger.info("ashby hosted page not found; loading the embedded form", { url: embeddedForm });
+      await page.goto(embeddedForm, { waitUntil: "domcontentloaded", timeout });
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    }
 
     if (!checkUrlAllowed(page.url(), options.policy).allowed) {
       return aborted(`page redirected off the allowlist to ${page.url()}`, page.url());
