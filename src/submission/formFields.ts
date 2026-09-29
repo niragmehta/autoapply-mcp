@@ -2,7 +2,7 @@ import type { DraftAnswer } from "../domain/job.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
 import { statesUnrelatedExperience } from "../drafting/experienceSubject.js";
 import { ratingSubjectMismatch } from "../drafting/ratingSubject.js";
-import { valueShapeMismatch } from "../drafting/valueShape.js";
+import { numberInputValue, valueShapeMismatch } from "../drafting/valueShape.js";
 import {
   asksWhetherSponsorshipRequired,
   canonicalizeWorkPermission,
@@ -593,14 +593,23 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
  * takes digits, an email box takes an address, a year question takes a year,
  * and a one-line box cannot hold paragraphs. Judge by the shape of the value
  * rather than by wording nothing distinguishes; see valueShape.ts.
+ *
+ * A typed control says what it takes whatever its label says. Confluent's
+ * "Mobile Phone" is a tel input whose help text asks for agreement "to receive
+ * text message updates"; the consent answer matched that text, and since only
+ * text boxes were judged, the tel box received the consent sentence.
  */
 function contactFieldRejectsValue(field: FieldDescriptor, value: string): boolean {
   if (offersOptions(field) || field.optionLabel) return false;
-  if (field.type !== "text" && field.type !== "textarea") return false;
+  if (value.trim().length === 0) return false;
   // A phone-code question names a country. Workday's prompt is collected as its
   // bare search box, so the phone-number shape would reject "Canada" for not
   // being digits; phoneCodeMismatch already keeps the number itself out.
   if (isPhoneCodeField(normalizeLabel(field.label))) return false;
+  if (field.type === "tel") return (value.match(/\d/g) ?? []).length < 7;
+  if (field.type === "email") return !value.includes("@");
+  if (field.type === "number") return numberInputValue(value) === null;
+  if (field.type !== "text" && field.type !== "textarea") return false;
   const control = field.type === "textarea" ? "multi-line" : "single-line";
   return valueShapeMismatch(normalizeLabel(field.label), control, value) !== null;
 }

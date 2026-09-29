@@ -2318,6 +2318,82 @@ describe("contact fields judged by the shape of the value", () => {
     );
     expect(matches[0]?.answer).toBeNull();
   });
+
+  // Confluent's Ashby form renders "Mobile Phone" as a tel input whose help
+  // text asks for agreement "to receive text message updates". The consent
+  // answer matched that text, and because only text boxes were judged by shape
+  // the tel box took "No - I do not consent to receiving text messages".
+  const confluentPhone = field(
+    "Mobile Phone Check Yes or No to indicate your agreement to receive text message updates from Confluent",
+    { type: "tel", selectorIndex: 0, required: true },
+  );
+
+  it("does not write an SMS consent sentence into a tel box", () => {
+    const matches = matchFields(
+      [confluentPhone],
+      [answer("Mobile Phone", "No - I do not consent to receiving text messages", { questionKey: "sms-consent" })],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("puts the phone number in a tel box when the consent answer competes for it", () => {
+    const matches = matchFields(
+      [confluentPhone],
+      [
+        answer("Mobile Phone", "No - I do not consent to receiving text messages", { questionKey: "sms-consent" }),
+        answer("Mobile Phone", "604-555-0142", { questionKey: "phone" }),
+      ],
+    );
+    expect(matches[0]?.answer?.answer).toBe("604-555-0142");
+  });
+
+  it("keeps a consent answer bound to a consent bank match out of the tel box", () => {
+    const bank = [
+      {
+        key: "sms-consent",
+        label: "Consent to receive text message updates",
+        patterns: ["agreement to receive text"],
+        answer: "No - I do not consent to receiving text messages",
+        allowAutoFill: true,
+      },
+    ];
+    expect(fallbackAnswersForFields([confluentPhone], [], bank)).toHaveLength(0);
+  });
+
+  it("does not write a sentence into an email-type box", () => {
+    const matches = matchFields(
+      [field("Email", { type: "email", selectorIndex: 0 })],
+      [answer("Email preference", "I do not wish to be emailed")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  // The same form asks for "Location - Zip Code" in a number input. The
+  // Canadian postal code "V5K 0A1" was reduced to its first digit and the
+  // application went out with a ZIP code of "5".
+  it("does not put a postal code in a number box", () => {
+    const matches = matchFields(
+      [field("Location - Zip Code", { type: "number", selectorIndex: 0, required: true })],
+      [answer("Location - Zip Code", "V5K 0A1", { questionKey: "personal.address.postalCode" })],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still lets a stated quantity fill a number box", () => {
+    const matches = matchFields(
+      [field("Years of experience", { type: "number", selectorIndex: 0 })],
+      [answer("Years of experience", "5+ years")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("5+ years");
+  });
+
+  it("still lets a grouped salary fill a number box", () => {
+    const matches = matchFields(
+      [field("Expected base salary", { type: "number", selectorIndex: 0 })],
+      [answer("Expected base salary", "250,000")],
+    );
+    expect(matches[0]?.answer?.answer).toBe("250,000");
+  });
 });
 describe("a contact detail may not answer a question about its kind", () => {
   // Workday renders "Phone Number" and "Phone Device Type" side by side. Both
