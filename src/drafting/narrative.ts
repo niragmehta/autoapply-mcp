@@ -53,6 +53,12 @@ export type NarrativeResolution = {
  * Finds a narrative template for a question and renders it. Returns null when
  * nothing matches, or when the posting did not yield enough specific topics to
  * make the answer worth sending.
+ *
+ * Templates are tried in profile order, and one needing more topics than the
+ * posting yielded gives way to a later match that needs fewer. Character.AI's
+ * "Why are you interested in working at Character AI?" matched only the
+ * topic-bearing template, its posting yielded none, and the required essay
+ * stayed blank although a general template would have answered it.
  */
 export function resolveNarrative(
   label: string,
@@ -60,10 +66,10 @@ export function resolveNarrative(
   context: NarrativeContext,
 ): NarrativeResolution | null {
   const match: NarrativeTemplate | undefined = profile.narratives.find((narrative) =>
+    context.topics.length >= narrative.minTopics &&
     narrative.patterns.some((pattern) => patternMatches(pattern, label, context.company)),
   );
   if (!match) return null;
-  if (context.topics.length < match.minTopics) return null;
 
   const answer = renderTemplate(match.template, context);
   if (answer.trim().length === 0) return null;

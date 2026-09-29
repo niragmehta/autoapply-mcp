@@ -157,6 +157,29 @@ describe("narrative templates", () => {
     expect(resolveNarrative("Why Anthropic?", profile, { ...context, topics: [] })).toBeNull();
   });
 
+  it("falls back to a later matching template that needs fewer topics", () => {
+    const withFallback = ProfileSchema.parse({
+      ...profile,
+      narratives: [
+        ...profile.narratives,
+        {
+          key: "why-company-general",
+          label: "Why this company? (posting yielded no topics)",
+          patterns: ["why {company}"],
+          template: "I build security systems, and {role} at {company} is where I want to apply that.",
+          allowAutoFill: true,
+          minTopics: 0,
+        },
+      ],
+    });
+
+    const thin = resolveNarrative("Why Anthropic?", withFallback, { ...context, topics: [] });
+    expect(thin?.answer).toBe("I build security systems, and Staff Security Engineer at Anthropic is where I want to apply that.");
+    expect(thin?.citation).toBe("profile.narratives.why-company-general");
+
+    expect(resolveNarrative("Why Anthropic?", withFallback, context)?.citation).toBe("profile.narratives.why-company");
+  });
+
   it("returns null for unrelated questions", () => {
     expect(resolveNarrative("What is your notice period?", profile, context)).toBeNull();
   });
