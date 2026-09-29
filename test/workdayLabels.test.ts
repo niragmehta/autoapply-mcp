@@ -67,6 +67,41 @@ describe("Workday question labels in a local browser", () => {
     expect(box?.required).toBe(true);
   });
 
+  it("marks a radio group required from its question's marker", async () => {
+    // GM's "Are you currently working or have you previously worked ... for
+    // General Motors" radios carry no required attribute of their own; the only
+    // marker is the legend's asterisk. Read as optional, an unmatched answer was
+    // skipped silently and My Information refused to advance with nothing named.
+    const question = "Are you currently working or have you previously worked for General Motors?";
+    const fields = await collectFrom(
+      browser,
+      `<div data-automation-id="formField-candidateIsPreviousWorker"><fieldset>
+        <legend><label>${question}<abbr title="required">*</abbr></label></legend>
+        <input type="radio" id="pw-yes" name="candidateIsPreviousWorker" value="true"><label for="pw-yes">Yes</label>
+        <input type="radio" id="pw-no" name="candidateIsPreviousWorker" value="false"><label for="pw-no">No</label>
+      </fieldset></div>`,
+    );
+
+    const radios = fields.filter((field) => field.type === "radio");
+
+    expect(radios.map((field) => field.optionLabel)).toEqual(["Yes", "No"]);
+    expect(radios.every((field) => field.label.startsWith(question))).toBe(true);
+    expect(radios.every((field) => field.required)).toBe(true);
+  });
+
+  it("leaves an unmarked Workday radio group optional", async () => {
+    const fields = await collectFrom(
+      browser,
+      `<div data-automation-id="formField-preferredContact"><fieldset>
+        <legend><label>Preferred contact method</label></legend>
+        <input type="radio" id="pc-email" name="preferredContact" value="email"><label for="pc-email">Email</label>
+        <input type="radio" id="pc-phone" name="preferredContact" value="phone"><label for="pc-phone">Phone</label>
+      </fieldset></div>`,
+    );
+
+    expect(fields.filter((field) => field.type === "radio").some((field) => field.required)).toBe(false);
+  });
+
   it("keeps an explicit label on a Workday text input", async () => {
     const fields = await collectFrom(
       browser,
