@@ -2421,7 +2421,10 @@ function collapseOptionGroups(
     }
 
     if (!selected) {
-      out.push({ ...head, answer: null });
+      // The head stands in for the whole group, so it has to carry the group's
+      // state: a question already answered on a later option is not missing.
+      const answered = head.field.value !== "checked" && group.some((match) => match.field.value === "checked");
+      out.push({ ...head, field: answered ? { ...head.field, value: "checked" } : head.field, answer: null });
       continue;
     }
     out.push({

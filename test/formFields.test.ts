@@ -1179,6 +1179,23 @@ describe("reporting what a person must still complete", () => {
     );
     expect(buildFillPlan(group, []).unfilled.map((entry) => entry.label)).toEqual(["Gender"]);
   });
+
+  it("does not report a required radio group whose selection is on a later option", () => {
+    // The group is reduced to its first option, so reading only that option's
+    // state called a question answered on "No" unanswered and aborted the run.
+    const group = [
+      field("Previously worked here?", { type: "radio", name: "pw", optionLabel: "Yes", selectorIndex: 0, required: true }),
+      field("Previously worked here?", { type: "radio", name: "pw", optionLabel: "No", selectorIndex: 1, required: true, value: "checked" }),
+    ];
+    expect(buildFillPlan(group, []).unmatchedRequired).toEqual([]);
+  });
+
+  it("still reports a required radio group with nothing selected", () => {
+    const group = ["Yes", "No"].map((optionLabel, selectorIndex) =>
+      field("Previously worked here?", { type: "radio", name: "pw", optionLabel, selectorIndex, required: true }),
+    );
+    expect(buildFillPlan(group, []).unmatchedRequired.map((entry) => entry.label)).toEqual(["Previously worked here?"]);
+  });
 });
 
 describe("prompts that test whether a person is filling the form", () => {

@@ -469,7 +469,8 @@ export const COLLECT_FIELDS = `(() => {
       required:
         el.hasAttribute('required') ||
         el.getAttribute('aria-required') === 'true' ||
-        Boolean((isListbox || isDateGroup) && workdayRequired(el)) ||
+        // Workday marks a radio group only on its question, not on each radio.
+        Boolean((isListbox || isDateGroup || isRadio) && workdayRequired(el)) ||
         Boolean(ashbyLabel && String(ashbyLabel.className).includes('_required_')),
       role,
       options: el.tagName.toLowerCase() === 'select'
