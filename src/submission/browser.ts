@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { SubmissionPolicy } from "../domain/campaign.js";
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
+import { numberInputValue } from "../drafting/valueShape.js";
 import { assertUrlAllowed, checkUrlAllowed } from "./allowlist.js";
 import {
   answerValueForField,
@@ -1583,10 +1584,11 @@ async function fillControl(
   }
   if (field.type === "file") return;
   // A number input rejects any text at all, so "5+ years" threw and the field
-  // was reported unfillable. The years the answer states are what the box wants.
+  // was reported unfillable. The years the answer states are what the box wants;
+  // a postal code is not a quantity and must not be cut down to its first digit.
   if (field.type === "number") {
-    const numeric = value.match(/-?\d+(?:\.\d+)?/)?.[0];
-    if (!numeric) throw new Error(`cannot type "${value}" into a number field`);
+    const numeric = numberInputValue(value);
+    if (numeric === null) throw new Error(`cannot type "${value}" into a number field`);
     await locator.fill(numeric);
     return;
   }

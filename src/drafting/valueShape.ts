@@ -48,3 +48,21 @@ export function valueShapeMismatch(label: string, control: TextControl, value: s
   }
   return null;
 }
+
+// A token holding both letters and digits is a code - a postal code, a licence
+// number - never a quantity.
+const MIXED_CODE_TOKEN = /\b(?=[a-z]*\d)(?=\d*[a-z])[a-z\d]+\b/i;
+const DIGIT_GROUP_SEPARATOR = /(\d),(?=\d{3}(?!\d))/g;
+
+/**
+ * What a number input can take from an answer, or null when the answer is not
+ * a quantity. A number box rejects text, so "5+ years" is typed as the 5 it
+ * states. Taking the first run of digits from anything else misstates it:
+ * Confluent's "Location - Zip Code" box received "5" from the postal code
+ * "V5H 1T2", and "$250,000" would have become a salary of 250.
+ */
+export function numberInputValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (MIXED_CODE_TOKEN.test(trimmed)) return null;
+  return trimmed.replace(DIGIT_GROUP_SEPARATOR, "$1").match(/-?\d+(?:\.\d+)?/)?.[0] ?? null;
+}
