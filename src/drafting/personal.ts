@@ -1,7 +1,7 @@
 import type { Personal, Profile, StoredAnswer } from "../domain/profile.js";
 import { asksAbilityToMeetRequirement } from "../text/requirementQuestion.js";
 import { normalizeQuestionLabel } from "./blockedQuestions.js";
-import { asksAboutOwnResidence, NON_POSTAL_STATE } from "./residence.js";
+import { asksAboutOwnResidence, NATIONALITY_QUESTION, NON_POSTAL_STATE } from "./residence.js";
 
 /**
  * Resolvers for personal and demographic form fields.
@@ -341,7 +341,7 @@ export function resolvePersonal(label: string, profile: Profile): (PersonalResol
     if (requirementQuestion && SELF_ID_CATEGORIES.has(resolver.category)) continue;
     if (
       (resolver.citation.startsWith("personal.address") || resolver.category === "contact") &&
-      (NON_POSTAL_STATE.test(label) || NON_POSTAL_STATE.test(normalized))
+      (NON_POSTAL_STATE.test(label) || NON_POSTAL_STATE.test(normalized) || NATIONALITY_QUESTION.test(label))
     ) continue;
     if (!resolver.pattern.test(label) && !resolver.pattern.test(normalized)) continue;
     const raw = resolver.resolve(profile.personal, profile);

@@ -123,6 +123,15 @@ describe("resolvePersonal", () => {
     expect(result?.citation).toBe("personal.address.street");
   });
 
+  it.each([
+    // HPE's export-control question, whose country list ends in "Ukraine(Crimea Region)".
+    "For any of the countries listed below: • Are you a citizen or have a passport, or • Have dual citizenship status, or • Have been granted a permanent resident status, or • Have been granted refugee or asylum status? Armenia, Azerbaijan, Belarus, Ukraine, Ukraine(Crimea Region), Uzbekistan, Venezuela, Vietnam, or Yemen",
+    "Which country or region issued your passport?",
+    "State your nationality",
+  ])("never answers a nationality question with an address part: %s", (label) => {
+    expect(resolvePersonal(label, profile)).toBeNull();
+  });
+
   it("returns null when nothing is stored", () => {
     expect(resolvePersonal("What is your favourite colour?", profile)).toBeNull();
     expect(resolvePersonal("Are you a protected veteran?", profile)).toBeNull();

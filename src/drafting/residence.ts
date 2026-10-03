@@ -22,6 +22,14 @@ export const WORK_AUTHORITY_TEXT = /\b(authoriz|sponsor|visa|work permit|eligibl
 export const NON_POSTAL_STATE = /\bstate[\s\u2010-\u2015-]+(?:owned|controlled|machines?)\b/i;
 
 /**
+ * Asks about nationality or legal status rather than an address. HPE's export
+ * control question lists countries including "Ukraine(Crimea Region)", and the
+ * bare "region" sent it to the address rule, which answered a citizenship
+ * question with the province.
+ */
+export const NATIONALITY_QUESTION = /\b(?:citizen\w*|passports?|nationalit\w*|asylum|refugees?)\b/i;
+
+/**
  * A question asking the inverse names the same place to mean the opposite, so
  * it is excluded and left to a person rather than answered backwards.
  */
