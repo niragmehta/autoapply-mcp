@@ -1268,6 +1268,22 @@ describe("single name inputs", () => {
     const matches = matchFields([field("Full Name *")], augmented);
     expect(matches[0]?.answer?.answer).toBe("Casey Moore");
   });
+
+  // Warner Bros. Discovery's Workday name block. The whole-name aliases put
+  // "Casey Moore" into Middle Name, so the submitted legal name read
+  // "Casey Casey Moore Moore".
+  it("never fills one part of a name with the whole name", () => {
+    const augmented = augmentAnswersForBrowser([answer("First Name", "Casey"), answer("Last Name", "Moore")]);
+    const matches = matchFields(
+      [
+        field("First Name*", { name: "legalName--firstName", selectorIndex: 0 }),
+        field("Middle Name", { name: "legalName--middleName", selectorIndex: 1 }),
+        field("Last Name*", { name: "legalName--lastName", selectorIndex: 2 }),
+      ],
+      augmented,
+    );
+    expect(matches.map((match) => match.answer?.answer ?? null)).toEqual(["Casey", null, "Moore"]);
+  });
 });
 
 describe("camel case brand names in patterns", () => {

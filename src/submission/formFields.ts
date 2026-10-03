@@ -209,6 +209,8 @@ const MIN_CONFIDENCE = 0.6;
 
 const BARE_NAME_FIELD =
   /^(?:your |applicant |candidate )?(?:full |legal )?name$|\bfirst\s+(?:and\s+|&\s*|\/\s*)?(?:middle\s+(?:and\s+)?)?last\s+name\b/;const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
+const WHOLE_NAME_ANSWER = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;
+const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b/;
 const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge|i understand|understand|understood|i confirm|confirm|i accept|accept)\b/i;
 
 /**
@@ -470,6 +472,13 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (BARE_NAME_FIELD.test(fieldLabel) && PARTIAL_NAME_ANSWER.test(answerLabel)) {
+    return true;
+  }
+  // Workday names each input in its legal-name block "legalName--<part>", so
+  // the attribute shares "legal name" with the whole-name answer and put it in
+  // Middle Name: Warner Bros. Discovery received "Casey Casey Moore Moore". A
+  // field asking for one part of a name never takes the whole name.
+  if (WHOLE_NAME_ANSWER.test(answerLabel) && NAME_PART_FIELD.test(fieldLabel) && !BARE_NAME_FIELD.test(fieldLabel)) {
     return true;
   }
   // Sponsorship and authorization take opposite answers, so a question asking
