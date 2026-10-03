@@ -130,6 +130,9 @@ export function openDatabase(path: string): Db {
   }
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL;");
+  // Discovery, the MCP server and submission runs are separate processes on
+  // one file; without a busy timeout a write meeting another's fails at once.
+  db.exec("PRAGMA busy_timeout = 15000;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
   logger.debug("database ready", { path });

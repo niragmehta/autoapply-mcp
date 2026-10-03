@@ -373,3 +373,13 @@ describe("evaluateAndStore", () => {
     expect(getEvaluation(db, a.id)?.flags.some((flag) => flag.startsWith("duplicate-role"))).toBe(true);
   });
 });
+
+describe("database connection", () => {
+  it("waits for another process's write lock instead of failing at once", () => {
+    // Discovery, the MCP server and a submission run each open the same file.
+    // With SQLite's default busy timeout of zero, a write that met another
+    // process's write failed outright, which could leave a sent application
+    // unrecorded.
+    expect(db.prepare("PRAGMA busy_timeout").get()).toEqual({ timeout: 15000 });
+  });
+});
