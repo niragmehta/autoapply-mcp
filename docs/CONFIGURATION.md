@@ -58,8 +58,10 @@ Name, headline, email, phone, location and links. Contact form fields are filled
 
 Keep `alwaysReviewManually` true unless counsel has reviewed your exact wording.
 
+The shipped template leaves all three country lists empty. Until you fill them in, every posting that states a citizenship or clearance requirement is gated out, and every country scores as needing employer support.
+
 ### compensation
-Your targets, plus a `disclosurePolicy` of `decline`, `range` or `exact`. Compensation questions are a blocked category by default regardless.
+Your targets, plus a `disclosurePolicy` of `decline`, `range` or `exact`. Compensation questions are a blocked category by default regardless. Ranking and drafting do not read these numbers. The floor that gates postings is [`compensation` in campaign.json](#compensation-1). The template's values of `1` are placeholders.
 
 ### preferences
 Relocation, workplace and notice-period preferences. `roleSearchNotes` preserves
@@ -102,6 +104,16 @@ Pre-approved answers to recurring questions:
 `alternatives` is an ordered preference list for questions rendered as a fixed set of choices. The first entry the employer actually offers is used; if none are offered, the question is handed back rather than submitted with an unlisted value. See [BATCH.md](BATCH.md).
 
 `skip: true` records a deliberate decision to leave an optional field blank.
+
+The shipped template carries 170 entries, each with a `note` explaining it:
+
+- An entry with an answer is a standing decision.
+- A blank `answer` means you are asked every time a form needs it. An application only waits on a question when that question is required.
+- Filling in a blank entry whose `allowAutoFill` is already true makes it automatic from then on.
+- Entries with `allowAutoFill: false` stay suggestions even when filled in.
+- For work authorization, sponsorship and citizenship questions, `workAuthorization.alwaysReviewManually` must also be false before an answer is sent unreviewed.
+
+Your name, contact details, links, current employer, school and city need no entry, because they are answered from `identity`, `experience` and `education`. A blank entry matching those questions would take precedence and ask you instead.
 
 ## campaign.json
 

@@ -89,7 +89,8 @@ function main(): void {
     [
       "",
       "Next, in order:",
-      "  1. Edit profile.json - identity, workAuthorization, compensation, skills, facts.",
+      "  1. Edit profile.json - replace the placeholders in identity, workAuthorization,",
+      "     compensation, experience, education, skills and facts, then review answers[].",
       "     Every drafted answer must trace back to something in this file.",
       "  2. Put your resume PDFs in resumes/ and point profile.resumes[].path at them.",
       "  3. Edit campaign.json - tracks, locations, compensation floor, submission policy.",

@@ -1,51 +1,45 @@
 {
   "version": 1,
   "identity": {
-    "fullName": "Jordan Example",
-    "headline": "Senior Software Engineer",
-    "email": "jordan@example.com",
-    "phone": "555-0100",
-    "location": { "city": "Toronto", "region": "Ontario", "country": "Canada" },
-    "links": {
-      "linkedin": "https://linkedin.com/in/example",
-      "github": "https://github.com/example",
-      "website": "https://example.com"
-    }
+    "fullName": "Your Full Name",
+    "headline": "Your Current Title",
+    "email": "you@example.com",
+    "phone": "",
+    "location": { "city": "Your City", "region": "Your Province or State", "country": "Your Country" },
+    "links": { "linkedin": "", "github": "", "website": "" }
   },
   "personal": {
     "dateOfBirth": { "value": "", "autoFill": false },
-    "address": { "street": "", "city": "Toronto", "region": "Ontario", "postalCode": "", "country": "Canada" },
+    "address": { "street": "", "city": "", "region": "", "postalCode": "", "country": "" },
     "addressAutoFill": false,
     "legalAgeConfirmation": { "value": "Yes", "autoFill": true },
-    "previousEmployment": { "value": "No", "autoFill": false },
+    "previousEmployment": { "value": "", "autoFill": false },
     "demographics": {
       "gender": { "value": "Decline to self-identify", "autoFill": true },
       "pronouns": { "value": "", "autoFill": false },
       "raceEthnicity": { "value": "Decline to self-identify", "autoFill": true },
       "hispanicLatino": { "value": "Decline to self-identify", "autoFill": true },
-      "veteranStatus": { "value": "I am not a protected veteran", "autoFill": true },
-      "disabilityStatus": { "value": "I do not wish to answer", "autoFill": true }
+      "veteranStatus": { "value": "I decline to self-identify for protected veteran status", "autoFill": true },
+      "disabilityStatus": { "value": "I do not wish to answer", "autoFill": true },
+      "sexualOrientation": { "value": "Decline to self-identify", "autoFill": true },
+      "transgenderIdentity": { "value": "Decline to self-identify", "autoFill": true }
     }
   },
   "workAuthorization": {
-    "citizenships": ["Canada"],
-    "authorizedIn": ["CA"],
-    "requiresSponsorshipIn": ["US"],
-    "statement": "Canadian citizen authorized to work in Canada. US roles require employer support for work authorization.",
+    "citizenships": ["Your country of citizenship"],
+    "authorizedIn": [],
+    "noSponsorshipRequiredIn": [],
+    "requiresSponsorshipIn": [],
+    "statement": "Describe your work authorization in one sentence, for example: authorized to work in Canada; requires sponsorship for US roles.",
     "alwaysReviewManually": true
   },
-  "compensation": {
-    "currency": "USD",
-    "targetTotal": 280000,
-    "minimumTotal": 200000,
-    "disclosurePolicy": "decline",
-    "rangeStatement": "Open to discussing compensation once we have both assessed fit."
-  },
+  "compensation": { "currency": "USD", "targetTotal": 1, "minimumTotal": 1, "disclosurePolicy": "decline" },
   "preferences": {
-    "willingToRelocate": true,
-    "relocationTargets": ["San Francisco Bay Area"],
+    "willingToRelocate": false,
+    "relocationTargets": [],
     "workplaceTypes": ["onsite", "hybrid", "remote"],
-    "noticePeriod": "4 weeks"
+    "noticePeriod": "",
+    "roleSearchNotes": ""
   },
   "resumes": [
     {
@@ -71,68 +65,2536 @@
   ],
   "experience": [
     {
-      "company": "Example Corp",
-      "title": "Senior Software Engineer",
-      "location": "Toronto, Canada",
+      "company": "Your Current Employer",
+      "title": "Your Job Title",
+      "location": "City, Country",
       "start": "2021-03",
       "end": "present",
-      "highlights": ["Led the platform reliability workstream across four teams."]
+      "highlights": ["Replace with a concrete accomplishment from this role."]
     }
   ],
   "education": [
     {
-      "institution": "Example University",
-      "credential": "BSc Computer Science",
-      "field": "Computer Science",
-      "location": "Toronto, Canada",
-      "start": "2016-09",
-      "end": "2020-12"
+      "institution": "Your University",
+      "credential": "Your Degree",
+      "field": "Your Field of Study",
+      "location": "City, Country",
+      "start": "2015-09",
+      "end": "2019-06"
     }
   ],
   "answers": [
     {
       "key": "source",
       "label": "How did you hear about us?",
-      "patterns": ["how did you hear", "how did you find", "where have you learned about"],
-      "answer": "Friend",
+      "patterns": [
+        "how did you hear",
+        "how did you find",
+        "referral source",
+        "where have you learned about",
+        "where did you learn about",
+        "how were you referred",
+        "how did you first learn",
+        "learn about",
+        "as an employer",
+        "how did you first hear",
+        "hear about this opportunity",
+        "hear about this role",
+        "hear about this position",
+        "hear about this job",
+        "hear about us"
+      ],
+      "answer": "Company Careers Page",
       "alternatives": [
-        "Friend",
-        "Referral",
-        "Employee Referral",
-        "Word of mouth",
-        "Company careers page",
-        "Company website",
-        "LinkedIn",
+        "Company Careers Page",
+        "Company Website",
+        "Careers Website",
+        "Company Site",
+        "Website",
+        "Job Search",
+        "Online Search",
+        "Search Engine",
         "Other"
       ],
       "allowAutoFill": true,
-      "note": "Ordered preference: the first entry the employer actually offers is used."
+      "note": "Ordered preference: the first choice an employer offers is used. Discovery reads employers' own job boards, so the careers page is accurate for postings found that way."
+    },
+    {
+      "key": "name-pronunciation",
+      "label": "Name pronunciation",
+      "patterns": ["name pronunciation", "pronounce your name", "pronunciation"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
     },
     {
       "key": "start-date",
       "label": "Earliest start date",
-      "patterns": ["start date", "notice period", "available to start"],
-      "answer": "Four weeks from offer acceptance",
-      "allowAutoFill": true
+      "patterns": [
+        "start date",
+        "notice period",
+        "available to start",
+        "availability",
+        "earliest you would want to start",
+        "when could you start",
+        "when can you start",
+        "start a new role",
+        "how soon can you start",
+        "earliest start",
+        "earliest month you'd be able to join",
+        "earliest month"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in something like 'Two weeks after accepting an offer' and it is used on every application."
+    },
+    {
+      "key": "timeline-considerations",
+      "label": "Deadlines or timeline considerations",
+      "patterns": ["deadlines or timeline", "timeline considerations", "other deadlines"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "onsite-willingness",
+      "label": "Willing to work in office",
+      "patterns": [
+        "open to working in-person",
+        "open to working in person",
+        "in one of our offices",
+        "willing to work onsite",
+        "comfortable working in office",
+        "hybrid schedule",
+        "work in person in our",
+        "working in our",
+        "work from our",
+        "from our office",
+        "in our office",
+        "work in our office",
+        "willing and able to work in office",
+        "able to work in office",
+        "willing to work in office"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "work-address",
+      "label": "Address you plan to work from",
+      "patterns": [
+        "address from which you plan on working",
+        "where do you plan to work",
+        "location you will work from"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "interviewed-before",
+      "label": "Interviewed here before",
+      "patterns": ["interviewed at", "interviewed with us", "previously interviewed"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "employed-before",
+      "label": "Previously employed at this company",
+      "patterns": [
+        "been employed by",
+        "worked for",
+        "former employee",
+        "previously worked at",
+        "ever worked for",
+        "currently or have you previously worked",
+        "previously been employed",
+        "previously employed by",
+        "ever been previously employed",
+        "previously employed at",
+        "been previously employed by",
+        "ever been employed",
+        "been employed full-time at",
+        "ever been employed full-time",
+        "been employed full time at",
+        "employed full-time at",
+        "otherwise engaged, by an",
+        "employed, or otherwise engaged",
+        "been employed, or otherwise",
+        "ever been issued",
+        "been issued a",
+        "employee id or",
+        "employee id or company email",
+        "employee number or",
+        "issued a company email",
+        "ever worked at",
+        "have you worked at",
+        "you worked at",
+        "are you a former",
+        "ever worked with",
+        "worked here before",
+        "prior employment with",
+        "previous employee of",
+        "are you currently an employee of",
+        "if you were a previous",
+        "were you a previous",
+        "are you a previous",
+        "you were a previous",
+        "a previous employee",
+        "currently working or have you previously worked",
+        "have you previously worked as an employee",
+        "previously worked as an employee, intern"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "relationships-conflict",
+      "label": "Family or personal relationships at the company",
+      "patterns": [
+        "family members",
+        "relatives or personal relationships",
+        "personal/familial relationships",
+        "know anyone who works",
+        "close personal relationship with a current",
+        "related to anyone who has the authority to influence and/or sign commercial contracts"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "contract-negotiation-role",
+      "label": "Current role involves negotiating contracts with the employer",
+      "patterns": [
+        "in your current role, do you engage with",
+        "employees to negotiate, influence and/or sign commercial contracts"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "outside-business",
+      "label": "Outside business activities",
+      "patterns": [
+        "outside business activit",
+        "advisory, consulting, or board roles",
+        "side businesses",
+        "engaged in any outside employment or activity"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "government-official",
+      "label": "Government official relationship",
+      "patterns": ["government official", "bribery", "corruption risk"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "ai-tools-adoption",
+      "label": "Which of the following best describes how you use AI tools today?",
+      "patterns": [
+        "best describes how you use ai",
+        "how you use ai tools",
+        "describes your use of ai",
+        "your experience with ai tools",
+        "level of ai tool"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "know-someone-here",
+      "label": "Do you know anyone currently at the company?",
+      "patterns": [
+        "do you know anyone currently at",
+        "do you know anyone who works at",
+        "do you know someone at",
+        "know anyone at"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "hybrid-commitment",
+      "label": "Willing to commit to the hybrid or in-office policy",
+      "patterns": [
+        "commit to the hybrid",
+        "hybrid policy",
+        "hybrid work policy",
+        "willing and able to commit to",
+        "able to work from the office",
+        "willing to work in the office",
+        "in office three days",
+        "in office 3 days",
+        "willing to join us in office",
+        "join us in office",
+        "days a week in office",
+        "in office on mondays",
+        "hybrid work model"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "willing-to-relocate-to-role-location",
+      "label": "Based in or willing to relocate to the role's location",
+      "patterns": [
+        "based in or willing to relocate",
+        "currently based in or willing to relocate",
+        "are you willing to relocate",
+        "area (or willing to be)",
+        "(or willing to be) and",
+        "or planning to relocate to be within",
+        "or open to relocation",
+        "located in or willing to relocate",
+        "or are you willing to relocate"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "authorized-work-location-us-or-canada",
+      "label": "Will you live in and work from the US, Canada or the UK?",
+      "patterns": [
+        "live in and planning to work from",
+        "performing the work from the united states",
+        "will you be performing the work from",
+        "reside in either the united states or canada",
+        "located in the united states or canada"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "marketing-opt-in",
+      "label": "Marketing and talent-community opt-in",
+      "patterns": [
+        "talent community",
+        "receive newsletters",
+        "stay up to date with",
+        "receive alerts for similar jobs",
+        "job alerts",
+        "culture and careers content",
+        "marketing communications",
+        "receive communications via sms",
+        "sms and/or whatsapp",
+        "text messages about your application"
+      ],
+      "answer": "No",
+      "allowAutoFill": true,
+      "note": "Opts out of newsletters, talent communities and job alerts."
+    },
+    {
+      "key": "used-product",
+      "label": "Have you used our product",
+      "patterns": [
+        "have you used",
+        "have you used our product",
+        "have you used any of our products",
+        "are you a user of our product",
+        "have you tried"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "The answer differs by employer, so it is asked on every application."
+    },
+    {
+      "key": "ai-policy",
+      "label": "AI policy for application",
+      "patterns": [
+        "ai policy for application",
+        "ai policy",
+        "did you use ai",
+        "use of ai in this application",
+        "use ai assistants",
+        "used ai to",
+        "ai assistance",
+        "ai usage attestation",
+        "ai use attestation",
+        "unauthorized outside assistance during the interview process"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Never auto-filled. Many employers restrict AI use in applications or interviews: read their policy and answer it yourself."
     },
     {
       "key": "salary-expectation",
       "label": "Salary expectation",
-      "patterns": ["salary expectation", "desired salary", "compensation expectation"],
-      "answer": "Open to discussing compensation once we have both assessed fit.",
+      "patterns": [
+        "salary expectation",
+        "desired salary",
+        "compensation expectation",
+        "expected compensation",
+        "current salary",
+        "desired compensation",
+        "what is your desired compensation",
+        "desired compensation for this position",
+        "what is your desired salary for this position",
+        "compensation for this position",
+        "what's your desired salary",
+        "what’s your desired salary",
+        "your desired salary"
+      ],
+      "answer": "",
       "allowAutoFill": false,
-      "note": "Never auto-filled: anchoring on a number too early is costly."
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "auth-country-of-residence",
+      "label": "Authorized to work in country of residence",
+      "patterns": [
+        "authorized to work in the country you reside",
+        "legally authorized to work in canada",
+        "entitled to work in canada",
+        "authorized to work in canada"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "h1b-sponsorship",
+      "label": "Require new H-1B sponsorship",
+      "patterns": ["new h-1b sponsorship", "require h-1b", "h1b sponsorship"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "visa-sponsorship",
+      "label": "Require visa sponsorship",
+      "patterns": [
+        "do you require visa sponsorship",
+        "require employment visa sponsorship",
+        "require visa sponsorship",
+        "require sponsorship to work",
+        "require a sponsorship to work",
+        "require immigration sponsorship",
+        "require sponsorship for employment",
+        "now or in the future require",
+        "need sponsorship",
+        "need sponsorship for employment visa status",
+        "require a work visa or sponsorship",
+        "work visa or sponsorship",
+        "require a visa or sponsorship",
+        "require sponsorship",
+        "requires sponsorship",
+        "sponsorship to legally work",
+        "sponsorship to work in the job location",
+        "to sponsor or renew an employment-based visa",
+        "require us to sponsor",
+        "require the company to sponsor",
+        "sponsor or renew an employment",
+        "i will now or in the future need assistance with a work",
+        "now or in the future need assistance with a work visa",
+        "need assistance with a work visa",
+        "require sponsorship from",
+        "require company sponsorship",
+        "company sponsorship now or in the future",
+        "maintain or extend your current work authorization",
+        "to maintain or extend your current work",
+        "sponsorship now or in the future to maintain",
+        "currently require the company",
+        "require the company’s sponsorship",
+        "require the company's sponsorship",
+        "the company’s sponsorship",
+        "the company's sponsorship",
+        "sponsorship or need to transfer",
+        "do you currently require the company",
+        "need to transfer your current",
+        "require the support of",
+        "will you now, or in the future, require",
+        "unable to provide employment sponsorship",
+        "do you require a work permit, visa or additional right to work support",
+        "work permit, visa or additional right to work support",
+        "additional right to work support",
+        "sponsorship to continue or extend your work authorization",
+        "need visa sponsorship",
+        "do you need visa sponsorship",
+        "require work sponsorship"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "visa-status",
+      "label": "Current visa status",
+      "patterns": ["current visa status", "what is your visa status", "immigration status"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "us-work-authorization-now",
+      "label": "Currently authorized to work in the US",
+      "patterns": [
+        "currently authorized to work in the u",
+        "currently legally authorized",
+        "legally work authorized to work in the us",
+        "legally authorized to work in the united states",
+        "legally authorized to work in the us",
+        "authorized to work in the united states",
+        "authorized to work in the us",
+        "do you currently have legal us work authorization",
+        "legal us work authorization",
+        "currently have legal u.s. work authorization",
+        "eligible to work in the u.s.",
+        "eligible to work in the us?",
+        "eligible to work in the united states?"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "relocation-willing",
+      "label": "Open to relocation",
+      "patterns": [
+        "open to relocation",
+        "willing to relocate",
+        "currently live or are you willing to relocate",
+        "relocate to the job",
+        "able to relocate to one of our hub"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "hybrid-commit",
+      "label": "Can commit to hybrid in-office schedule",
+      "patterns": [
+        "in-office on a hybrid schedule",
+        "days per week at the location",
+        "willing to work four days per week",
+        "three days per week",
+        "commit to being in-office",
+        "come into the office",
+        "come in to the office",
+        "into the office to work",
+        "in office expectations",
+        "a week, with or without",
+        "times a week",
+        "times per week",
+        "commute to our",
+        "commute to the office",
+        "willing and able to commute",
+        "days a week in the office",
+        "per week in our",
+        "on a hybrid (3 days per week) basis",
+        "accommodate our hybrid environment"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "privacy-consent",
+      "label": "Privacy notice acknowledgement",
+      "patterns": [
+        "candidate privacy",
+        "privacy policy",
+        "privacy notice",
+        "processing of my personal data",
+        "data privacy notice",
+        "consent to",
+        "acknowledge and agree"
+      ],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Accepts the employer's privacy notice, which an application cannot be submitted without."
+    },
+    {
+      "key": "arbitration-receipt",
+      "label": "Confirm receipt of arbitration agreement",
+      "patterns": [
+        "arbitration agreement",
+        "confirm receipt of the above",
+        "arbitration",
+        "class action",
+        "jury trial"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Never auto-filled: arbitration agreements and class-action or jury-trial waivers give up legal rights, so read the document before you confirm it."
+    },
+    {
+      "key": "ai-tools-in-process",
+      "label": "Employer may use AI in the process",
+      "patterns": ["may use ai tools to assist", "ai tools in the application and interview"],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Acknowledges that the employer may use AI tools in its hiring process."
+    },
+    {
+      "key": "gov-official-self",
+      "label": "Government official or employee",
+      "patterns": [
+        "current government official",
+        "were you a government official",
+        "government official",
+        "government employee",
+        "public official",
+        "state owned entity",
+        "state-owned enterprise"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "gov-official-relative",
+      "label": "Close relative of a government official",
+      "patterns": ["close relative of a government official", "relative of a government"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "financial-interest",
+      "label": "Financial interest or competing role",
+      "patterns": ["significant financial interest", "hold a role, have a significant"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "referred-by-leader",
+      "label": "Referred by a senior leader",
+      "patterns": ["referred to this position by a senior leader"],
+      "answer": "No",
+      "allowAutoFill": true,
+      "note": "Default for an application nobody referred you to. Answer per application when someone did."
+    },
+    {
+      "key": "familiarity",
+      "label": "Familiarity with the company",
+      "patterns": ["how familiar were you with"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "The answer differs by employer, so it is asked on every application."
+    },
+    {
+      "key": "years-experience",
+      "label": "Years of professional experience",
+      "patterns": ["how many years", "years of experience do you have", "total years of experience"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "preferred-language",
+      "label": "Preferred interview language",
+      "patterns": [
+        "preferred programming language for interviews",
+        "primary programming language",
+        "main programming language",
+        "programming language and/or framework",
+        "what programming language"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "based-in-location",
+      "label": "Currently based in the role's location",
+      "patterns": [
+        "currently based in",
+        "do you currently live in",
+        "are you located in",
+        "do you reside in the",
+        "located on the east coast",
+        "currently reside in the location specified",
+        "reside in the location specified for this role"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "sponsorship-named-tn",
+      "label": "Sponsorship where the employer explicitly lists TN",
+      "patterns": [
+        "h-1b, e-3, tn, o-1",
+        "requiring a written submission from the company to a government agency",
+        "commence (“sponsor”) an immigration case",
+        "commence (\"sponsor\") an immigration case",
+        "h-1b, stem opt, j-1, o-1, tn",
+        "h-1b, tn, opt",
+        "h-1b, tn, o-1",
+        "h-1b, tn, or",
+        "h-1b, tn, etc"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Only relevant if you are eligible for TN status (Canadian or Mexican citizens). Some forms define sponsorship to include TN, which can flip the usual answer. Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "sponsorship-named-tn-explained",
+      "label": "Free-text sponsorship question whose definition names TN",
+      "patterns": ["require sponsorship for employment visa status (e.g. h-1b, tn visa status)"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Only relevant if you are eligible for TN status (Canadian or Mexican citizens). Some forms define sponsorship to include TN, which can flip the usual answer. Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "us-person-status",
+      "label": "Are you a U.S. Person",
+      "patterns": [
+        "u.s. person",
+        "us person",
+        "lawful permanent resident, refugee, or asylee",
+        "u.s. person status",
+        "us person status",
+        "export control question #1 - are you one of the following",
+        "which of the following best describes your u.s. person",
+        "which of the following best describes your citizenship"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "auth-country-relative",
+      "label": "Authorized in the country where the job is located",
+      "patterns": [
+        "authorized to work in the country in which you are applying",
+        "authorized to work in the country where the job is located",
+        "authorized to work in the country where this position is located",
+        "authorized to work in the country in which this job is based",
+        "authorized to work in the country of this role",
+        "legally authorized to work in the country",
+        "authorized to work lawfully in the location",
+        "work lawfully in the location posted",
+        "authorized to work lawfully",
+        "lawfully in the location posted for this position",
+        "legally authorised to work full time in the country where this job is based",
+        "legally authorised to work in the country",
+        "authorised to work in the country",
+        "legally authorised to work",
+        "right to work in the country you are applying",
+        "right to work in the country for which you are applying",
+        "right to work in the country in which you are applying",
+        "right to work in the country where this position",
+        "legal work authorization in the country where this position",
+        "legal work authorization in the country",
+        "right to work in the country",
+        "authorized to work in the country where this role is located",
+        "work in the country where this role is located",
+        "where this role is located, for any employer",
+        "authorized to work in the country this role",
+        "for any employer",
+        "are you authorized to work in the location",
+        "authorized to work in the location(s) you selected",
+        "authorized to work in the location(s) you selected in your previous response",
+        "are you authorized to lawfully work in the country where this role is located",
+        "authorized to lawfully work in the country where this role is located",
+        "authorized to work in the city/country where this position is located",
+        "authorized to lawfully work for"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "restrictive-agreements",
+      "label": "Bound by agreements with a current or former employer",
+      "patterns": [
+        "bound by any agreements",
+        "bound by an agreement",
+        "non-compete",
+        "noncompete",
+        "restrictive covenant",
+        "any agreements with a current or former",
+        "post-employment restriction",
+        "subject to any employment agreement",
+        "contractual obligations, restrictions or limitations",
+        "prohibit you from working at"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "years-experience-threshold",
+      "label": "Do you have N+ years of experience",
+      "patterns": [
+        "6+ years",
+        "7+ years",
+        "8+ years",
+        "9+ years",
+        "10+ years",
+        "12+ years",
+        "15+ years",
+        "7-10 years",
+        "8-10 years",
+        "6-8 years",
+        "7 or more years",
+        "8 or more years",
+        "10 or more years",
+        "at least 7 years",
+        "at least 8 years",
+        "at least 10 years",
+        "minimum of 7 years",
+        "minimum of 8 years",
+        "minimum of 10 years"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "The threshold differs by posting, so it is asked whenever experience[] cannot settle it."
+    },
+    {
+      "key": "data-processing-consent",
+      "label": "Processing of personal data",
+      "patterns": ["processing of personal data", "process my personal data", "data processing"],
+      "answer": "Acknowledge/Confirm",
+      "allowAutoFill": true,
+      "note": "Pre-answered consent or acknowledgement. Review it before your first run; set allowAutoFill to false to decide per application instead."
+    },
+    {
+      "key": "relocation-assistance",
+      "label": "Do you require relocation assistance",
+      "patterns": ["require relocation assistance", "need relocation assistance", "relocation assistance"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "immigration-case",
+      "label": "Active immigration case",
+      "patterns": [
+        "active immigration case",
+        "immigration case",
+        "pending immigration case",
+        "currently have an active immigration"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "sms-consent",
+      "label": "Consent to receive text message updates",
+      "patterns": [
+        "receive text message updates",
+        "agreement to receive text",
+        "consent to receiving text messages",
+        "text message updates regarding your job",
+        "ok to text me",
+        "okay to text me"
+      ],
+      "answer": "No - I do not consent to receiving text messages",
+      "allowAutoFill": true,
+      "note": "Declines text messages about the application; email remains the channel."
+    },
+    {
+      "key": "ai-tools-usage",
+      "label": "What AI tools are you currently using and how",
+      "patterns": [
+        "what ai tools",
+        "which ai tools",
+        "ai tools are you",
+        "ai tools do you",
+        "ai tools you use",
+        "ai tools currently using",
+        "how are you using ai",
+        "how do you use ai",
+        "ai tools in your workflow",
+        "genai tools do you",
+        "llm tools do you"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "located-in-us",
+      "label": "Are you located in the United States?",
+      "patterns": [
+        "are you located in the united states",
+        "located in the united states",
+        "located in the us",
+        "are you based in the united states",
+        "based in the united states",
+        "do you currently reside in the united states",
+        "currently reside in the us",
+        "are you a us resident",
+        "do you live in the united states",
+        "us-based candidate",
+        "are you physically located in the united states"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "acknowledgement",
+      "label": "I acknowledge and agree",
+      "patterns": [
+        "i acknowledge",
+        "i agree",
+        "i accept",
+        "i certify",
+        "i confirm",
+        "acknowledge and agree",
+        "acknowledge that",
+        "agree to the terms",
+        "terms and conditions",
+        "privacy policy",
+        "applicant privacy",
+        "privacy notice",
+        "information i have provided is accurate",
+        "certify that the information",
+        "confirm that the information",
+        "consent to the processing"
+      ],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Catch-all that answers Yes to 'I acknowledge / I agree / I certify' checkboxes. A more specific entry with a longer matching pattern still wins, which is how arbitration, class-action and jury-trial waivers are routed to arbitration-receipt and always asked. Review it before your first run."
+    },
+    {
+      "key": "proudest-achievement",
+      "label": "Walk us through your proudest achievement",
+      "patterns": [
+        "proudest achievement",
+        "proudest of",
+        "most proud of",
+        "accomplishment you are most proud",
+        "achievement you are most proud",
+        "greatest achievement",
+        "walk us through your proudest",
+        "project you are most proud",
+        "biggest accomplishment",
+        "work you are most proud of",
+        "tell us about a project you"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "additional-information",
+      "label": "Additional information",
+      "patterns": [
+        "additional information",
+        "anything else you would like us to know",
+        "anything else we should know",
+        "is there anything else",
+        "anything else you want us to know",
+        "additional context",
+        "anything further you",
+        "other information you would like"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "office-location-preference",
+      "label": "Which office location are you interested in?",
+      "patterns": [
+        "which location you are interested",
+        "offices are located",
+        "preferred office",
+        "office location",
+        "which office",
+        "preferred working location",
+        "location do you intend to work from"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "us-work-authorization-status",
+      "label": "U.S. Work Authorization Status",
+      "patterns": ["u.s. work authorization status", "us work authorization status", "work authorization status"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "pronouns",
+      "label": "Pronouns",
+      "patterns": ["pronoun", "how should we refer to you in the third person", "refer to you in the third person"],
+      "answer": "I prefer not to say",
+      "alternatives": [
+        "Decline to self-identify",
+        "Prefer not to say",
+        "I prefer not to answer",
+        "I do not wish to answer",
+        "I don't wish to answer"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "social-none",
+      "label": "Twitter / other links (no account)",
+      "patterns": ["twitter", "other links", "other link", "other website", "instagram", "facebook"],
+      "answer": "N/A",
+      "allowAutoFill": true,
+      "note": "For optional social-profile boxes such as Twitter or Instagram when you have nothing to add."
+    },
+    {
+      "key": "contracted-before",
+      "label": "Previously provided contract work to this company",
+      "patterns": [
+        "provided any contract work",
+        "contract work for",
+        "worked as a contractor for",
+        "contractor or consultant for",
+        "through an agency for",
+        "contracted with",
+        "contract or agency work",
+        "as a contractor",
+        "vendor, or temporary worker",
+        "or temporary worker",
+        "independent, vendor"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "us-state-residence",
+      "label": "US state of residence",
+      "patterns": [
+        "state do you currently reside",
+        "what state do you reside",
+        "state do you reside in",
+        "u.s state do you currently reside",
+        "us state do you currently reside",
+        "which state do you live in",
+        "what state do you live in",
+        "state of residence",
+        "which u.s. state",
+        "which us state",
+        "state where you currently reside",
+        "state where you reside",
+        "state you currently reside in"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "disability-self-id",
+      "label": "Disability self-identification",
+      "patterns": [
+        "disability or chronic condition",
+        "do you have a disability",
+        "disability status",
+        "self-identification of disability",
+        "substantially limits",
+        "identify as having a disability",
+        "living with a disability",
+        "disability or long-term condition"
+      ],
+      "answer": "I don't wish to answer",
+      "alternatives": [
+        "I don't wish to answer",
+        "I do not wish to answer",
+        "I do not want to answer",
+        "Decline to self-identify",
+        "I prefer not to say",
+        "Prefer not to say",
+        "I don't want to answer",
+        "Prefer not to disclose"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "age-18",
+      "label": "Are you 18 years of age or older",
+      "patterns": [
+        "18+ years of age",
+        "18 years of age",
+        "at least 18 years",
+        "are you at least 18",
+        "18 years or older",
+        "18 or older",
+        "over the age of 18",
+        "age of 18",
+        "legal working age",
+        "of legal age"
+      ],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Confirms you are at least 18."
+    },
+    {
+      "key": "sponsorship-type",
+      "label": "What type of sponsorship support do you require",
+      "patterns": [
+        "list the type of support",
+        "type of support you may require",
+        "what type of sponsorship",
+        "which type of sponsorship",
+        "please specify the type of visa",
+        "type of visa sponsorship",
+        "if yes, please specify the sponsorship",
+        "please describe the sponsorship"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "sponsorship-countries-list-na",
+      "label": "List the countries where you now or in future require sponsorship (N/A if none)",
+      "patterns": ["indicate all locations or countries for which you now, or in the future, require sponsorship"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "dates-not-applicable",
+      "label": "Dates of prior employment or contract engagement",
+      "patterns": [
+        "please enter your dates of employment",
+        "enter your dates of contract engagement",
+        "dates of contract engagement",
+        "dates of employment",
+        "if you answered \"yes\" to the question above, please enter"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "export-control-citizenship",
+      "label": "Citizen or permanent resident of an embargoed country",
+      "patterns": [
+        "cuba, iran, north korea, syria",
+        "citizen or legal permanent resident of cuba",
+        "export control laws given that the position",
+        "embargoed countri",
+        "sanctioned countr",
+        "cuba, iran, north korea (dprk)",
+        "iran, cuba, north korea or syria",
+        "iran, cuba, north korea, or syria",
+        "are you a citizen or have a passport, or",
+        "have been granted refugee or asylum status? armenia"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "accommodation-needs",
+      "label": "Reasonable accommodation for the hiring process",
+      "patterns": [
+        "need for a reasonable accommodation for this hiring process",
+        "require any reasonable accommodation",
+        "need any accommodations",
+        "require accommodation"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "work-cities",
+      "label": "Cities available to work in",
+      "patterns": [
+        "in what cities are you available to work",
+        "which cities are you available to work",
+        "cities are you available to work"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "work-authorization-statement",
+      "label": "Work authorization status statement",
+      "patterns": ["work authorization", "work authorisation", "authorized to work for any employer"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "auth-any-employer-where-posted",
+      "label": "Are you authorized to work for any employer in the country where the job is posted? (Yes/No form)",
+      "patterns": [
+        "are you authorized to work for any employer in the country where the job is posted",
+        "authorized to work for any employer in the country where the job is posted"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "relocation-office-proximity",
+      "label": "Open to relocating to be within commutable distance of the office",
+      "patterns": [
+        "are you open to relocating",
+        "open to relocating",
+        "if you do not reside within the country and within commutable proximity to the office",
+        "willing to relocate to be within commutable",
+        "do you currently reside within commuting distance or are you open to relocation",
+        "reside within commuting distance or are you open to relocation",
+        "currently reside within commuting distance",
+        "in office attendance is an essential function",
+        "reside within commuting distance or are you open to",
+        "commuting distance or are you open to relocation"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "contact-current-employer",
+      "label": "May we contact your current employer",
+      "patterns": ["may we contact your current employer", "may we contact your present employer"],
+      "answer": "No",
+      "allowAutoFill": true,
+      "note": "Most candidates decline until an offer is made. Change it if you are happy for them to call."
+    },
+    {
+      "key": "incident-response-led",
+      "label": "Security incident or vulnerability response led",
+      "patterns": [
+        "describe a security incident or vulnerability response you led",
+        "security incident or vulnerability response you led",
+        "incident commander"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "salary-range-start",
+      "label": "Desired base salary range - beginning",
+      "patterns": [
+        "beginning of your desired annual base salary range",
+        "start of your desired annual base salary range",
+        "minimum of your desired base salary"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "salary-range-end",
+      "label": "Desired base salary range - end",
+      "patterns": [
+        "end of your desired annual base salary range",
+        "top of your desired annual base salary range",
+        "maximum of your desired base salary"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "cybersecurity-saas-experience",
+      "label": "Experience in cybersecurity SaaS",
+      "patterns": ["experience in cybersecurity saas", "experience with cybersecurity saas", "cybersecurity saas"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "company-size-recent",
+      "label": "Size of company worked for most recently",
+      "patterns": [
+        "size of company you have worked for most recently",
+        "size of the company you most recently worked",
+        "size of company"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "background-check-conditional",
+      "label": "Offers conditional on a background check",
+      "patterns": [
+        "offers of employment are conditional on satisfactory completion of a background check",
+        "conditional on satisfactory completion of a background check",
+        "offer of employment is conditional on a background check"
+      ],
+      "answer": "I understand",
+      "allowAutoFill": true,
+      "note": "Acknowledges that an offer depends on a background check."
+    },
+    {
+      "key": "what-brought-you",
+      "label": "What brought you to this job posting",
+      "patterns": [
+        "what brought you to this job posting",
+        "what brought you to this posting",
+        "what brought you here"
+      ],
+      "answer": "Found the posting on the company's careers page.",
+      "allowAutoFill": true,
+      "note": "Same default as the source question."
+    },
+    {
+      "key": "interview-recording-consent",
+      "label": "Consent to AI notetaking / recording and transcription of interviews",
+      "patterns": [
+        "metaview",
+        "ai notetaking",
+        "ai note-taking",
+        "ai note taking",
+        "notetaking tool",
+        "note-taking tool",
+        "transcribe all your interviews",
+        "transcribe your interviews",
+        "silently records notes",
+        "record your interview",
+        "recording your interview",
+        "recording of your interview",
+        "interviews recorded",
+        "interview recorded",
+        "recorded and transcribed",
+        "summarizing discussions",
+        "use of ai to create written transcripts",
+        "written transcripts and summaries of your interviews"
+      ],
+      "answer": "Yes",
+      "alternatives": ["Yes", "I consent", "I agree", "Yes, I consent"],
+      "allowAutoFill": true,
+      "note": "Consents to interviews being recorded and transcribed by a third-party AI notetaker. Set the answer to No if you would rather not be recorded."
+    },
+    {
+      "key": "ai-position-rating",
+      "label": "How would you rate this company's position in AI compared to other tech companies?",
+      "patterns": ["position in ai", "how would you rate", "rate the company", "compared to other tech companies"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "The answer differs by employer, so it is asked on every application."
+    },
+    {
+      "key": "phone-device-type",
+      "label": "Phone device type",
+      "patterns": ["phone device type", "device type", "phone type"],
+      "answer": "Mobile",
+      "allowAutoFill": true,
+      "note": "Answers 'what kind of phone is this number' with Mobile."
+    },
+    {
+      "key": "years-of-experience",
+      "label": "Years of relevant work experience",
+      "patterns": [
+        "how many years of relevant work experience",
+        "years of relevant work experience",
+        "years of professional experience do you have",
+        "years of industry experience",
+        "years of software engineering experience",
+        "how many years of experience",
+        "years of experience",
+        "years of relevant experience"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "gov-official-relation",
+      "label": "Family or close personal relationship with a government official",
+      "patterns": [
+        "do you have a family relationship",
+        "close personal contact",
+        "family relationship (biological",
+        "relationship with, or are you a close personal contact",
+        "related to anyone who is an employee of a government office or agency"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "government-employment",
+      "label": "Employment by a government entity",
+      "patterns": [
+        "have you ever worked for a u.s. government",
+        "currently work for or have you ever worked for a u.s. government",
+        "are you a government employee",
+        "employed by a government entity",
+        "work for a u.s. government entity, either as a contractor",
+        "prior us government employment",
+        "prior u.s. government employment",
+        "united states government or public institution employment experience",
+        "an employee of a government office or agency that has oversight over"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "government-entity-name",
+      "label": "Name of the government entity worked for",
+      "patterns": [
+        "please list the u.s. government entity",
+        "list the government entity you worked for",
+        "if not applicable, type 'n/a'"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "ethnicity-self-id",
+      "label": "Ethnicity self-identification",
+      "patterns": [
+        "what is your ethnicity",
+        "ethnicity",
+        "ethnic background",
+        "race/ethnicity",
+        "race or ethnicity",
+        "hispanic or latino",
+        "what is your race",
+        "racial identity",
+        "ethnic group",
+        "race / ethnicity",
+        "identify my race",
+        "hispanic/latino"
+      ],
+      "answer": "Decline to self-identify",
+      "alternatives": [
+        "I don't wish to answer",
+        "I do not wish to answer",
+        "I do not wish to self-identify",
+        "I DO NOT WISH TO SELF-IDENTIFY",
+        "Decline to self-identify",
+        "Decline to State",
+        "Decline To Self Identify",
+        "I prefer not to say",
+        "Prefer not to say",
+        "I choose not to self-identify",
+        "Prefer not to disclose",
+        "I don't want to answer"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "gender-self-id",
+      "label": "Gender self-identification",
+      "patterns": ["what is your gender", "gender identity", "what gender do you identify", "gender"],
+      "answer": "Decline to self-identify",
+      "alternatives": [
+        "I don't wish to answer",
+        "I do not wish to answer",
+        "I do not wish to self-identify",
+        "I DO NOT WISH TO SELF-IDENTIFY",
+        "Decline to self-identify",
+        "Decline to State",
+        "Decline To Self Identify",
+        "I prefer not to say",
+        "Prefer not to say",
+        "I choose not to self-identify",
+        "Prefer not to disclose",
+        "I don't want to answer"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "veteran-self-id",
+      "label": "Veteran status self-identification",
+      "patterns": [
+        "protected veteran",
+        "veteran status",
+        "are you a veteran",
+        "do you identify as one of the following protected veterans",
+        "disabled veteran",
+        "recently separated veteran",
+        "armed forces service medal",
+        "military service",
+        "veteran"
+      ],
+      "answer": "I do not wish to self-identify",
+      "alternatives": [
+        "I don't wish to answer",
+        "I do not wish to answer",
+        "I do not wish to self-identify",
+        "I DO NOT WISH TO SELF-IDENTIFY",
+        "Decline to self-identify",
+        "Decline to State",
+        "Decline To Self Identify",
+        "I prefer not to say",
+        "Prefer not to say",
+        "I choose not to self-identify",
+        "Prefer not to disclose",
+        "I don't want to answer"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "background-check-willing",
+      "label": "Willing to submit to a background check",
+      "patterns": [
+        "willing to submit to a background check",
+        "are you willing to submit a background check",
+        "willing to undergo a background check",
+        "consent to a background check",
+        "are you willing to complete a background check"
+      ],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Agrees to a background check, which most offers require."
+    },
+    {
+      "key": "right-to-work-documentation",
+      "label": "Can provide documentation establishing identity and right to work",
+      "patterns": [
+        "can you provide documentation establishing your identity and right to work",
+        "provide documentation establishing your identity and right to work",
+        "able to provide proof of your right to work",
+        "can you provide proof of eligibility to work",
+        "documentation evidencing your legal right to work"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "employed-alphabet",
+      "label": "Current or former Alphabet/Google employee",
+      "patterns": [
+        "current or former alphabet employee",
+        "alphabet employee, intern, vendor, contractor",
+        "worked at google",
+        "worked for google",
+        "former google employee",
+        "google or other alphabet",
+        "or contractor of alphabet",
+        "vendor, or contractor of alphabet",
+        "student ambassador, fellow, student researcher"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "alphabet-ldap",
+      "label": "Alphabet LDAP",
+      "patterns": [
+        "please provide your ldap",
+        "your ldap",
+        "ldap",
+        "google/alphabet username",
+        "previous google username",
+        "alphabet username"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "prior-contractor-services",
+      "label": "Previously provided services as a contractor or consultant",
+      "patterns": [
+        "provided services to",
+        "as a consultant or independent contractor",
+        "consultant, contractor, or temp",
+        "vendor, contractor"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "onsite-willing",
+      "label": "Able to work onsite / commute / relocate to the office",
+      "patterns": [
+        "able to come onsite",
+        "come into the office",
+        "work from one of our office",
+        "office hubs",
+        "commutable distance",
+        "can you relocate to the area",
+        "willing to relocate to",
+        "work onsite",
+        "hybrid schedule",
+        "days per week in the office",
+        "days from one of our office",
+        "willing to work from the office",
+        "work from the office(s) listed",
+        "able to work from our office",
+        "attendance a minimum of",
+        "in person attendance",
+        "hybrid position, which requires",
+        "excited to work in-office",
+        "okay with a hybrid in-office schedule",
+        "in-office five days a week",
+        "work in office five days",
+        "comfortable working in office",
+        "in office attendance is an essential function",
+        "office attendance is an essential function",
+        "essential function for this role",
+        "work on a hybrid basis",
+        "willing and able to go into our",
+        "open to a hybrid role",
+        "office 2-3 days per week",
+        "join us in the office",
+        "willing to work in our",
+        "requires hybrid work with in-office attendance",
+        "in-office expectation",
+        "open to working in a hybrid environment",
+        "required to be onsite",
+        "come into our",
+        "days in office per week"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "paired-exercise-language",
+      "label": "Preferred language for a paired coding exercise",
+      "patterns": [
+        "live paired coding exercise",
+        "python or go",
+        "which programming language(s) do you prefer",
+        "language would you like to use for the interview"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "most-proficient-language",
+      "label": "Most proficient programming language",
+      "patterns": [
+        "most proficient programming language",
+        "strongest programming language",
+        "which language are you strongest"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "us-citizen-or-pr",
+      "label": "US citizen or permanent resident",
+      "patterns": [
+        "currently a u.s. citizen or permanent resident",
+        "us citizen or green card",
+        "citizen or permanent resident (green card)",
+        "fedramp compliant. are you currently a u.s. citizen"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "address-line-2",
+      "label": "Address line 2",
+      "patterns": ["address line 2", "address line two", "apt, suite"],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "stackexchange-profile",
+      "label": "StackExchange profile",
+      "patterns": ["stackexchange", "stack exchange"],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "source-specify-other",
+      "label": "Specify the source chosen above",
+      "patterns": [
+        "please specify here",
+        "if you chose",
+        "if you answered",
+        "if you selected 'other'",
+        "if you selected other",
+        "please share additional details",
+        "if you selected 'other' for where you learned about",
+        "if you selected ‘other’ for where you learned about",
+        "which specific channel/event/medium",
+        "let us know which specific channel"
+      ],
+      "answer": "Found the role on the company's careers page.",
+      "allowAutoFill": true,
+      "note": "Follow-up asking which source you meant when a form's choices include Other."
+    },
+    {
+      "key": "referrer-name",
+      "label": "Name of the employee who referred you",
+      "patterns": [
+        "name of the employee that referred you",
+        "name of the employee who referred you",
+        "who referred you",
+        "if you were referred for this role",
+        "please provide the full name and work email",
+        "employee who referred you",
+        "name of the person who referred you"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "optional-personal-preferences",
+      "label": "Optional personal preferences free-text",
+      "patterns": ["(optional) personal preferences", "personal preferences"],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "accept-listed-range",
+      "label": "Do you accept the listed salary range",
+      "patterns": [
+        "do you accept the listed salary range",
+        "accept the listed salary",
+        "comfortable with the salary range",
+        "align with the posted salary range",
+        "salary range for this position",
+        "[compensation] do you accept the listed salary range",
+        "do you accept the listed salary range for this position",
+        "accept the listed salary range for this position"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "travel-willing",
+      "label": "Are you open to travel?",
+      "patterns": [
+        "open to travel",
+        "willing to travel",
+        "able to travel",
+        "confirm you have read and understand there will be a need to travel",
+        "need to travel in this role",
+        "there will be a need to travel"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "english-proficiency",
+      "label": "Level of English proficiency",
+      "patterns": [
+        "level of english proficiency",
+        "english proficiency",
+        "proficiency in english",
+        "how would you rate your english",
+        "english level",
+        "are you proficient in english",
+        "proficient level of written and spoken english",
+        "requires a proficient level of written and spoken english"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "recent-hiring-process",
+      "label": "Participated in a hiring process with us recently",
+      "patterns": [
+        "participated in a hiring process with",
+        "been through our hiring process",
+        "interviewed with us in the last",
+        "applied to or interviewed with",
+        "in the last 6 months",
+        "in the last six months"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "One answer covers every employer, so only fill in No if it holds for all of them; otherwise leave it blank and answer per application."
+    },
+    {
+      "key": "referred-by-employee-na",
+      "label": "Referred by a current employee (N/A when not applicable)",
+      "patterns": [
+        "if you were referred by a current employee",
+        "referred by a current employee, please list",
+        "if this is not applicable, please list n/a",
+        "please list their name. if this is not applicable",
+        "which employee referred you",
+        "employee who referred you",
+        "name of the employee who referred"
+      ],
+      "answer": "N/A",
+      "alternatives": ["N/A"],
+      "allowAutoFill": true,
+      "note": "Default for an application nobody referred you to. Answer per application when someone did."
+    },
+    {
+      "key": "cloud-environments",
+      "label": "Cloud environments most experienced with",
+      "patterns": [
+        "what cloud environments are you most experienced",
+        "cloud environments are you most experienced deploying",
+        "which cloud providers have you",
+        "cloud platforms have you worked with",
+        "which csps do you have experience with",
+        "csps do you have experience",
+        "which cloud service providers"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "dev-languages-experienced",
+      "label": "Development languages most experienced with",
+      "patterns": [
+        "what development languages are you most experienced",
+        "development languages are you most experienced with",
+        "which programming languages are you most",
+        "languages are you strongest in"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "oop-proficient",
+      "label": "Are you proficient in an object-oriented programming language?",
+      "patterns": [
+        "proficient in an object oriented programming language",
+        "proficient in an object-oriented programming language",
+        "object oriented programming language",
+        "object-oriented programming language"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "time-zone",
+      "label": "Which time zone would you be working from in this role?",
+      "patterns": [
+        "which time zone would you be working from",
+        "what time zone",
+        "which time zone",
+        "time zone would you be working from in this role",
+        "your time zone"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "interview-accommodations",
+      "label": "Do you require any accommodations for the interview process?",
+      "patterns": [
+        "accessible and inclusive interview experience",
+        "let us know if there are any accommodations",
+        "require any accommodations",
+        "need any accommodations",
+        "accommodations for the interview",
+        "reasonable accommodation for the interview"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "recruiting-messaging-optin",
+      "label": "Do you opt in to recruiting text/WhatsApp messages?",
+      "patterns": [
+        "opt-in to receive whatsapp messages",
+        "opt in to receive whatsapp messages",
+        "receive whatsapp messages from",
+        "opt-in to receive text messages",
+        "receive sms messages from"
+      ],
+      "answer": "No",
+      "allowAutoFill": false,
+      "note": "Declines recruiting text and WhatsApp messages."
+    },
+    {
+      "key": "interview-travel",
+      "label": "Willing to travel for in-person interviews or onsite onboarding",
+      "patterns": [
+        "interviews for this role may be held in person",
+        "in-person interviews and onsite onboarding",
+        "able to participate in these onsite requirements",
+        "travel for in-person interviews",
+        "travel for an onsite interview"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "referred-by-current-employee",
+      "label": "Referred by a current employee",
+      "patterns": [
+        "were you referred by a current",
+        "were you referred by an employee",
+        "referred by a current employee?",
+        "referred to this role by a current employee",
+        "referred to this position by a current employee",
+        "referred to this job by a current employee"
+      ],
+      "answer": "No",
+      "alternatives": ["No"],
+      "allowAutoFill": true,
+      "note": "Default for an application nobody referred you to. Answer per application when someone did."
+    },
+    {
+      "key": "verified-resume-link",
+      "label": "Third-party verified resume link (optional)",
+      "patterns": ["verified resume"],
+      "answer": "",
+      "allowAutoFill": true,
+      "skip": true,
+      "note": "Deliberately left empty (skip is true), so this optional field never holds up an application."
+    },
+    {
+      "key": "unrestricted-right-to-work-countries",
+      "label": "Countries with unrestricted right to work",
+      "patterns": [
+        "in what countries do you have the unrestricted right to work",
+        "which countries do you have the unrestricted right to work"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "communication-preference",
+      "label": "Preferred communication channel",
+      "patterns": [
+        "how should we communicate with you",
+        "preferred method of communication",
+        "preferred communication method"
+      ],
+      "answer": "Email",
+      "allowAutoFill": true,
+      "note": "Email as the preferred channel."
+    },
+    {
+      "key": "spoken-languages",
+      "label": "Spoken languages",
+      "patterns": [
+        "which languages do you speak",
+        "what languages do you speak",
+        "language(s) are you business fluent"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "spousal-work-authorization",
+      "label": "Work authorization based on a spouse's H-1B, L-1 or E visa",
+      "patterns": [
+        "based on your status as a spouse",
+        "status as a spouse of an h-1b",
+        "status as a spouse of an h1b",
+        "spouse of an h-1b, l-1",
+        "spouse of an h-1b",
+        "spouse of an h1b",
+        "h-4 ead",
+        "h4 ead"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "perform-job-functions",
+      "label": "Able to perform the job's functions, with or without accommodation",
+      "patterns": [
+        "able to perform all job functions",
+        "perform all job functions",
+        "perform the essential functions",
+        "essential functions of this job",
+        "essential functions of the position"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "tb-screening-requirement",
+      "label": "Able to meet a tuberculosis screening requirement",
+      "patterns": ["tuberculosis screening", "tuberculosis test", "tb screening"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "container-security-kubernetes",
+      "label": "Hands-on experience with container security or Kubernetes",
+      "patterns": [
+        "hands-on experience with container security or kubernetes",
+        "experience with container security or kubernetes",
+        "hands-on experience with kubernetes"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "export-control-us-person-embargo",
+      "label": "Export control: U.S. person and embargo status (combined)",
+      "patterns": [
+        "confirm citizenship and permanent residency as defined below",
+        "subject to the u.s. export administration regulations (ear)",
+        "export administration regulations (ear). access to controlled source code"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "desired-salary-range",
+      "label": "Desired salary range (free text)",
+      "patterns": [
+        "what is your desired salary range",
+        "desired salary range",
+        "your desired salary range",
+        "what is your target compensation range",
+        "target compensation range",
+        "range of your compensation expectations"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "export-control-listed-countries-na",
+      "label": "Export control: citizen or permanent resident of listed countries (select Not Applicable if not)",
+      "patterns": [
+        "citizen or permanent resident of any of the following countries/regions",
+        "export control license may be required, are you currently a citizen"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "i9-acknowledgement",
+      "label": "Acknowledge I-9 and proof of right to work on employment",
+      "patterns": [
+        "completion of an i-9 form will be required",
+        "proof of legal right to work in the us and completion of an i-9"
+      ],
+      "answer": "Yes",
+      "alternatives": ["Yes", "I understand", "Acknowledged"],
+      "allowAutoFill": true,
+      "note": "Acknowledges that US employers verify the right to work (Form I-9) after an offer."
+    },
+    {
+      "key": "unrestricted-right-to-work-us",
+      "label": "Unrestricted right to work in the country applied to (form: answer No if on any visa or expiring work document)",
+      "patterns": [
+        "do you have the unrestricted right to work in the country to which you",
+        "unrestricted right to work in the country to which you're applying"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "post-government-restrictions-attest",
+      "label": "Attest no post-government employment restrictions",
+      "patterns": [
+        "i have no post-government employment restrictions",
+        "no post-government employment restrictions currently applicable to me"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "federal-debarment",
+      "label": "Debarred, suspended or declared ineligible by a federal agency",
+      "patterns": [
+        "debarred, suspended, proposed for debarment",
+        "declared ineligible for award of a contract by any federal agency"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Legally material, so never sent unreviewed: blank means you are asked, and a filled-in answer stays a suggestion until you also set allowAutoFill to true."
+    },
+    {
+      "key": "future-positions-consideration",
+      "label": "Consider for future positions at the employer",
+      "patterns": [
+        "regarding future positions at",
+        "consider me for future positions",
+        "considered for future positions"
+      ],
+      "answer": "Yes",
+      "alternatives": [
+        "Yes",
+        "I would like to be considered for future positions",
+        "Please consider me for future positions",
+        "Yes, please consider me for future positions",
+        "Consider me for future positions"
+      ],
+      "allowAutoFill": true,
+      "note": "Asks to be considered for other roles at the same employer."
+    },
+    {
+      "key": "preferred-work-arrangement",
+      "label": "Preferred in-office, hybrid or remote arrangement",
+      "patterns": [
+        "preferred in-office/hybrid/remote",
+        "in-office/hybrid/remote",
+        "preferred work arrangement",
+        "preferred working arrangement"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "us-work-authorization-unrestricted",
+      "label": "Authorized to work in the United States without restrictions",
+      "patterns": [
+        "authorized to work in the united states without restriction",
+        "authorized to work in the us without restriction",
+        "authorized to work in the u.s. without restriction"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "relocation-self-relocate",
+      "label": "If the role requires relocation: willing to relocate and will self-relocate",
+      "patterns": ["if this role or future roles require relocation", "if this role requires relocation"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "military-status-self-id",
+      "label": "Military spouse / reserves status self-identification",
+      "patterns": [
+        "military spouse",
+        "are you in the reserves",
+        "member of the reserves",
+        "national guard or reserves"
+      ],
+      "answer": "Wish not to answer",
+      "alternatives": [
+        "Wish not to answer",
+        "I wish not to answer",
+        "I do not wish to answer",
+        "I don't wish to answer",
+        "Prefer not to answer",
+        "Prefer not to say",
+        "Decline to self-identify",
+        "I do not wish to self-identify"
+      ],
+      "allowAutoFill": true,
+      "note": "Voluntary self-identification, pre-set to decline. Replace the answer and alternatives if you would rather disclose."
+    },
+    {
+      "key": "future-opportunities",
+      "label": "Would you like to be considered for future opportunities",
+      "patterns": [
+        "considered for future opportunities",
+        "considered for other opportunities",
+        "considered for future roles",
+        "considered for other roles"
+      ],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Asks to be considered for other roles at the same employer."
+    },
+    {
+      "key": "application-accuracy-certification",
+      "label": "Certify that the application and resume are accurate (background verification)",
+      "patterns": [
+        "providing fully accurate and truthful information",
+        "i certify that all information provided in my application",
+        "offer of employment is contingent upon a successful background verification"
+      ],
+      "answer": "I agree",
+      "alternatives": ["I agree", "I Agree", "Agree", "Yes", "I certify", "I Acknowledge"],
+      "allowAutoFill": true,
+      "note": "Certifies that the application is accurate, which every application requires."
+    },
+    {
+      "key": "candidate-confidentiality-agreement",
+      "label": "Agree to the employer's candidate confidentiality agreement (pre-interview NDA)",
+      "patterns": ["candidate confidentiality agreement"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Never auto-filled: read the agreement before you accept it."
+    },
+    {
+      "key": "proud-project-short",
+      "label": "A short note on a project you're proud of",
+      "patterns": [
+        "short note on a project you're proud of",
+        "project you're proud of",
+        "project you are proud of",
+        "worked on that you were proud of",
+        "worked on that you're proud of"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "what-motivates",
+      "label": "What motivates you?",
+      "patterns": ["what motivates you"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "excited-in-person",
+      "label": "Excited to work in-person?",
+      "patterns": ["excited to work in-person", "excited to work in person"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "startups-previously",
+      "label": "Have you worked with any startups previously?",
+      "patterns": [
+        "have you worked with any startups",
+        "worked at a startup",
+        "worked at any startups",
+        "worked at an early-stage",
+        "startup experience"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "age-redaction-ack",
+      "label": "Acknowledgement that age-identifying information may be redacted",
+      "patterns": ["redact or remove age-identifying information", "redact or remove age identifying information"],
+      "answer": "I Acknowledge",
+      "allowAutoFill": true,
+      "note": "Pre-answered consent or acknowledgement. Review it before your first run; set allowAutoFill to false to decide per application instead."
+    },
+    {
+      "key": "reference-check-consent",
+      "label": "Consent to contact additional references",
+      "patterns": ["may contact additional references beyond the references you provide"],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Pre-answered consent or acknowledgement. Review it before your first run; set allowAutoFill to false to decide per application instead."
+    },
+    {
+      "key": "in-area-or-plan-to-relocate",
+      "label": "Located in the role's area or planning to relocate there",
+      "patterns": ["or do you plan to relocate there"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "startup-pace-ok",
+      "label": "Startup pace and long, flexible hours",
+      "patterns": ["we move fast, work under pressure, and put in long"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "most-relevant-experience",
+      "label": "Most relevant skill or experience for this role",
+      "patterns": ["most relevant skill and/or piece of experience you have for this role"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "sponsorship-explain-h1b",
+      "label": "If you require employer sponsorship (H-1B, etc.), please explain",
+      "patterns": ["if you require employer sponsorship (h-1b, etc.) to legally work in the u.s., please explain"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "in-office-five-days",
+      "label": "Open to working in-office five days a week",
+      "patterns": ["open to working in-office 5x per week"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "hybrid-3-days-onsite",
+      "label": "Open to a hybrid setup with 3 days/week onsite",
+      "patterns": ["open to working in a hybrid setup"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "zero-to-one-project",
+      "label": "A project you pushed from 0 to 1",
+      "patterns": ["tell us about a specific project that you've pushed from 0 to 1"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "background-check-consent",
+      "label": "Background Check Consent",
+      "patterns": ["background check consent"],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Agrees to a background check, which most offers require."
+    },
+    {
+      "key": "ai-evaluation-consent",
+      "label": "Consent to the use of AI for evaluating my candidacy",
+      "patterns": ["consenting to the use of ai for evaluating my candidacy"],
+      "answer": "Yes",
+      "allowAutoFill": true,
+      "note": "Consents to the employer using AI to evaluate your application. Set the answer to No if you would rather not."
+    },
+    {
+      "key": "outstanding-work-examples",
+      "label": "1-3 examples of outstanding work",
+      "patterns": ["name 1-3 examples of outstanding work", "examples of outstanding work you"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "work-from-office-weekly",
+      "label": "Can you work out of our office weekly?",
+      "patterns": ["work out of our office in"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "ai-workflow-change",
+      "label": "Describe a workflow, tool, or process you changed by using AI",
+      "patterns": [
+        "meaningfully changed by using ai",
+        "workflow, tool, or process you've meaningfully changed",
+        "process you've changed using ai"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "office-hybrid-need-relocate",
+      "label": "Able to come in to the office on a hybrid basis (choice includes relocation)",
+      "patterns": ["office, at least, on a hybrid basis"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "exceptional-ability",
+      "label": "Please provide an example or evidence of your exceptional ability.",
+      "patterns": ["evidence of your exceptional ability", "example of your exceptional ability"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "require-work-auth-or-sponsorship-us",
+      "label": "Do you require work authorization or sponsorship to work in the US?",
+      "patterns": ["require work authorization or sponsorship to work in the us"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "preferred-location-in-office",
+      "label": "Preferred Location (In Office)",
+      "patterns": ["preferred location (in office)", "preferred location in office"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "us-person-status-citizen-elsewhere",
+      "label": "U.S. person status (sentence options)",
+      "patterns": [
+        "legal temporary resident (i.e., a refugee or asylee) of the united states",
+        "which of the following best describes your “u.s. person” status",
+        "which of the following best describes your \"u.s. person\" status"
+      ],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Work authorization. Blank means you are asked; a filled-in answer stays a suggestion until allowAutoFill is true, and is still reviewed while workAuthorization.alwaysReviewManually is true."
+    },
+    {
+      "key": "startup-hours-nights-weekends",
+      "label": "Ready for startup hours where nights and weekends are not uncommon",
+      "patterns": [
+        "nights and weekend hours are not uncommon",
+        "are you ready for or excited to work in this type of environment"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "hiring-deadlines",
+      "label": "Do you have any deadlines we should be aware of?",
+      "patterns": ["any deadlines we should be aware of", "deadlines we should be aware of"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "salary-expectation-number",
+      "label": "What are your salary expectations? (numeric)",
+      "patterns": ["what are your salary expectations", "what is your salary expectation"],
+      "answer": "",
+      "allowAutoFill": false,
+      "note": "Compensation. Blank and never auto-filled, so you decide on every application."
+    },
+    {
+      "key": "office-5-days-week",
+      "label": "Willing and able to work from the office 5 days a week",
+      "patterns": ["office 5 days/week", "office 5 days a week", "office five days a week", "office 5 days per week"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "education-status",
+      "label": "Current education status",
+      "patterns": ["what is your current education status", "current education status"],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Blank, so you are asked. Fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "hub-proximity-relocate",
+      "label": "Located within N miles of a hub at time of hire",
+      "patterns": [
+        "will you be located within 50 miles of one of our hubs",
+        "within 50 miles of one of our hubs",
+        "reside within 50 miles of the hub"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
+    },
+    {
+      "key": "most-impressive-thing",
+      "label": "What is the most impressive thing you've done?",
+      "patterns": [
+        "most impressive thing you",
+        "most impressive project you",
+        "most impressive accomplishment",
+        "most impressive thing you've done",
+        "most impressive thing you have done",
+        "what is the most impressive thing you"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Free-text question. Blank, so you are asked; write a reusable answer and it is used on every application."
+    },
+    {
+      "key": "intended-work-country",
+      "label": "Nation you intend to work from",
+      "patterns": [
+        "which country do you intend to work from",
+        "country do you intend to work from",
+        "what country do you intend to work from",
+        "which country will you work from",
+        "which country would you work from"
+      ],
+      "answer": "",
+      "allowAutoFill": true,
+      "note": "Location or workplace preference. Blank, so you are asked; fill in your answer once and it is used on every application."
     }
   ],
   "narratives": [
     {
       "key": "why-company",
       "label": "Why this company?",
-      "patterns": ["why {company}", "why do you want to work", "why are you interested", "what interests you about", "cover letter", "what excites you about this role"],
-      "template": "I have spent the last {years} years building {your domain}, most recently {one clause naming a real project}. {company}'s work on {topics} lines up closely with the problems I have been solving, and {role} is where I would want to apply that depth.",
-      "allowAutoFill": true,
+      "patterns": [
+        "why {company}",
+        "why do you want to work",
+        "why are you interested",
+        "what interests you about",
+        "why this role",
+        "why are you excited",
+        "what draws you to",
+        "cover letter",
+        "why you",
+        "re applying to work here",
+        "what excited you about this role",
+        "what excites you about this role",
+        "why do you want to join",
+        "why join",
+        "tell us why",
+        "what motivated you to apply",
+        "why are you applying",
+        "reason for applying",
+        "what appeals to you about"
+      ],
+      "template": "I have spent the last {years} years building {your domain}, most recently {one concrete project you can stand behind}. {company}'s work on {topics} lines up closely with the problems I have been solving, and {role} is where I would want to apply that depth.",
+      "allowAutoFill": false,
       "minTopics": 1,
-      "note": "Braced placeholders are filled from the posting. Renders only when the posting yields at least one matched topic; otherwise the question is handed back to you rather than answered with boilerplate."
+      "note": "A suggestion until you finish it: rewrite the braced parts other than {company}, {role}, {topics} and {location} in your own words, then set allowAutoFill to true. Only those four are filled from the posting; any other braced text would be sent as written. Used when the posting yields at least one topic from your skills and facts."
+    },
+    {
+      "key": "why-company-general",
+      "label": "Why this company? (no topic match)",
+      "patterns": [
+        "why {company}",
+        "why do you want to work",
+        "why are you interested",
+        "what interests you about",
+        "why this role",
+        "why are you excited",
+        "what draws you to",
+        "cover letter",
+        "why you",
+        "re applying to work here",
+        "what excited you about this role",
+        "what excites you about this role",
+        "why do you want to join",
+        "why join",
+        "tell us why",
+        "what motivated you to apply",
+        "why are you applying",
+        "reason for applying",
+        "what appeals to you about"
+      ],
+      "template": "I have spent the last {years} years building {your domain}, most recently {one concrete project you can stand behind}. The {role} role at {company} is a natural next step for that work, and I would welcome the chance to bring it to your team.",
+      "allowAutoFill": false,
+      "minTopics": 0,
+      "note": "A suggestion until you finish it: rewrite the braced parts other than {company}, {role}, {topics} and {location} in your own words, then set allowAutoFill to true. Only those four are filled from the posting; any other braced text would be sent as written. Fallback for postings that match none of your topics."
     }
   ]
 }

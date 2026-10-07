@@ -50,6 +50,20 @@ npm run init
 
 `init` creates `~/.autoapply` from the shipped examples, adds `resumes/`, `data/` and `artifacts/`, and prints the editing order. It never overwrites a file that already exists, so it is safe to re-run.
 
+### The profile template
+
+`examples/profile.example.json` holds no personal data, compensation or location preferences. It does carry a bank of 170 recurring application questions, each matched to the wordings employers use:
+
+- **Fill in:** `identity`, `workAuthorization`, `compensation`, `preferences`, `resumes`, `skills`, `facts`, `experience` and `education`. Every value in these sections is a placeholder or an example to replace. The `workAuthorization` country lists start empty, which gates out every posting that requires citizenship until you add the ISO codes, such as `CA` or `US`, of the countries you can work in.
+- **Pre-answered:** decisions that hold for almost anyone, which you should review once before your first run:
+  - "How did you hear about us?" (the company careers page);
+  - privacy, data-processing and background-check consents;
+  - voluntary demographic questions, set to decline.
+- **Blank:** anything personal. A blank answer means you are asked whenever a form needs it; write it once and it is reused. Legally material questions, such as work authorization, export control, government ties, arbitration and salary, are also set to `allowAutoFill: false`, so a filled-in answer stays a suggestion until you set it to true.
+- **Narratives:** the two "why this company" templates stay suggestions until you rewrite them in your own words and set `allowAutoFill` to true. See [docs/BATCH.md](docs/BATCH.md#narrative-templates).
+
+How answers are matched is described in [docs/CONFIGURATION.md](docs/CONFIGURATION.md#answers).
+
 To do it by hand instead:
 
 ```bash
