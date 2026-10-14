@@ -1960,8 +1960,12 @@ export function canAwaitVerificationCode(options: {
  * it. Waiting here keeps one browser session alive across the round trip to
  * whoever is reading the inbox, which is the only point at which the code is
  * still good.
+ *
+ * A mailbox read that fails - a dropped IMAP connection included - counts as
+ * "no code yet": the gate stays open and the next poll reconnects, until the
+ * deadline. Aborting there would throw away a fully filled form over a blip.
  */
-async function awaitVerificationCode(
+export async function awaitVerificationCode(
   options: BrowserRunOptions,
   page: AnyPage,
   emailedAt: Date,

@@ -211,6 +211,7 @@ async function loadImapFlow(): Promise<new (options: unknown) => ImapFlowLike> {
 }
 
 type ImapFlowLike = {
+  on: (event: "error", listener: (error: Error & { code?: unknown }) => void) => unknown;
   connect: () => Promise<void>;
   logout: () => Promise<void>;
   getMailboxLock: (mailbox: string) => Promise<{ release: () => void }>;
@@ -232,6 +233,17 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
     secure: true,
     auth: { user: config.user, pass: config.password },
     logger: false,
+  });
+  // ImapFlow reports a dropped socket (seen from Gmail as read ECONNRESET) by
+  // emitting 'error' and then failing whatever was pending. With no listener
+  // that emit throws on the socket's own stack and takes the whole server down
+  // mid-submission; with one, the reset arrives as the rejected read below and
+  // the caller's poll simply tries again.
+  client.on("error", (error) => {
+    logger.warn("verification inbox connection error", {
+      code: typeof error.code === "string" ? error.code : undefined,
+      detail: String(error.message ?? "").slice(0, 120),
+    });
   });
   const messages: ImapMessage[] = [];
   await client.connect();
