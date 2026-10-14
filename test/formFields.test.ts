@@ -3444,3 +3444,31 @@ describe("the stored location offered to a yes/no question", () => {
     expect(matchFields([field("Location (City)*")], [location])[0]?.answer?.answer).toBe("Vancouver, British Columbia, Canada");
   });
 });
+
+// Disney's Prefix and Suffix dropdowns sit under the heading "Legal Name", and
+// the bank's "legal name" entry reached them through it. Searching a suffix
+// list for the whole name left "II" selected - a suffix nobody has.
+describe("prefix and suffix fields", () => {
+  const legalName = {
+    key: "legal-name",
+    label: "Legal name if different",
+    patterns: ["legal name"],
+    answer: "Casey Moore",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+
+  it("never take a name, only an honorific", () => {
+    const fields = [
+      field("Prefix", { role: "combobox", questionLabel: "Legal Name", required: false, selectorIndex: 0 }),
+      field("Suffix", { role: "combobox", questionLabel: "Legal Name", required: false, selectorIndex: 3 }),
+    ];
+    expect(fallbackAnswersForFields(fields, [], [legalName])).toEqual([]);
+    expect(matchFields(fields, [answer("Legal name if different", "Casey Moore")]).map((m) => m.answer)).toEqual([null, null]);
+  });
+
+  it("still take an honorific the candidate stated", () => {
+    const prefix = field("Prefix", { role: "combobox", required: false });
+    expect(matchFields([prefix], [answer("Prefix", "Dr.")])[0]?.answer?.answer).toBe("Dr.");
+  });
+});

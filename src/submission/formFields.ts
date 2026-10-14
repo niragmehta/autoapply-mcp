@@ -212,6 +212,8 @@ const BARE_NAME_FIELD =
 const WHOLE_NAME_ANSWER = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;
 /** A field holding one part of a name, including the honorifics either side of it. */
 const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b|^(?:name )?(?:prefix|suffix|salutation|honorific)$/;
+const HONORIFIC_FIELD = /^(?:name )?(?:prefix|suffix|salutation|honorific)$/;
+const HONORIFIC_VALUE = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|dame|rev|jr|sr|ii|iii|iv|v|esq|phd|md)\.?$/i;
 
 const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
@@ -502,6 +504,10 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   if (WHOLE_NAME_ANSWER.test(answerLabel) && NAME_PART_FIELD.test(fieldLabel) && !BARE_NAME_FIELD.test(fieldLabel)) {
     return true;
   }
+  // A prefix or suffix holds an honorific and nothing else. Disney's Prefix and
+  // Suffix sit under the heading "Legal Name", which the bank's "legal name"
+  // entry matched; searching a suffix list for the whole name left "II" behind.
+  if (HONORIFIC_FIELD.test(fieldLabel) && !HONORIFIC_VALUE.test(answer.answer.trim())) return true;
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
   // Nor is a yes/no question answered with a place. Broadcom asked about being
   // "employed by any entity of the federal, state or local government", and
