@@ -1322,3 +1322,17 @@ describe("a Workday option written with typographic quotes", () => {
     expect(prompt.selected).toEqual(["Bachelor\u2019s Degree"]);
   });
 });
+
+// Thomson Reuters' "Type to Add Skills" lists "No Items." until something is
+// typed, and the search skipped every term shorter than three characters, so
+// "C#" was never typed and a required question was reported unfillable.
+describe("a skill named in fewer than three characters", () => {
+  it("is still typed into the search box", async () => {
+    const prompt = new SearchablePrompt({ "No Items.": null }, ["C", "C#", "C++", "Python"], "keystroke");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["C#"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["C#"]);
+  });
+});

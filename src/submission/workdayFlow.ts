@@ -481,9 +481,13 @@ async function searchMenu(page: Page, field: Locator, candidate: string): Promis
   const attempts: string[] = [];
   // A taxonomy names things its own way: Adobe's list of majors has no plain
   // "Computer Science" entry, so the full phrase returns "No Items." while its
-  // first word reaches "Computer Science, General" and its neighbours.
-  const terms = [candidate, candidate.split(/[\s,/]+/)[0] ?? candidate].filter(
-    (term, index, all) => term.length >= 3 && all.indexOf(term) === index,
+  // first word reaches "Computer Science, General" and its neighbours. Only that
+  // fallback word needs a minimum length (so a stray "of" is never searched);
+  // the answer itself is typed whatever its length, since skills such as "C#"
+  // or "Go" are named in two characters.
+  const firstWord = candidate.split(/[\s,/]+/)[0] ?? "";
+  const terms = [candidate.trim(), firstWord.length >= 3 ? firstWord : ""].filter(
+    (term, index, all) => term.length > 0 && all.indexOf(term) === index,
   );
   for (const { box, where, ownsPrompt } of boxes) {
     for (const term of terms) {
