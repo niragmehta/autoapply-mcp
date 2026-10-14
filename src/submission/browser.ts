@@ -50,6 +50,7 @@ import {
   readListboxOptions,
   describeControl,
   workdayStepName,
+  workdayTenant,
   reviewOmissions,
 } from "./workdayFlow.js";
 
@@ -63,6 +64,7 @@ const WORKDAY_MAX_STEPS = 12;
 const WORKDAY_MAX_RETRIES = 3;
 import {
   fetchVerificationCode,
+  fetchVerificationLink,
   readVerificationInboxConfig,
   type VerificationInboxConfig,
 } from "./verificationInbox.js";
@@ -178,13 +180,17 @@ export type BrowserRunOptions = {
    * to be emailed, so a second run invalidates whatever the first produced.
    * Waiting inside the run is the only way an automated submission can clear
    * the gate.
+   *
+   * With a mailbox configured, this also bounds the wait for the link Workday
+   * emails to verify a new or unverified candidate account.
    */
   codeWaitMs?: number;
   /** File polled for the code while `codeWaitMs` has not elapsed. */
   codeFilePath?: string;
   /**
-   * Mailbox polled alongside `codeFilePath`. Defaults to whatever the
-   * environment configures, and is absent unless deliberately switched on.
+   * Mailbox polled alongside `codeFilePath`, and for Workday's account
+   * verification links. Defaults to whatever the environment configures, and
+   * is absent unless deliberately switched on.
    */
   verificationInbox?: VerificationInboxConfig | null;
 };
@@ -704,6 +710,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     if (isWorkdayUrl(page.url())) {
       const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
         allowAccountCreation: options.allowAccountCreation ?? false,
+        awaitVerificationLink: workdayVerificationLinkReader(options, page.url()),
       });
       if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options);
       if (entry.reached !== "form") {
@@ -1950,6 +1957,24 @@ export function canAwaitVerificationCode(options: {
   if ((options.codeWaitMs ?? 0) <= 0) return false;
   const inbox = options.verificationInbox ?? readVerificationInboxConfig();
   return Boolean(options.codeFilePath) || Boolean(inbox);
+}
+
+/**
+ * Reads the link Workday emails to verify a candidate account, from the
+ * mailbox that already supplies one-time codes and within the same wait
+ * budget. Without both, an account awaiting verification is left for a person
+ * as before: a link has no file hand-off, so only the mailbox can supply one.
+ */
+export function workdayVerificationLinkReader(
+  options: { codeWaitMs?: number; verificationInbox?: VerificationInboxConfig | null },
+  pageUrl: string,
+  fetchLink: typeof fetchVerificationLink = fetchVerificationLink,
+): ((since: Date) => Promise<string | null>) | undefined {
+  const timeoutMs = options.codeWaitMs ?? 0;
+  const inbox = options.verificationInbox ?? readVerificationInboxConfig();
+  if (timeoutMs <= 0 || !inbox) return undefined;
+  const tenant = workdayTenant(pageUrl);
+  return (since) => fetchLink(inbox, { since, timeoutMs, tenant });
 }
 
 /**

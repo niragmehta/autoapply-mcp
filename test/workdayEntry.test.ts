@@ -1,6 +1,11 @@
 ﻿import { beforeEach, describe, expect, it } from "vitest";
 
-import { advanceWorkdayStep, enterWorkdayApplication, recoverWorkdayError } from "../src/submission/workdayFlow.js";
+import {
+  advanceWorkdayStep,
+  enterWorkdayApplication,
+  recoverWorkdayError,
+  workdayTenant,
+} from "../src/submission/workdayFlow.js";
 
 /**
  * A Workday tenant reduced to the part the entry walk depends on: which
@@ -25,6 +30,8 @@ class FakeTenant {
   errorText = "";
   /** Runs on every wait, so a test can make a screen paint late. */
   onWait?: () => void;
+  /** The second tab an emailed verification link is opened in, if any. */
+  linkTab?: FakeLinkTab;
   private readonly transitions: Record<string, string[] | (() => string[])>;
 
   constructor(initial: string[], transitions: Record<string, string[] | (() => string[])>) {
@@ -33,6 +40,11 @@ class FakeTenant {
   }
 
   private id(selector: string): string {
+    // The resend control and the dialog asking where to send the email are
+    // each reached through several selector shapes; the fake renders each as
+    // a single control.
+    if (selector.includes('[role="dialog"]')) return selector.includes("input") ? "dialogEmail" : "dialogConfirm";
+    if (/resend/i.test(selector)) return "resendAccountVerification";
     return selector.replace(/^\[data-automation-id="/, "").replace(/"\]$/, "");
   }
 
@@ -41,6 +53,7 @@ class FakeTenant {
     const self = this;
     const locator = {
       first: () => locator,
+      nth: () => locator,
       count: async () => (self.visible.has(id) ? 1 : 0),
       isVisible: async () => self.visible.has(id),
       allInnerTexts: async () => [self.bodyText],
@@ -65,6 +78,7 @@ class FakeTenant {
   asPage() {
     return {
       goto: async () => undefined,
+      reload: async () => undefined,
       locator: (selector: string) => this.locator(selector),
       url: () => "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/x",
       waitForTimeout: async () => {
@@ -75,6 +89,43 @@ class FakeTenant {
         typeof script === "string" && script.includes("errorMessage") && this.visible.has("errorMessage")
           ? this.errorText
           : "",
+      context: () => ({
+        newPage: async () => {
+          if (!this.linkTab) throw new Error("this scenario opens no second tab");
+          return this.linkTab.asTab();
+        },
+      }),
+    };
+  }
+}
+
+/**
+ * The tab an emailed verification link opens in. Opening it is what verifies
+ * the account, so a test hands it the state change to make.
+ */
+class FakeLinkTab {
+  readonly opened: string[] = [];
+  closed = false;
+
+  constructor(
+    private readonly onOpen: () => void,
+    private readonly text = "Your account has been verified. You can now sign in.",
+    private readonly fails = false,
+  ) {}
+
+  asTab() {
+    return {
+      goto: async (url: string) => {
+        this.opened.push(url);
+        if (this.fails) throw new Error(`page.goto: net::ERR_CONNECTION_RESET at ${url}`);
+        this.onOpen();
+      },
+      waitForLoadState: async () => undefined,
+      waitForTimeout: async () => undefined,
+      locator: () => ({ allInnerTexts: async () => [this.text] }),
+      close: async () => {
+        this.closed = true;
+      },
     };
   }
 }
@@ -383,6 +434,245 @@ describe("enterWorkdayApplication", () => {
 
     expect(result.reached).toBe("form");
     expect(result.createdAccount).toBe(true);
+  });
+});
+
+describe("verifying a Workday account through its emailed link", () => {
+  const LINK = "https://acme.wd5.myworkdayjobs.com/en-US/External/activate/test-token";
+  const REFUSAL = "Verify your account before you sign in or request a verification email.";
+
+  beforeEach(() => {
+    process.env.AUTOAPPLY_ATS_PASSWORD = "test-password-value";
+    process.env.AUTOAPPLY_ATS_EMAIL = "candidate@example.com";
+  });
+
+  /**
+   * A tenant holding an account that was registered but never verified. It
+   * refuses sign-in with Workday's own banner and offers "Resend Account
+   * Verification" until the emailed link has been opened.
+   */
+  function unverifiedTenant(resend: string[] | (() => string[]) = [...CREDENTIALS, "errorMessage"]) {
+    const state = { verified: false };
+    const tenant: FakeTenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: () => (state.verified ? FORM : [...CREDENTIALS, "errorMessage", "resendAccountVerification"]),
+      resendAccountVerification: resend,
+      dialogConfirm: [...CREDENTIALS, "errorMessage"],
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: FORM,
+    });
+    tenant.errorText = REFUSAL;
+    return { tenant, state };
+  }
+
+  it("requests a fresh email for an unverified account, opens its link and signs in", async () => {
+    let resentAt = 0;
+    const { tenant, state } = unverifiedTenant(() => {
+      resentAt = Date.now();
+      tenant.errorText = "An email has been sent to you.";
+      return [...CREDENTIALS, "errorMessage"];
+    });
+    const tab = new FakeLinkTab(() => {
+      state.verified = true;
+    });
+    tenant.linkTab = tab;
+    const requests: Date[] = [];
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+      awaitVerificationLink: async (since) => {
+        requests.push(since);
+        return LINK;
+      },
+    });
+
+    expect(tenant.clicks).toContain("resendAccountVerification");
+    expect(requests).toHaveLength(1);
+    // Dated before the click, so the email the click triggers is never too early.
+    expect(requests[0]!.getTime()).toBeLessThanOrEqual(resentAt);
+    expect(tab.opened).toEqual([LINK]);
+    expect(tab.closed).toBe(true);
+    expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+    expect(result).toMatchObject({ reached: "form", createdAccount: false });
+    expect(result.detail).toMatch(/verified .*emailed link/i);
+  });
+
+  it("gives the address when the resend asks where to send the email", async () => {
+    const { tenant, state } = unverifiedTenant([...CREDENTIALS, "errorMessage", "dialogEmail", "dialogConfirm"]);
+    tenant.linkTab = new FakeLinkTab(() => {
+      state.verified = true;
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+      awaitVerificationLink: async () => LINK,
+    });
+
+    expect(tenant.filled.dialogEmail).toBe("candidate@example.com");
+    expect(tenant.clicks).toContain("dialogConfirm");
+    expect(result.reached).toBe("form");
+  });
+
+  it("keeps today's instructions, and says so, when no email arrives in time", async () => {
+    const { tenant } = unverifiedTenant();
+    const tab = new FakeLinkTab(() => undefined);
+    tenant.linkTab = tab;
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+      awaitVerificationLink: async () => null,
+    });
+
+    expect(result).toMatchObject({ reached: "sign-in", createdAccount: false });
+    expect(result.detail).toMatch(/not verified yet: open the verification email sent to candidate@example\.com/);
+    expect(result.detail).toMatch(/no verification email arrived within \d+s/);
+    expect(tab.opened).toEqual([]);
+    expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+  });
+
+  it("does not wait for an email it found no way to request", async () => {
+    let waited = false;
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: [...CREDENTIALS, "errorMessage"],
+    });
+    tenant.errorText = REFUSAL;
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+      awaitVerificationLink: async () => {
+        waited = true;
+        return LINK;
+      },
+    });
+
+    expect(waited).toBe(false);
+    expect(result.reached).toBe("sign-in");
+    expect(result.detail).toMatch(/not verified yet/);
+    expect(result.detail).toMatch(/Resend Account Verification/);
+  });
+
+  it("follows the link emailed on registration and signs in with the new account", async () => {
+    // Some tenants register the account and then return the browser to Sign In
+    // with "An email has been sent to you. Please verify your account."
+    let verified = false;
+    let registeredAt = 0;
+    const tenant: FakeTenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: () => (verified ? FORM : CREDENTIALS),
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: () => {
+        registeredAt = Date.now();
+        tenant.bodyText += " Sign In An email has been sent to you. Please verify your account.";
+        return CREDENTIALS;
+      },
+    });
+    const tab = new FakeLinkTab(() => {
+      verified = true;
+    });
+    tenant.linkTab = tab;
+    const requests: Date[] = [];
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+      awaitVerificationLink: async (since) => {
+        requests.push(since);
+        return LINK;
+      },
+    });
+
+    expect(tenant.clicks).toContain("createAccountSubmitButton");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.getTime()).toBeLessThanOrEqual(registeredAt);
+    expect(tab.opened).toEqual([LINK]);
+    expect(result).toMatchObject({ reached: "form", createdAccount: true });
+    expect(result.detail).toMatch(/created .*verified it via the emailed link/i);
+  });
+
+  it("keeps the registration instructions when the email never arrives", async () => {
+    const tenant: FakeTenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: () => {
+        tenant.bodyText += " Sign In An email has been sent to you. Please verify your account.";
+        return CREDENTIALS;
+      },
+    });
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+      awaitVerificationLink: async () => null,
+    });
+
+    expect(result).toMatchObject({ reached: "sign-in", createdAccount: true });
+    expect(result.detail).toMatch(/requires email verification first/);
+    expect(result.detail).toMatch(/no verification email arrived/);
+  });
+
+  it("reports a link that would not open without echoing it", async () => {
+    const { tenant } = unverifiedTenant();
+    const tab = new FakeLinkTab(() => undefined, undefined, true);
+    tenant.linkTab = tab;
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+      awaitVerificationLink: async () => LINK,
+    });
+
+    expect(result.reached).toBe("sign-in");
+    expect(result.detail).toMatch(/could not be opened/);
+    expect(result.detail).not.toContain("test-token");
+    expect(tab.closed).toBe(true);
+  });
+
+  it("never follows a link off Workday's own hosts, whatever supplied it", async () => {
+    const { tenant } = unverifiedTenant();
+    const tab = new FakeLinkTab(() => undefined);
+    tenant.linkTab = tab;
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+      awaitVerificationLink: async () => "https://acme.wd5.myworkdayjobs.com.evil.example/activate/x",
+    });
+
+    expect(tab.opened).toEqual([]);
+    expect(result.reached).toBe("sign-in");
+  });
+
+  it("says so when the account still refuses sign-in after the link was opened", async () => {
+    const { tenant } = unverifiedTenant();
+    tenant.linkTab = new FakeLinkTab(() => undefined, "This verification link has expired.");
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: false,
+      awaitVerificationLink: async () => LINK,
+    });
+
+    expect(result.reached).toBe("sign-in");
+    expect(result.detail).toMatch(/opened the emailed verification link, but signing in afterwards did not complete/);
+    expect(result.detail).toMatch(/reported a problem with the link/);
+  });
+});
+
+describe("workdayTenant", () => {
+  it("reads the tenant from a career-site host", () => {
+    expect(workdayTenant("https://acme.wd5.myworkdayjobs.com/en-US/External/job/x")).toBe("acme");
+    expect(workdayTenant("https://Acme.WD1.myworkdayjobs.com/External")).toBe("acme");
+  });
+
+  it("names no tenant for anything else", () => {
+    expect(workdayTenant("https://wd5.myworkdayjobs.com/External")).toBeUndefined();
+    expect(workdayTenant("https://acme.example.com/jobs")).toBeUndefined();
+    expect(workdayTenant("not a url")).toBeUndefined();
   });
 });
 

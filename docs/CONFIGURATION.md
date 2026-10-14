@@ -251,7 +251,7 @@ whichever code arrives first is used.
 | `AUTOAPPLY_OTP_IMAP_HOST` | `imap.gmail.com` | IMAP host. |
 | `AUTOAPPLY_OTP_IMAP_PORT` | `993` | IMAPS port. |
 | `AUTOAPPLY_OTP_MAILBOX` | `INBOX,[Gmail]/All Mail,[Gmail]/Trash` | Comma-separated folders to search, in order. Defaults cover a forwarding filter that archives or deletes on arrival. Missing folders are skipped. |
-| `AUTOAPPLY_OTP_FROM` | - | Only consider senders containing this text. Greenhouse sends from `us.greenhouse-mail.io`, so use `greenhouse`, not `greenhouse.io`. |
+| `AUTOAPPLY_OTP_FROM` | - | Only consider senders containing this text. Greenhouse sends from `us.greenhouse-mail.io`, so use `greenhouse`, not `greenhouse.io`. Applies to codes only: Workday links are always limited to Workday's own senders. |
 
 Point this at a mailbox that receives nothing but forwarded verification mail,
 created by a filter on your real address. An app password grants full read of
@@ -265,5 +265,20 @@ earlier code belongs to an earlier attempt and is already dead. When a message
 yields two different candidate codes the server declines to guess, because a
 wrong code is not a free retry - the board rejects it and emails a fresh one,
 invalidating the code the run is waiting for.
+
+**Workday account verification.** Workday will not let a newly registered
+candidate account sign in until a link it emails has been opened. The same
+inbox supplies that link: with it configured and `waitForCodeSeconds` set, a run
+waits up to that long for the email - sent on registration, or requested with
+"Resend Account Verification" when an earlier run left the account unverified -
+opens the link in a second tab, signs in and carries on to the application.
+Without the inbox, or if no email arrives in time, the run stops with
+instructions as before. Have the forwarding filter match Workday as well as
+Greenhouse, e.g. `from:(workday.com OR myworkday.com)`: tenants send from
+addresses such as `acme@otp.workday.com`. Only https links on Workday's own
+domains (`myworkdayjobs.com`, `myworkdaysite.com`, `myworkday.com`,
+`workday.com`), in mail from those domains dated no more than two minutes before
+the request, are followed; a link naming another tenant is skipped, and the
+link itself is never logged.
 
 Requires `npm install imapflow`, an optional peer dependency.

@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { canAwaitVerificationCode } from "../src/submission/browser.js";
+import { describe, expect, it, vi } from "vitest";
+import { canAwaitVerificationCode, workdayVerificationLinkReader } from "../src/submission/browser.js";
 import {
   decodeMessageText,
   extractVerificationCode,
   fetchVerificationCode,
+  fetchVerificationLink,
   readVerificationInboxConfig,
   type VerificationInboxConfig,
 } from "../src/submission/verificationInbox.js";
@@ -259,5 +260,105 @@ describe("decoding a raw message", () => {
   it("strips html tags so a code inside markup is still readable", () => {
     const source = Buffer.from("<p>Code: <b>KbZB13vY</b></p>", "utf8");
     expect(extractVerificationCode(decodeMessageText(source))).toBe("KbZB13vY");
+  });
+});
+
+describe("waiting for a Workday verification link", () => {
+  const since = new Date("2026-10-01T12:00:00Z");
+  const LINK = "https://acme.wd5.myworkdayjobs.com/en-US/External/activate/secret-token-123";
+  const email = {
+    receivedAt: new Date(since.getTime() + 5_000),
+    sender: "acme@otp.workday.com",
+    body: `<p>Please verify your account.</p><a href="${LINK}">Verify Account</a>`,
+  };
+
+  it("keeps polling until the email arrives", async () => {
+    let reads = 0;
+    const found = await fetchVerificationLink(
+      config,
+      { since, timeoutMs: 5_000, pollMs: 1, tenant: "acme" },
+      async () => (++reads < 3 ? [] : [email]),
+    );
+    expect(found).toBe(LINK);
+    expect(reads).toBe(3);
+  });
+
+  it("gives up with null once its budget is spent", async () => {
+    let reads = 0;
+    const found = await fetchVerificationLink(config, { since, timeoutMs: 40, pollMs: 5 }, async () => {
+      reads += 1;
+      return [];
+    });
+    expect(found).toBeNull();
+    expect(reads).toBeGreaterThan(1);
+  });
+
+  it("treats a failed read as an empty poll rather than giving up", async () => {
+    let reads = 0;
+    const found = await fetchVerificationLink(config, { since, timeoutMs: 5_000, pollMs: 1 }, async () => {
+      reads += 1;
+      if (reads === 1) throw Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+      return [email];
+    });
+    expect(found).toBe(LINK);
+  });
+
+  it("searches from well before the request so a day boundary cannot hide the email", async () => {
+    let asked: Date | undefined;
+    await fetchVerificationLink(config, { since, timeoutMs: 0 }, async (_config, from) => {
+      asked = from;
+      return [];
+    });
+    expect((since.getTime() - (asked?.getTime() ?? 0)) / 3_600_000).toBeGreaterThanOrEqual(24);
+  });
+
+  it("logs which host the link is on, never the link itself", async () => {
+    // The link carries the account's verification token.
+    const written: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    });
+    try {
+      await fetchVerificationLink(config, { since, timeoutMs: 1_000, pollMs: 1 }, async () => [email]);
+    } finally {
+      spy.mockRestore();
+    }
+    const logged = written.join("");
+    expect(logged).toContain("acme.wd5.myworkdayjobs.com");
+    expect(logged).not.toContain("secret-token-123");
+  });
+});
+
+describe("wiring the Workday link reader into a run", () => {
+  const applyUrl = "https://acme.wd5.myworkdayjobs.com/en-US/External/job/Remote/Engineer_R1";
+
+  it("is not wired without a wait budget", () => {
+    expect(workdayVerificationLinkReader({ codeWaitMs: 0, verificationInbox: config }, applyUrl)).toBeUndefined();
+  });
+
+  it("is not wired without a mailbox", () => {
+    vi.stubEnv("AUTOAPPLY_OTP_IMAP_USER", "");
+    vi.stubEnv("AUTOAPPLY_OTP_IMAP_PASSWORD", "");
+    try {
+      expect(workdayVerificationLinkReader({ codeWaitMs: 300_000 }, applyUrl)).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("reads the configured mailbox for this tenant within the code wait budget", async () => {
+    const calls: unknown[] = [];
+    const reader = workdayVerificationLinkReader({ codeWaitMs: 240_000, verificationInbox: config }, applyUrl, async (
+      inbox,
+      query,
+    ) => {
+      calls.push({ inbox, query });
+      return "https://acme.wd5.myworkdayjobs.com/External/activate/t1";
+    });
+    const since = new Date();
+
+    await expect(reader?.(since)).resolves.toBe("https://acme.wd5.myworkdayjobs.com/External/activate/t1");
+    expect(calls).toEqual([{ inbox: config, query: { since, timeoutMs: 240_000, tenant: "acme" } }]);
   });
 });

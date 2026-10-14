@@ -10,15 +10,22 @@
  * Configuration is environment-only and absent by default: with nothing set,
  * this module reports "not configured" and the manual file hand-off is
  * unchanged.
+ *
+ * The same mailbox also supplies the link Workday emails to verify a new
+ * candidate account; see fetchVerificationLink.
  */
 import { logger } from "../util/logger.js";
+import { chooseVerificationLink, decodeQuotedPrintable, isWorkdaySender } from "./verificationLinks.js";
 
 export type VerificationInboxConfig = {
   host: string;
   port: number;
   user: string;
   password: string;
-  /** Only messages from a sender containing this text are considered. */
+  /**
+   * Only messages from a sender containing this text are considered when
+   * reading codes. Workday links are held to Workday's own senders instead.
+   */
   from?: string;
   /**
    * Folders to search, in order. More than one because a forwarding rule can
@@ -141,7 +148,7 @@ function shapedCandidates(body: string): string[] {
     .filter((token) => looksLikeCode(token));
 }
 
-type ImapMessage = { receivedAt: Date; body: string };
+type ImapMessage = { receivedAt: Date; body: string; sender?: string };
 
 /**
  * How far before the submit click an email may be dated and still be believed.
@@ -194,6 +201,54 @@ export async function fetchVerificationCode(
   return null;
 }
 
+export type VerificationLinkQuery = {
+  /** When this run asked Workday to send the email. */
+  since: Date;
+  /** How long to keep looking before leaving the account for a person. */
+  timeoutMs: number;
+  /** Gap between mailbox reads. */
+  pollMs?: number;
+  /** The tenant applied to: `acme` for `acme.wd5.myworkdayjobs.com`. */
+  tenant?: string;
+};
+
+/** Gap between mailbox reads while a verification email is awaited. */
+const LINK_POLL_MS = 5_000;
+
+/**
+ * Waits for the link Workday emails to verify a candidate account, resolving
+ * to null once `timeoutMs` has passed without one.
+ *
+ * Reads the same folders as the code reader but only Workday's own senders:
+ * AUTOAPPLY_OTP_FROM scopes the code reader, typically to Greenhouse, and
+ * applying it here would hide every Workday email. A failed read is just an
+ * empty poll. The link carries a secret token for the account, so nothing but
+ * its host is ever logged.
+ */
+export async function fetchVerificationLink(
+  config: VerificationInboxConfig,
+  query: VerificationLinkQuery,
+  fetchMessages: (config: VerificationInboxConfig, since: Date) => Promise<ImapMessage[]> = readWorkdayMail,
+): Promise<string | null> {
+  const deadline = Date.now() + Math.max(0, query.timeoutMs);
+  const pollMs = Math.max(1, query.pollMs ?? LINK_POLL_MS);
+  const searchFrom = new Date(query.since.getTime() - SEARCH_BACKDATE_MS);
+  for (;;) {
+    const messages = await fetchMessages(config, searchFrom).catch((error: unknown) => {
+      logger.warn("verification inbox unreadable", { detail: String(error) });
+      return [] as ImapMessage[];
+    });
+    const link = chooseVerificationLink(messages, { since: query.since, tenant: query.tenant });
+    if (link) {
+      logger.info("workday verification link found", { host: new URL(link).hostname });
+      return link;
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
+    await new Promise<void>((resolve) => setTimeout(resolve, Math.min(pollMs, remaining)));
+  }
+}
+
 /**
  * Loaded on demand so the package installs and runs without an IMAP client for
  * everyone who never turns this on.
@@ -222,10 +277,18 @@ type ImapFlowLike = {
 };
 
 /**
- * How far to widen the mailbox search behind the moment we care about.
- * Defined next to the search itself; see fetchVerificationCode.
+ * Reads every message from an accepted sender that the server files on or
+ * after `since`'s day, across the configured folders. By default it reads the
+ * way the code reader needs: senders narrowed by AUTOAPPLY_OTP_FROM and bodies
+ * decoded for code extraction.
  */
-async function readMailbox(config: VerificationInboxConfig, since: Date): Promise<ImapMessage[]> {
+async function readMailbox(
+  config: VerificationInboxConfig,
+  since: Date,
+  acceptSender: (address: string) => boolean = (address) =>
+    !config.from || address.toLowerCase().includes(config.from.toLowerCase()),
+  decode: (source: Buffer | undefined) => string = decodeMessageText,
+): Promise<ImapMessage[]> {
   const ImapFlow = await loadImapFlow();
   const client = new ImapFlow({
     host: config.host,
@@ -260,10 +323,11 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
       try {
         for await (const message of client.fetch({ since }, { envelope: true, source: true })) {
           const sender = message.envelope?.from?.[0]?.address ?? "";
-          if (config.from && !sender.toLowerCase().includes(config.from.toLowerCase())) continue;
+          if (!acceptSender(sender)) continue;
           messages.push({
             receivedAt: message.envelope?.date ?? new Date(0),
-            body: decodeMessageText(message.source),
+            sender,
+            body: decode(message.source),
           });
         }
       } finally {
@@ -279,6 +343,11 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
   return messages;
 }
 
+/** Workday's mail, left raw: the link reader decodes each MIME part itself. */
+function readWorkdayMail(config: VerificationInboxConfig, since: Date): Promise<ImapMessage[]> {
+  return readMailbox(config, since, isWorkdaySender, (source) => source?.toString("utf8") ?? "");
+}
+
 /**
  * Turns a raw message into searchable text. Quoted-printable is undone first
  * because it inserts soft line breaks that can fall in the middle of a code.
@@ -290,12 +359,7 @@ async function readMailbox(config: VerificationInboxConfig, since: Date): Promis
  */
 export function decodeMessageText(source: Buffer | undefined): string {
   if (!source) return "";
-  const raw = source.toString("utf8");
-  const unfolded = raw.replace(/=\r?\n/g, "");
-  const decoded = unfolded.replace(/=([0-9A-F]{2})/g, (_match, hex: string) =>
-    String.fromCharCode(Number.parseInt(hex, 16)),
-  );
-  return decoded
+  return decodeQuotedPrintable(source.toString("utf8"))
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<head[\s\S]*?<\/head>/gi, " ")
     // RFC822 and MIME headers. A body sentence never starts with a single

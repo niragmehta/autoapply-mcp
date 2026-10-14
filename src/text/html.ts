@@ -18,7 +18,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   middot: "*",
 };
 
-function decodeEntitiesOnce(input: string): string {
+export function decodeEntitiesOnce(input: string): string {
   return input
     .replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) => safeCodePoint(Number.parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_m, dec: string) => safeCodePoint(Number.parseInt(dec, 10)))

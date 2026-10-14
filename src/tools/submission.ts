@@ -134,7 +134,7 @@ export function registerSubmissionTools(server: McpServer): void {
           .max(1800)
           .optional()
           .describe(
-            "Hold the browser at a verification gate for this long while waiting for the code to be written to <artifacts>/<applicationId>.code. A code cannot be carried between runs, so this is the only way an automated submission clears the gate.",
+            "Hold the browser at a verification gate for this long while waiting for the code to be written to <artifacts>/<applicationId>.code. A code cannot be carried between runs, so this is the only way an automated submission clears the gate. With a verification inbox configured, it also bounds the wait for the link Workday emails to verify a candidate account.",
           ),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },

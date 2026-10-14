@@ -2,6 +2,7 @@ import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
 import { getAtsCredentials, type AtsCredentials } from "./credentials.js";
+import { isWorkdayHost } from "./verificationLinks.js";
 
 /**
  * Workday's pre-form flow.
@@ -28,6 +29,16 @@ type Page = {
     press: (key: string) => Promise<void>;
     type: (text: string, options?: unknown) => Promise<void>;
   };
+  /** Present on a live page; opens an emailed link beside the application. */
+  context?: () => { newPage: () => Promise<BrowserTab> };
+};
+/** A second tab of the same browser context, sharing its cookies. */
+type BrowserTab = {
+  goto: (url: string, options?: unknown) => Promise<unknown>;
+  waitForLoadState: (state: string, options?: unknown) => Promise<void>;
+  waitForTimeout: (ms: number) => Promise<void>;
+  locator: (selector: string) => { allInnerTexts: () => Promise<string[]> };
+  close: () => Promise<void>;
 };
 type Locator = {
   first: () => Locator;
@@ -50,6 +61,22 @@ export function isWorkdayUrl(rawUrl: string): boolean {
     return WORKDAY_HOST_PATTERN.test(new URL(rawUrl).hostname);
   } catch {
     return false;
+  }
+}
+
+/**
+ * The employer's tenant, which Workday puts first in the hostname: `acme` for
+ * `acme.wd5.myworkdayjobs.com`. It tells this employer's emails apart from
+ * another's when two runs read one mailbox.
+ */
+export function workdayTenant(rawUrl: string): string | undefined {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    if (!WORKDAY_HOST_PATTERN.test(host)) return undefined;
+    const label = host.split(".")[0] ?? "";
+    return /^(?:www|wd\d+|myworkdayjobs)$/.test(label) ? undefined : label;
+  } catch {
+    return undefined;
   }
 }
 
@@ -1612,6 +1639,18 @@ async function atApplicationForm(page: Page): Promise<boolean> {
   return false;
 }
 
+export type WorkdayEntryOptions = {
+  allowAccountCreation: boolean;
+  /**
+   * Waits for the link Workday emails to verify a new or unverified account,
+   * resolving to null once the run's wait budget is spent. `since` is when the
+   * email was requested, so an older email is not mistaken for it. Without it,
+   * an account awaiting verification ends the walk with instructions for a
+   * person, as it always has.
+   */
+  awaitVerificationLink?: (since: Date) => Promise<string | null>;
+};
+
 /**
  * Walks from a Workday job advert to its application form, signing in or
  * registering as needed.
@@ -1623,7 +1662,7 @@ async function atApplicationForm(page: Page): Promise<boolean> {
 export async function enterWorkdayApplication(
   page: Page,
   profileEmail: string,
-  options: { allowAccountCreation: boolean },
+  options: WorkdayEntryOptions,
 ): Promise<WorkdayEntryResult> {
   const credentials: AtsCredentials = getAtsCredentials(profileEmail);
 
@@ -1684,9 +1723,21 @@ export async function enterWorkdayApplication(
   // An account that exists but was never verified refuses sign-in until its
   // email link is opened, and registering again cannot get past that.
   if (VERIFY_ACCOUNT_TEXT.test(signedIn.detail)) {
+    const unverified = `an account for ${credentials.email} exists on this tenant but is not verified yet: open the verification email sent to ${credentials.email}, then rerun`;
+    if (!options.awaitVerificationLink) return { reached: "sign-in", detail: unverified, createdAccount: false };
+    // Taken before the click, so the email it triggers cannot predate it.
+    const requestedAt = new Date();
+    if (!(await requestVerificationEmail(page, credentials.email))) {
+      return {
+        reached: "sign-in",
+        detail: `${unverified}; no Resend Account Verification control was found to request a fresh email`,
+        createdAccount: false,
+      };
+    }
+    const verified = await verifyByEmailedLink(page, credentials, options.awaitVerificationLink, requestedAt);
     return {
-      reached: "sign-in",
-      detail: `an account for ${credentials.email} exists on this tenant but is not verified yet: open the verification email sent to ${credentials.email}, then rerun`,
+      reached: verified.ok ? "form" : "sign-in",
+      detail: verified.ok ? "verified the existing account via the emailed link and signed in" : `${unverified}; ${verified.detail}`,
       createdAccount: false,
     };
   }
@@ -1695,7 +1746,7 @@ export async function enterWorkdayApplication(
     return { reached: "sign-in", detail: `${signedIn.detail}; account creation not permitted`, createdAccount: false };
   }
 
-  const created = await createAccount(page, credentials);
+  const created = await createAccount(page, credentials, options.awaitVerificationLink);
   return {
     reached: created.ok ? "form" : created.created ? "sign-in" : "blocked",
     detail: created.detail,
@@ -1739,6 +1790,7 @@ async function signIn(page: Page, credentials: AtsCredentials): Promise<{ ok: bo
 async function createAccount(
   page: Page,
   credentials: AtsCredentials,
+  awaitVerificationLink?: (since: Date) => Promise<string | null>,
 ): Promise<{ ok: boolean; created: boolean; detail: string }> {
   const onSignIn = await page.locator(SEL.verifyPassword).first().isVisible().catch(() => false);
   if (!onSignIn) {
@@ -1758,6 +1810,8 @@ async function createAccount(
     .click()
     .catch(() => undefined);
 
+  // Registering is what sends the verification email, so it cannot predate this.
+  const registeredAt = new Date();
   await clickIfPresent(page, SEL.createAccountSubmit, 8000);
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);
 
@@ -1773,7 +1827,18 @@ async function createAccount(
     const verifyNotice = async () =>
       VERIFY_ACCOUNT_TEXT.test((await page.locator("body").allInnerTexts().catch(() => [] as string[])).join(" "));
     const verificationDetail = `created an account, but the tenant requires email verification first: open the verification email sent to ${credentials.email}, then rerun`;
-    if (await verifyNotice()) return { ok: false, created: true, detail: verificationDetail };
+    const verifyByEmail = async (): Promise<{ ok: boolean; created: boolean; detail: string }> => {
+      if (!awaitVerificationLink) return { ok: false, created: true, detail: verificationDetail };
+      const verified = await verifyByEmailedLink(page, credentials, awaitVerificationLink, registeredAt);
+      if (!verified.ok) return { ok: false, created: true, detail: `${verificationDetail}; ${verified.detail}` };
+      logger.info("workday account created", { host: new URL(page.url()).hostname, verifiedByEmail: true });
+      return {
+        ok: true,
+        created: true,
+        detail: "created a new account on this employer's tenant, verified it via the emailed link and signed in",
+      };
+    };
+    if (await verifyNotice()) return await verifyByEmail();
 
     const signedIn = await signIn(page, credentials);
     if (signedIn.ok) {
@@ -1781,7 +1846,7 @@ async function createAccount(
       return { ok: true, created: true, detail: "created a new account on this employer's tenant and signed in with it" };
     }
     if (VERIFY_ACCOUNT_TEXT.test(signedIn.detail) || (await verifyNotice())) {
-      return { ok: false, created: true, detail: verificationDetail };
+      return await verifyByEmail();
     }
     return {
       ok: false,
@@ -1804,6 +1869,182 @@ async function createAccount(
     created: false,
     detail: error ? `account creation refused: ${error.slice(0, 200)}` : "account creation did not complete",
   };
+}
+
+/**
+ * The control an unverified account's sign-in refusal offers: "Resend Account
+ * Verification". Its markup has not been captured from a live tenant, so the
+ * overlay Workday lays over its buttons, the control's own automation id and
+ * finally its wording are tried in turn. The wording deliberately leaves out
+ * the banner's own "request a verification email", which is not a control.
+ */
+const RESEND_VERIFICATION = [
+  `${CLICK_FILTER}[aria-label*="resend" i]`,
+  '[data-automation-id*="resend" i]',
+  "text=/resend (?:account )?verification|resend (?:the )?verification email/i",
+] as const;
+
+/** A dialog some tenants open to ask which address the email should go to. */
+const DIALOG = ':is([role="dialog"], [role="alertdialog"], [aria-modal="true"])';
+const RESEND_DIALOG_EMAIL = `${DIALOG} :is(input[type="email"], input[data-automation-id*="email" i], input[name*="email" i], input[aria-label*="email" i])`;
+const RESEND_DIALOG_CONFIRM = [
+  `${DIALOG} ${CLICK_FILTER}:is([aria-label*="send" i], [aria-label*="submit" i], [aria-label*="verif" i], [aria-label*="continue" i], [aria-label="ok" i])`,
+  ...["Send", "Submit", "Verify", "Continue", "OK"].map((word) => `${DIALOG} :is(button, [role="button"]):has-text("${word}")`),
+];
+
+/**
+ * Asks the tenant to send the verification email again, answering the dialog
+ * that sometimes asks where to send it. Returns false when no resend control
+ * could be clicked: waiting on an email nobody asked for only burns the budget.
+ */
+async function requestVerificationEmail(page: Page, email: string): Promise<boolean> {
+  // Counted first, so a dialog the click opens is told apart from any address
+  // field already on screen.
+  const addressFields = page.locator(RESEND_DIALOG_EMAIL);
+  const before = await addressFields.count().catch(() => 0);
+  let requested = false;
+  for (const selector of RESEND_VERIFICATION) {
+    requested = await clickIfPresent(page, selector, 3000);
+    if (requested) break;
+  }
+  if (!requested) return false;
+
+  const after = await addressFields.count().catch(() => 0);
+  if (after > before) {
+    await addressFields.nth(after - 1).fill(email).catch(() => undefined);
+    for (const selector of RESEND_DIALOG_CONFIRM) {
+      if (await clickIfPresent(page, selector, 2000)) break;
+    }
+  }
+  logger.info("workday verification email requested", { host: hostOf(page.url()) });
+  return true;
+}
+
+/**
+ * Verifies the account through the link Workday emailed, then signs in.
+ *
+ * The link opens in a second tab of the same browser context, so the
+ * application tab keeps its place at the sign-in gate and shares any session
+ * the verification page sets.
+ */
+async function verifyByEmailedLink(
+  page: Page,
+  credentials: AtsCredentials,
+  awaitLink: (since: Date) => Promise<string | null>,
+  since: Date,
+): Promise<{ ok: true } | { ok: false; detail: string }> {
+  const link = await awaitLink(since).catch((error: unknown) => {
+    logger.warn("workday verification email unavailable", { detail: String(error) });
+    return null;
+  });
+  if (!link) {
+    const waited = Math.max(0, Math.round((Date.now() - since.getTime()) / 1000));
+    return { ok: false, detail: `no verification email arrived within ${waited}s` };
+  }
+  const opened = await openVerificationLink(page, link);
+  if (opened === "failed") return { ok: false, detail: "the emailed verification link could not be opened" };
+  const signedIn = await signInAfterVerification(page, credentials);
+  if (!signedIn.ok) {
+    const pageSaid = opened === "refused" ? "; the verification page reported a problem with the link" : "";
+    return {
+      ok: false,
+      detail: `opened the emailed verification link, but signing in afterwards did not complete (${signedIn.detail})${pageSaid}`,
+    };
+  }
+  logger.info("workday account verified by email", { host: hostOf(link), page: opened });
+  return { ok: true };
+}
+
+/** What a verification page says once its own request has settled. */
+const LINK_ACCEPTED_TEXT = /\b(?:verified|activated|success(?:ful(?:ly)?)?)\b/i;
+const LINK_REFUSED_TEXT = /\b(?:expired|invalid|not (?:been |yet )?verified|could not|unable to)\b/i;
+/** One-second reads of the verification page before taking it as settled. */
+const LINK_SETTLE_POLLS = 10;
+
+/**
+ * Opens the emailed link in a second tab and reports what the page said.
+ *
+ * The wording is read but not required: the sign-in that follows is what
+ * proves the account was verified. Only https links on Workday's own hosts are
+ * followed, whatever supplied them.
+ */
+async function openVerificationLink(page: Page, link: string): Promise<"failed" | "confirmed" | "refused" | "unclear"> {
+  const host = hostOf(link);
+  if (!isOpenableLink(link)) {
+    logger.warn("workday verification link refused: not an https Workday link", { host });
+    return "failed";
+  }
+  const context = page.context?.();
+  if (!context) return "failed";
+  let tab: BrowserTab | undefined;
+  try {
+    tab = await context.newPage();
+    await tab.goto(link, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await tab.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    const outcome = await readLinkPage(tab);
+    logger.info("workday verification link opened", { host, outcome });
+    return outcome;
+  } catch (error) {
+    // A navigation error quotes the URL, and the URL carries the token.
+    logger.warn("workday verification link failed to open", {
+      host,
+      detail: String(error).replace(/https?:\/\/\S+/g, "[link]").slice(0, 200),
+    });
+    return "failed";
+  } finally {
+    await tab?.close().catch(() => undefined);
+  }
+}
+
+async function readLinkPage(tab: BrowserTab): Promise<"confirmed" | "refused" | "unclear"> {
+  for (let poll = 0; poll < LINK_SETTLE_POLLS; poll += 1) {
+    const text = (await tab.locator("body").allInnerTexts().catch(() => [] as string[])).join(" ");
+    if (LINK_REFUSED_TEXT.test(text)) return "refused";
+    if (LINK_ACCEPTED_TEXT.test(text)) return "confirmed";
+    await tab.waitForTimeout(1000);
+  }
+  return "unclear";
+}
+
+function isOpenableLink(link: string): boolean {
+  try {
+    const url = new URL(link);
+    return url.protocol === "https:" && !url.username && !url.password && isWorkdayHost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function hostOf(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Signs in on the application tab once the account is verified.
+ *
+ * That tab was left at the sign-in gate. Should it have moved on, reloading
+ * the step brings back the gate - or the form itself, if the link signed this
+ * browser in - and failing both, the walk in from the advert is replayed.
+ */
+async function signInAfterVerification(
+  page: Page,
+  credentials: AtsCredentials,
+): Promise<{ ok: boolean; detail: string }> {
+  if (!(await atCredentialGate(page))) {
+    await page.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    if (await atApplicationForm(page)) return { ok: true, detail: "already signed in after verification" };
+    if (!(await atCredentialGate(page))) {
+      await clickIfPresent(page, SEL.apply, 10_000);
+      await clickIfPresent(page, SEL.applyManually, 8000);
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+    }
+  }
+  return await signIn(page, credentials);
 }
 
 /** Polls allowed for a registration submit to settle, 1.5s apart. */
