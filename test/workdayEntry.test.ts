@@ -756,3 +756,78 @@ describe("recoverWorkdayError", () => {
 });
 
 
+
+// Red Hat's tenant requires 14 characters and lists the rule on its
+// create-account page; a shorter stored password could never register there.
+describe("a tenant whose password minimum exceeds the stored password", () => {
+  const STORED = "test-password-value";
+  const LENGTHENED = STORED.repeat(2);
+
+  beforeEach(() => {
+    process.env.AUTOAPPLY_ATS_PASSWORD = STORED;
+    process.env.AUTOAPPLY_ATS_EMAIL = "candidate@example.com";
+  });
+
+  it("registers with the stored password lengthened to the stated minimum", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      signInLink: CREDENTIALS,
+      createAccountSubmitButton: FORM,
+    });
+    tenant.bodyText += " Password Requirements: An uppercase character. A minimum of 24 characters.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("form");
+    expect(result.createdAccount).toBe(true);
+    expect(tenant.filled.password).toBe(LENGTHENED);
+    expect(tenant.filled.verifyPassword).toBe(LENGTHENED);
+  });
+
+  it("signs back in with the lengthened password instead of registering twice", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: () => (tenant.filled.password === LENGTHENED ? FORM : CREDENTIALS),
+      createAccountLink: REGISTRATION,
+      signInLink: CREDENTIALS,
+      createAccountSubmitButton: FORM,
+    });
+    tenant.bodyText += " A minimum of 24 characters.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("form");
+    expect(result.createdAccount).toBe(false);
+    expect(tenant.clicks).not.toContain("createAccountSubmitButton");
+  });
+
+  it("keeps the stored password where it already meets the minimum", async () => {
+    const tenant = new FakeTenant(ADVERT, {
+      adventureButton: MODAL,
+      applyManually: CHOOSER,
+      SignInWithEmailButton: CREDENTIALS,
+      signInSubmitButton: CREDENTIALS,
+      createAccountLink: REGISTRATION,
+      createAccountSubmitButton: FORM,
+    });
+    tenant.bodyText += " A minimum of 8 characters.";
+
+    const result = await enterWorkdayApplication(tenant.asPage(), "fallback@example.com", {
+      allowAccountCreation: true,
+    });
+
+    expect(result.reached).toBe("form");
+    expect(tenant.filled.password).toBe(STORED);
+    expect(tenant.clicks).not.toContain("signInLink");
+  });
+});

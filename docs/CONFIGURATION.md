@@ -235,6 +235,23 @@ connections so they load the new schema. Once the new code is running,
 
 Start from `presets/ai-security-us-canada.json`, which contains 135 boards verified live against the ATS APIs. `npm run init` copies it for you. It is a starting point, not a fixed list: this file is your own selection, so add and remove boards freely. Boards found during a campaign land in your copy, not in the repository, so contribute anything worth sharing back to the preset.
 
+## Workday accounts (environment only)
+
+Workday makes every applicant register on each employer's tenant, so Workday
+boards need a password the server can register and sign in with.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AUTOAPPLY_ATS_PASSWORD` | - | Password for the candidate accounts the server creates and signs into. Without it a Workday submission stops with a `credentials_missing` error. |
+| `AUTOAPPLY_ATS_EMAIL` | `personal.email` | Account email, when it should differ from the profile's. |
+
+Use one password that satisfies common rules (upper and lower case, a digit, a
+symbol). A tenant whose create-account page states a longer minimum - Red Hat
+requires 14 characters - is registered with the password repeated until it is
+long enough, and later runs on that tenant sign in with the same lengthened
+password. It is never written to a file and is redacted from logs like the
+original.
+
 ## Verification codes (environment only)
 
 Greenhouse increasingly emails a one-time code before it accepts a submission,

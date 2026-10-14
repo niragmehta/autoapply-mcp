@@ -1,7 +1,7 @@
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
-import { getAtsCredentials, type AtsCredentials } from "./credentials.js";
+import { getAtsCredentials, lengthenedPassword, type AtsCredentials } from "./credentials.js";
 import { isWorkdayHost } from "./verificationLinks.js";
 
 /**
@@ -1797,13 +1797,24 @@ async function signIn(page: Page, credentials: AtsCredentials): Promise<{ ok: bo
 
 async function createAccount(
   page: Page,
-  credentials: AtsCredentials,
+  stored: AtsCredentials,
   awaitVerificationLink?: (since: Date) => Promise<string | null>,
 ): Promise<{ ok: boolean; created: boolean; detail: string }> {
   const onSignIn = await page.locator(SEL.verifyPassword).first().isVisible().catch(() => false);
   if (!onSignIn) {
     const switched = await clickIfPresent(page, SEL.createAccountLink, 5000);
     if (!switched) return { ok: false, created: false, detail: "could not reach the create-account form" };
+  }
+
+  // A tenant that states a longer minimum than the stored password allows
+  // could only ever have been registered with the lengthened one, so an
+  // earlier run's account is tried under it before registering again.
+  const minimum = await statedPasswordMinimum(page);
+  const credentials =
+    minimum > stored.password.length ? { ...stored, password: lengthenedPassword(stored.password, minimum) } : stored;
+  if (credentials !== stored) {
+    const returning = await signInWithLengthenedPassword(page, credentials, awaitVerificationLink);
+    if (returning) return returning;
   }
 
   await page.locator(SEL.email).first().fill(credentials.email);
@@ -1877,6 +1888,51 @@ async function createAccount(
     created: false,
     detail: error ? `account creation refused: ${error.slice(0, 200)}` : "account creation did not complete",
   };
+}
+
+/**
+ * The longest password minimum the page states, or 0 when it states none.
+ * Red Hat lists "A minimum of 14 characters" among its password requirements.
+ */
+const PASSWORD_MINIMUM_TEXT = /\b(?:minimum(?: of)?|at least)\s+(\d{1,2})\s+characters?\b/gi;
+
+async function statedPasswordMinimum(page: Page): Promise<number> {
+  const text = (await page.locator("body").allInnerTexts().catch(() => [] as string[])).join(" ");
+  return Math.max(0, ...[...text.matchAll(PASSWORD_MINIMUM_TEXT)].map((match) => Number(match[1])));
+}
+
+/**
+ * Signs in with the lengthened password from the create-account form, for a
+ * tenant an earlier run already registered on. Returns undefined, back on the
+ * create-account form, when there is no such account to use.
+ */
+async function signInWithLengthenedPassword(
+  page: Page,
+  credentials: AtsCredentials,
+  awaitVerificationLink?: (since: Date) => Promise<string | null>,
+): Promise<{ ok: boolean; created: boolean; detail: string } | undefined> {
+  if (!(await clickIfPresent(page, SEL.signInLink, 5000))) return undefined;
+  const returning = await signIn(page, credentials);
+  if (returning.ok) {
+    return { ok: true, created: false, detail: "signed in with the lengthened password this tenant requires" };
+  }
+  if (VERIFY_ACCOUNT_TEXT.test(returning.detail) && awaitVerificationLink) {
+    const requestedAt = new Date();
+    if (await requestVerificationEmail(page, credentials.email)) {
+      const verified = await verifyByEmailedLink(page, credentials, awaitVerificationLink, requestedAt);
+      return {
+        ok: verified.ok,
+        created: false,
+        detail: verified.ok
+          ? "verified the existing account via the emailed link and signed in with the lengthened password"
+          : `an account for ${credentials.email} exists on this tenant but is not verified yet; ${verified.detail}`,
+      };
+    }
+  }
+  if (!(await clickIfPresent(page, SEL.createAccountLink, 5000))) {
+    return { ok: false, created: false, detail: "could not return to the create-account form" };
+  }
+  return undefined;
 }
 
 /**

@@ -40,6 +40,18 @@ export function getAtsCredentials(profileEmail: string): AtsCredentials {
 }
 
 /**
+ * The account password lengthened to a tenant's stated minimum. Red Hat's
+ * Workday tenant demands 14 characters, so a shorter stored password could
+ * never register there. Repeating it keeps every character class the tenant
+ * already accepted, is the same on every run - so the account can be signed
+ * into again - and is still removed whole by redactSecrets.
+ */
+export function lengthenedPassword(password: string, minimum: number): string {
+  if (password.length === 0 || password.length >= minimum) return password;
+  return password.repeat(Math.ceil(minimum / password.length));
+}
+
+/**
  * Removes the password from text that is about to be logged or surfaced.
  *
  * A failing page often echoes what was typed into it, and an error message is

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { getAtsCredentials, hasAtsCredentials, redactSecrets } from "../src/submission/credentials.js";
+import { getAtsCredentials, hasAtsCredentials, lengthenedPassword, redactSecrets } from "../src/submission/credentials.js";
 import { isWorkdayUrl } from "../src/submission/workdayFlow.js";
 
 afterEach(() => {
@@ -62,5 +62,22 @@ describe("workday url detection", () => {
     expect(isWorkdayUrl("https://myworkdayjobs.com.evil.example/x")).toBe(false);
     expect(isWorkdayUrl("https://job-boards.greenhouse.io/acme")).toBe(false);
     expect(isWorkdayUrl("not a url")).toBe(false);
+  });
+});
+
+describe("lengthenedPassword", () => {
+  it("repeats a short password until it meets the minimum", () => {
+    expect(lengthenedPassword("Ab1!xyz", 14)).toBe("Ab1!xyzAb1!xyz");
+    expect(lengthenedPassword("Ab1!xyz", 15)).toBe("Ab1!xyzAb1!xyzAb1!xyz");
+  });
+
+  it("leaves a password that already meets the minimum unchanged", () => {
+    expect(lengthenedPassword("Ab1!xyz", 7)).toBe("Ab1!xyz");
+    expect(lengthenedPassword("Ab1!xyz", 0)).toBe("Ab1!xyz");
+  });
+
+  it("is still fully redacted", () => {
+    process.env.AUTOAPPLY_ATS_PASSWORD = "Ab1!xyz";
+    expect(redactSecrets(`typed ${lengthenedPassword("Ab1!xyz", 14)}`)).not.toContain("xyz");
   });
 });
