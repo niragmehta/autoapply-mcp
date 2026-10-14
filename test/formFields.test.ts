@@ -2992,3 +2992,24 @@ describe("bankAnswerFor", () => {
     expect(bankAnswerFor("Why are you interested in working here?", [entry])?.key).toBe("why-multi");
   });
 });
+
+/**
+ * A stored "Yes" says the candidate is authorized, not how. Workday-style lists
+ * offer "Yes - US Citizen", "Yes - Permanent Resident" and "Yes - Visa holder";
+ * matching the bare word took the first and claimed a status nobody stated.
+ */
+describe("choices claiming US citizenship or permanent residency", () => {
+  const statuses = ["Yes - US Citizen", "Yes - Permanent Resident (Green Card)", "Yes - Visa holder (H-1B, TN, etc.)", "No"];
+
+  it("is never selected by a bare yes", () => {
+    expect(pickOptionIndex(statuses, ["Yes"])).toBe(2);
+  });
+
+  it("is selected by an answer naming the status", () => {
+    expect(pickOptionIndex(statuses, ["Yes - US Citizen"])).toBe(0);
+  });
+
+  it("keeps a choice that denies the status", () => {
+    expect(pickOptionIndex(["Yes, I am a US citizen", "No, I am not a US citizen"], ["No"])).toBe(1);
+  });
+});

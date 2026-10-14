@@ -1209,6 +1209,12 @@ function countsTnAsSponsorship(optionTexts: readonly string[]): boolean {
   return optionTexts.some((text) => TN_NAMED.test(text) && /sponsor/i.test(text));
 }
 
+/** Wording that claims US citizenship or US permanent residency outright. */
+const US_STATUS_CLAIM =
+  /\b(?:u\.?\s?s\.?\s+citizen|citizen of the (?:united states|u\.?\s?s\.?)|american citizen|green\s?card|(?:lawful\s+)?permanent\s+resident)/i;
+/** A choice that denies the status, such as "No, I am not a US citizen", claims nothing. */
+const DENIES_US_STATUS = /\b(?:not|neither|nor)\s+(?:a\s+|an\s+)?(?:u\.?\s?s\.?\s+)?(?:citizen|permanent resident|green\s?card)/i;
+
 /** Index of the option best matching any candidate, or -1 when none match. */
 export function pickOptionIndex(
   optionTexts: readonly string[],
@@ -1217,6 +1223,22 @@ export function pickOptionIndex(
   if (countsTnAsSponsorship(optionTexts) && !candidates.some((candidate) => TN_NAMED.test(candidate))) {
     return -1;
   }
+  // A stored "Yes" says the candidate is authorized, not how. Lists offering
+  // "Yes - US Citizen", "Yes - Permanent Resident" and "Yes - Visa holder" let
+  // the bare word take the first, claiming a status nobody stated, so such a
+  // choice is only open to an answer that names the status itself.
+  const namesStatus = candidates.some((candidate) => US_STATUS_CLAIM.test(candidate));
+  const offered = optionTexts
+    .map((text, index) => ({ text, index }))
+    .filter(({ text }) => namesStatus || !US_STATUS_CLAIM.test(text) || DENIES_US_STATUS.test(text));
+  const picked = pickAmongOptions(
+    offered.map(({ text }) => text),
+    candidates,
+  );
+  return picked >= 0 ? (offered[picked]?.index ?? -1) : -1;
+}
+
+function pickAmongOptions(optionTexts: readonly string[], candidates: readonly string[]): number {
   for (const candidate of candidates) {
     if (isWebAddress(candidate)) {
       const spelled = optionTexts.findIndex((text) => optionSpellsAddress(text, candidate));

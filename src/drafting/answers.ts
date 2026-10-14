@@ -474,6 +474,33 @@ function resolveTnChoice(
   return choice ? { value: choice, unmatchedChoice: false } : { value: entry.answer, unmatchedChoice: true };
 }
 
+/** Choice wording that claims US citizenship, or US permanent residency, outright. */
+const US_CITIZENSHIP_CLAIM = /\b(?:u\.?\s?s\.?\s+citizen|citizen of the (?:united states|u\.?\s?s\.?)|american citizen)/i;
+const US_PERMANENT_RESIDENCY_CLAIM = /\b(?:green\s?card|(?:lawful\s+)?permanent\s+resident)/i;
+/** A choice that denies the status, such as "No, I am not a US citizen", claims nothing. */
+const DENIES_US_STATUS = /\b(?:not|neither|nor)\s+(?:a\s+|an\s+)?(?:u\.?\s?s\.?\s+)?(?:citizen|permanent resident|green\s?card)/i;
+const US_COUNTRY = /^(?:us|usa|u\.s\.(?:a\.)?|united states(?: of america)?)$/i;
+
+/**
+ * The offered choices the candidate may select given the status the profile
+ * records. SeatGeek lists "Yes, I have US work authorization as a US Citizen or
+ * US Permanent Resident/Green Card Holder" ahead of "Yes, ... via a
+ * non-immigrant visa (... TN ...)", and a stored "Yes" took the first - telling
+ * the employer a Canadian citizen holds US citizenship. Citizenship is read
+ * from the recorded citizenships; permanent residency implies authorization to
+ * work in the US, so a profile not authorized there never claims it.
+ */
+function claimableOptions(options: readonly string[], profile: Profile): string[] {
+  const { citizenships, authorizedIn } = profile.workAuthorization;
+  const usCitizen = citizenships.some((country) => US_COUNTRY.test(country.trim()));
+  const usAuthorized = usCitizen || authorizedIn.some((country) => US_COUNTRY.test(country.trim()));
+  return options.filter((option) => {
+    if (DENIES_US_STATUS.test(option)) return true;
+    if (!usCitizen && US_CITIZENSHIP_CLAIM.test(option)) return false;
+    return usAuthorized || !US_PERMANENT_RESIDENCY_CLAIM.test(option);
+  });
+}
+
 /**
  * Resolves a stored answer against the choices a question actually offers.
  * Falls back to the plain answer when the question is free text.
@@ -481,6 +508,7 @@ function resolveTnChoice(
 function resolveApprovedValue(
   entry: { answer: string; alternatives: string[] },
   question: FormQuestion,
+  profile?: Profile,
 ): { value: string; unmatchedChoice: boolean } {
   const hadOptions = (question.options?.length ?? 0) > 0;
   // Declaring no alternatives used to skip option matching entirely, so a
@@ -492,7 +520,8 @@ function resolveApprovedValue(
     return { value: entry.answer, unmatchedChoice: false };
   }
   const preferences = [entry.answer, ...entry.alternatives].filter((value) => value.trim().length > 0);
-  const match = selectBestOption(preferences, question.options);
+  const options = profile ? claimableOptions(question.options ?? [], profile) : question.options;
+  const match = selectBestOption(preferences, options);
   return { value: match.value, unmatchedChoice: !match.matchedOption };
 }
 
@@ -649,7 +678,7 @@ function answerOne(
     // sponsorship for?" matches the stored "need sponsorship" answer, so a bare
     // "No" was headed for a list of country names. A stored answer the question
     // does not offer is unusable, whatever its wording says.
-    const resolved = approved ? (resolveTnChoice(approved, question) ?? resolveApprovedValue(approved, question)) : undefined;
+    const resolved = approved ? (resolveTnChoice(approved, question) ?? resolveApprovedValue(approved, question, profile)) : undefined;
     const unusable = resolved?.unmatchedChoice === true;
     const useApproved = approved !== undefined && canAutoFill(approved) && !reviewAll && !unusable;
     return {
@@ -705,10 +734,10 @@ function answerOne(
   const factualFallback =
     approvedEarly !== undefined &&
     category === "contact" &&
-    resolveApprovedValue(approvedEarly, asked).unmatchedChoice &&
+    resolveApprovedValue(approvedEarly, asked, profile).unmatchedChoice &&
     CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
   if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback && !yesNoForEssay(question, approvedEarly.answer)) {
-    const resolved = resolveApprovedValue(approvedEarly, asked);
+    const resolved = resolveApprovedValue(approvedEarly, asked, profile);
     // An optional choice question offering none of the stored preferences needs
     // no decision: leaving it blank is the honest outcome, and for a decline
     // preference it is exactly the intended one. Figma's Pronouns list offers
@@ -784,7 +813,7 @@ function answerOne(
     // handed back. Demographic fields are left to the decline handling at fill
     // time, which knows each board's wording for declining.
     const offered = personal.category === "contact" && personal.answer.trim().length > 0 && (question.options?.length ?? 0) > 0;
-    const resolved = offered ? resolveApprovedValue({ answer: personal.answer, alternatives: [] }, question) : undefined;
+    const resolved = offered ? resolveApprovedValue({ answer: personal.answer, alternatives: [] }, question, profile) : undefined;
     const unusable = resolved?.unmatchedChoice === true;
     return {
       questionKey: question.key,
@@ -902,7 +931,7 @@ function answerOne(
       // decorated - Instacart lists "(CAN) British Columbia", not "British
       // Columbia". Handing the bare value to a closed list submits something the
       // form does not offer, so resolve it against the options when there are any.
-      const resolved = resolveApprovedValue({ answer: plain, alternatives: [] }, question);
+      const resolved = resolveApprovedValue({ answer: plain, alternatives: [] }, question, profile);
       const value = resolved.unmatchedChoice ? plain : resolved.value;
       const unusable = resolved.unmatchedChoice && (question.options?.length ?? 0) > 0;
       return {

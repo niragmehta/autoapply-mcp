@@ -544,3 +544,58 @@ describe("a stored yes/no answer and a free-text prompt", () => {
     expect(answers[0]?.answer).toBe("No");
   });
 });
+
+/**
+ * SeatGeek offers "Yes, I have US work authorization as a US Citizen or US
+ * Permanent Resident/Green Card Holder" ahead of "Yes, I have US Work
+ * authorization via a non-immigrant visa (... TN ...)". A stored "Yes" took the
+ * first, telling the employer a Canadian citizen holds US citizenship.
+ */
+describe("choices that claim a US status the profile does not record", () => {
+  const authorizedNow = {
+    key: "us-work-authorization-now",
+    label: "Currently authorized to work in the US",
+    patterns: ["authorized to work in the united states"],
+    answer: "Yes",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+  const seatGeek = choice("Are you currently authorized to work in the United States?", [
+    "Yes, I have US work authorization as a US Citizen or US Permanent Resident/Green Card Holder",
+    "Yes, I have US Work authorization via a non-immigrant visa (H-1B, L-1, F-1 OPT OR CPT, TN, E-3, O-1, Dependent Visa)",
+    "No, I am not currently authorized to work in the United States",
+  ]);
+
+  // Decided answers, as a candidate who has settled their work-authorization wording would have.
+  function decided(answers: Profile["answers"], citizenships = ["Canada"], authorizedIn = ["CA"]): Profile {
+    const profile = profileWith(answers);
+    return {
+      ...profile,
+      workAuthorization: { ...profile.workAuthorization, citizenships, authorizedIn, alwaysReviewManually: false },
+    };
+  }
+
+  it("never selects a US citizenship or green card claim for a Canadian citizen", () => {
+    const { answers } = draftAnswers([seatGeek], decided([authorizedNow]), makeCampaign());
+
+    expect(answers[0]?.answer).not.toMatch(/citizen|green card/i);
+    expect(answers[0]?.answer).toMatch(/^Yes, I have US Work authorization via a non-immigrant visa/);
+  });
+
+  it("still selects the citizenship choice for a US citizen", () => {
+    const { answers } = draftAnswers([seatGeek], decided([authorizedNow], ["United States"], ["US"]), makeCampaign());
+
+    expect(answers[0]?.answer).toMatch(/US Citizen/);
+  });
+
+  it("keeps a choice that denies the status", () => {
+    const denial = { ...authorizedNow, answer: "No, I am not a US citizen or permanent resident", alternatives: [] };
+    const question = choice("Are you currently authorized to work in the United States?", [
+      "Yes, I am a US citizen or permanent resident",
+      "No, I am not a US citizen or permanent resident",
+    ]);
+    const { answers } = draftAnswers([question], decided([denial]), makeCampaign());
+
+    expect(answers[0]?.answer).toBe("No, I am not a US citizen or permanent resident");
+  });
+});
