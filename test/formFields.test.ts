@@ -1285,6 +1285,23 @@ describe("single name inputs", () => {
     );
     expect(matches.map((match) => match.answer?.answer ?? null)).toEqual(["Casey", null, "Moore"]);
   });
+
+  // Disney's Workday name block offers Prefix and Suffix dropdowns named
+  // "legalName--title" and "legalName--social". The whole name bound to both
+  // and each spent minutes searching "Casey Moore" among "Mr." and "Jr".
+  it("never offers the whole name to a prefix or suffix", () => {
+    const augmented = augmentAnswersForBrowser([answer("First Name", "Casey"), answer("Last Name", "Moore")]);
+    const matches = matchFields(
+      [
+        field("Prefix", { name: "legalName--title", role: "combobox", selectorIndex: 0 }),
+        field("First Name*", { name: "legalName--firstName", selectorIndex: 1 }),
+        field("Last Name*", { name: "legalName--lastName", selectorIndex: 2 }),
+        field("Suffix", { name: "legalName--social", role: "combobox", selectorIndex: 3 }),
+      ],
+      augmented,
+    );
+    expect(matches.map((match) => match.answer?.answer ?? null)).toEqual([null, "Casey", "Moore", null]);
+  });
 });
 
 describe("camel case brand names in patterns", () => {
@@ -3255,5 +3272,26 @@ describe("stalePlaceholderFields", () => {
     const planned = field("Comments (Optional)", { type: "textarea", required: false, selectorIndex: 8, value: "N/A" });
     const plan = buildFillPlan([required, real, prompt, planned], [answer("Comments (Optional)", "Happy to discuss.")]);
     expect(stalePlaceholderFields([required, real, prompt, planned], plan)).toEqual([]);
+  });
+});
+
+// Disney's consent question explains that "yes" means mail "to the email
+// address associated with your job applicant profile", and the stored email
+// address bound to it as if it were the answer.
+describe("contact details offered to yes/no questions", () => {
+  const email = answer("Email", "casey@example.com", { questionKey: "email" });
+
+  it("does not answer a consent question with an email address it merely mentions", () => {
+    const consent = field(
+      "Do you consent to the use of your personal information for consideration for future job and career opportunities? Selecting \u201cyes\u201d indicates you would like to receive information, including via email communication to the email address associated with your job applicant profile.",
+      { role: "combobox", required: true },
+    );
+    expect(matchFields([consent], [email])[0]?.answer).toBeNull();
+  });
+
+  it("still gives the email to a question that asks for it", () => {
+    expect(matchFields([field("Can you share the best email address to reach you?")], [email])[0]?.answer?.answer).toBe(
+      "casey@example.com",
+    );
   });
 });

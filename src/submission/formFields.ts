@@ -210,7 +210,24 @@ const MIN_CONFIDENCE = 0.6;
 const BARE_NAME_FIELD =
   /^(?:your |applicant |candidate )?(?:full |legal )?name$|\bfirst\s+(?:and\s+|&\s*|\/\s*)?(?:middle\s+(?:and\s+)?)?last\s+name\b/;const PARTIAL_NAME_ANSWER = /^(?:first|last|middle|preferred|nick|given|family|sur)\s?name\b/;
 const WHOLE_NAME_ANSWER = /^(?:your |applicant |candidate )?(?:full |legal )?name$/;
-const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b/;
+/** A field holding one part of a name, including the honorifics either side of it. */
+const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b|^(?:name )?(?:prefix|suffix|salutation|honorific)$/;
+
+const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
+const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
+const ASKS_FOR_CONTACT = /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address)\b/i;
+
+/**
+ * A yes/no question that only mentions a contact detail is not asking for it.
+ * Disney's consent question explains that "yes" means mail "to the email address
+ * associated with your job applicant profile", and the stored address bound to
+ * it as the answer. Only a question whose own first sentence asks for the
+ * detail - "Can you share the best email address to reach you?" - may take it.
+ */
+function yesNoQuestionTakesContact(label: string, value: string): boolean {
+  const question = label.split("?")[0] ?? label;
+  return YES_NO_LEAD.test(question) && CONTACT_VALUE.test(value.trim()) && !ASKS_FOR_CONTACT.test(question);
+}
 const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge|i understand|understand|understood|i confirm|confirm|i accept|accept)\b/i;
 
 /**
@@ -478,10 +495,12 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // Workday names each input in its legal-name block "legalName--<part>", so
   // the attribute shares "legal name" with the whole-name answer and put it in
   // Middle Name: Warner Bros. Discovery received "Casey Casey Moore Moore". A
-  // field asking for one part of a name never takes the whole name.
+  // field asking for one part of a name never takes the whole name, and nor do
+  // the Prefix and Suffix dropdowns Disney's block puts either side of it.
   if (WHOLE_NAME_ANSWER.test(answerLabel) && NAME_PART_FIELD.test(fieldLabel) && !BARE_NAME_FIELD.test(fieldLabel)) {
     return true;
   }
+  if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
   // Sponsorship and authorization take opposite answers, so a question asking
   // whether sponsorship is required is only answered by an answer about
   // sponsorship - or by the drafted answer to that very question. The raw label
