@@ -22,6 +22,7 @@ import {
   optionSearchCandidates,
   orderFieldsForBrowser,
   pickOptionIndex,
+  stalePlaceholderFields,
   type ApprovedAnswerEntry,
   type FieldDescriptor,
   type FillPlan,
@@ -630,6 +631,15 @@ async function fillFormPage(
     const index = filled.findIndex((entry) => entry.label === label);
     if (index >= 0) filled.splice(index, 1);
     failedRequired.push(label);
+  }
+
+  for (const field of stalePlaceholderFields(fields, plan)) {
+    await page
+      .locator(`[data-autoapply-idx="${field.selectorIndex}"]`)
+      .first()
+      .fill("")
+      .catch(() => undefined);
+    logger.info("cleared a placeholder an earlier run left", { label: field.label });
   }
 
   return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups };

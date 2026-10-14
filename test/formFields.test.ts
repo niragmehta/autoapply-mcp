@@ -16,6 +16,7 @@ import {
   optionTextMatches,
   orderFieldsForBrowser,
   pickOptionIndex,
+  stalePlaceholderFields,
   type FieldDescriptor,
 } from "../src/submission/formFields.js";
 import type { DraftAnswer } from "../src/domain/job.js";
@@ -3204,5 +3205,55 @@ describe("opt-in and opt-out choices", () => {
       answer("Opt out", "No"),
     );
     expect(pickOptionIndex(["Opt-In", "Opt-Out"], candidates)).toBe(-1);
+  });
+});
+
+// Zendesk's Workday took the bank's "N/A" for "Twitter (Optional)", rejected
+// it as an invalid URL, and would not leave My Experience. An optional field
+// the candidate has nothing for is left empty.
+describe("placeholder answers for optional fields", () => {
+  const socialNone = {
+    key: "social-none",
+    label: "No social profiles",
+    patterns: ["twitter", "other links"],
+    answer: "N/A",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+
+  it("leaves an optional field empty rather than typing a placeholder into it", () => {
+    const twitter = field("Twitter (Optional)", { type: "url", required: false, selectorIndex: 4 });
+    expect(fallbackAnswersForFields([twitter], [], [socialNone])).toEqual([]);
+  });
+
+  it("still answers a required field with the placeholder", () => {
+    const twitter = field("Twitter", { type: "text", required: true, selectorIndex: 4 });
+    expect(fallbackAnswersForFields([twitter], [], [socialNone])[0]?.answer).toBe("N/A");
+  });
+
+  it("still fills an optional field with a real answer", () => {
+    const linkedin = field("LinkedIn URL (Optional)", { type: "url", required: false, selectorIndex: 5 });
+    const bank = [{ ...socialNone, key: "linkedin", patterns: ["linkedin"], answer: "https://www.linkedin.com/in/example" }];
+    expect(fallbackAnswersForFields([linkedin], [], bank)[0]?.answer).toBe("https://www.linkedin.com/in/example");
+  });
+});
+
+// The "N/A" an earlier run typed stays in a Workday draft, so leaving the
+// field alone on the next run still fails URL validation on My Experience.
+describe("stalePlaceholderFields", () => {
+  const twitter = field("Twitter (Optional)", { type: "url", required: false, selectorIndex: 4, value: "N/A" });
+
+  it("names an optional text field still holding a placeholder nothing will replace", () => {
+    const plan = buildFillPlan([twitter], []);
+    expect(stalePlaceholderFields([twitter], plan).map((f) => f.label)).toEqual(["Twitter (Optional)"]);
+  });
+
+  it("leaves required fields, real values, planned fields and prompts alone", () => {
+    const required = field("Other links", { type: "text", required: true, selectorIndex: 5, value: "N/A" });
+    const real = field("Website (Optional)", { type: "url", required: false, selectorIndex: 6, value: "https://example.com" });
+    const prompt = field("Suffix (Optional)", { type: "text", role: "combobox", required: false, selectorIndex: 7, value: "None" });
+    const planned = field("Comments (Optional)", { type: "textarea", required: false, selectorIndex: 8, value: "N/A" });
+    const plan = buildFillPlan([required, real, prompt, planned], [answer("Comments (Optional)", "Happy to discuss.")]);
+    expect(stalePlaceholderFields([required, real, prompt, planned], plan)).toEqual([]);
   });
 });

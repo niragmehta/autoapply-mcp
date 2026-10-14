@@ -1751,6 +1751,30 @@ function todayForSignature(): string {
   return `${pad(now.getMonth() + 1)}/${pad(now.getDate())}/${now.getFullYear()}`;
 }
 
+/** A stored answer that states nothing, standing in for "no answer". */
+const PLACEHOLDER_ANSWER = /^(?:n\/?a|none|not applicable|-+)\.?$/i;
+
+const TEXT_ENTRY_TYPES = new Set(["text", "url", "email", "tel", "search", "textarea"]);
+
+/**
+ * Optional text fields still holding a placeholder that nothing now fills.
+ * Workday keeps a draft's values between runs, so the "N/A" an earlier run
+ * typed into Zendesk's "Twitter (Optional)" stayed, failed URL validation and
+ * held My Experience on every later attempt. An empty optional field says
+ * the same thing and passes.
+ */
+export function stalePlaceholderFields(fields: readonly FieldDescriptor[], plan: FillPlan): FieldDescriptor[] {
+  const planned = new Set(plan.toFill.map((match) => match.field.selectorIndex));
+  return fields.filter(
+    (field) =>
+      field.required === false &&
+      field.role !== "combobox" &&
+      TEXT_ENTRY_TYPES.has(field.type) &&
+      !planned.has(field.selectorIndex) &&
+      PLACEHOLDER_ANSWER.test((field.value ?? "").trim()),
+  );
+}
+
 export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
   answers: readonly DraftAnswer[],
   bank: readonly ApprovedAnswerEntry[],
@@ -1835,6 +1859,11 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
     }
 
     const entry = bestBankEntry(match.field, eligible);
+    // An optional field the candidate has nothing for is left empty. Zendesk's
+    // Workday took "N/A" for "Twitter (Optional)", rejected it as an invalid
+    // URL and would not leave My Experience; a placeholder says no more than
+    // the empty field does.
+    if (entry && match.field.required === false && PLACEHOLDER_ANSWER.test(entry.answer.trim())) continue;
     // A bank entry that cannot serve this field is no reason to leave the field
     // blank - the personal and narrative resolvers below may still hold the
     // right answer. Abridge asks "Which state do you currently reside in?"; a
