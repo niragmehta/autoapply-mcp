@@ -299,6 +299,10 @@ function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boo
 /** A sentence in the label that is itself a yes/no question. */
 const YES_NO_QUESTION = /(?:^|[.!?:;\u2014]\s*)(?:do|does|did|are|is|was|were|have|has|had|will|would|can|could|should)\s[^?]*\?/i;
 
+/** A choice that lets the candidate decline to self-identify. */
+const OFFERS_DECLINE =
+  /\b(?:decline|prefer not|rather not|not (?:wish|want) to|don'?t (?:wish|want) to|choose not to|not to (?:say|answer|disclose|self[- ]?identify))/i;
+
 /**
  * A free-text prompt asking for prose cannot be answered "Yes" or "No".
  * Accordion's "Describe a specific AI-assisted workflow you've built or refined
@@ -737,7 +741,15 @@ function answerOne(
     resolveApprovedValue(approvedEarly, asked, profile).unmatchedChoice &&
     CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
   if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback && !yesNoForEssay(question, approvedEarly.answer)) {
-    const resolved = resolveApprovedValue(approvedEarly, asked, profile);
+    const stated = resolveApprovedValue(approvedEarly, asked, profile);
+    // A required self-identification question that offers no way to decline
+    // takes the value the candidate stored for exactly that case.
+    const noDecline =
+      stated.unmatchedChoice && question.required && approvedEarly.whenNoDecline?.trim() &&
+      !(question.options ?? []).some((option) => OFFERS_DECLINE.test(option))
+        ? resolveApprovedValue({ answer: approvedEarly.whenNoDecline, alternatives: [] }, asked, profile)
+        : undefined;
+    const resolved = noDecline && !noDecline.unmatchedChoice ? noDecline : stated;
     // An optional choice question offering none of the stored preferences needs
     // no decision: leaving it blank is the honest outcome, and for a decline
     // preference it is exactly the intended one. Figma's Pronouns list offers
@@ -781,6 +793,7 @@ function answerOne(
             skipOptional ? ". Optional, so it is left blank." : ""
           }`
         : "",
+      ...(approvedEarly.whenNoDecline ? { whenNoDecline: approvedEarly.whenNoDecline } : {}),
     };
   }
 

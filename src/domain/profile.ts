@@ -98,6 +98,13 @@ export const ApprovedAnswerSchema = z.object({
    * decision stops the question blocking every application.
    */
   skip: z.boolean().default(false),
+  /**
+   * For a declined self-identification answer: the value to select only when
+   * the form makes the question required and offers no way to decline, such as
+   * a gender list of just "Male" and "Female". Any decline choice is still
+   * taken first. Without it such a form stops for a person.
+   */
+  whenNoDecline: z.string().optional(),
   note: z.string().optional(),
 });
 
@@ -158,6 +165,8 @@ export const CompensationPreferenceSchema = z.object({
 export const StoredAnswerSchema = z.object({
   value: z.string().default(""),
   autoFill: z.boolean().default(false),
+  /** See ApprovedAnswerSchema.whenNoDecline. */
+  whenNoDecline: z.string().optional(),
 });
 export type StoredAnswer = z.infer<typeof StoredAnswerSchema>;
 

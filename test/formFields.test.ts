@@ -3013,3 +3013,59 @@ describe("choices claiming US citizenship or permanent residency", () => {
     expect(pickOptionIndex(["Yes, I am a US citizen", "No, I am not a US citizen"], ["No"])).toBe(1);
   });
 });
+
+/**
+ * Autodesk's Workday form requires "Hispanic or Latino?" with only Yes and No,
+ * and gender with only Male and Female. A stored decline matched neither, so a
+ * required field stayed empty and the application stopped. The candidate can
+ * store a value to use only where the form offers no way to decline.
+ */
+describe("a decline with a value for forms that offer no decline", () => {
+  const gender = field("Please select your gender.", { type: "select", name: "gender", required: true });
+  const declined: DraftAnswer = {
+    questionKey: "gender-self-id",
+    label: "Gender",
+    answer: "Decline to self-identify",
+    source: "approved-answer",
+    citation: "profile.answers.gender-self-id",
+    requiresHuman: false,
+    required: true,
+    category: "general",
+    guidance: "",
+    whenNoDecline: "Male",
+  };
+
+  it("still declines when the form offers a decline", () => {
+    expect(pickOptionIndex(["Male", "Female", "I do not wish to answer"], optionSearchCandidates(gender, declined))).toBe(2);
+  });
+
+  it("uses the stored value only when no decline is offered", () => {
+    expect(pickOptionIndex(["Male", "Female"], optionSearchCandidates(gender, declined))).toBe(0);
+  });
+
+  it("selects nothing without a stored value", () => {
+    const { whenNoDecline: _unused, ...plain } = declined;
+    expect(pickOptionIndex(["Male", "Female"], optionSearchCandidates(gender, plain))).toBe(-1);
+  });
+
+  it("leaves an optional field blank rather than answer it", () => {
+    const optional = { ...gender, required: false };
+    expect(pickOptionIndex(["Male", "Female"], optionSearchCandidates(optional, declined))).toBe(-1);
+  });
+
+  it("carries the value from the answer bank to the live field", () => {
+    const bank = [
+      {
+        key: "gender-self-id",
+        label: "Gender",
+        patterns: ["gender"],
+        answer: "Decline to self-identify",
+        alternatives: [],
+        allowAutoFill: true,
+        whenNoDecline: "Male",
+      },
+    ];
+    const derived = fallbackAnswersForFields([gender], [], bank);
+    expect(derived[0]?.whenNoDecline).toBe("Male");
+  });
+});

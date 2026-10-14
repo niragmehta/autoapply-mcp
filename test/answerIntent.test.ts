@@ -599,3 +599,37 @@ describe("choices that claim a US status the profile does not record", () => {
     expect(answers[0]?.answer).toBe("No, I am not a US citizen or permanent resident");
   });
 });
+
+/**
+ * Autodesk requires gender with only "Male" and "Female" offered. A stored
+ * decline cannot be selected there, so the candidate's value for exactly that
+ * case is used - and only there.
+ */
+describe("a decline with a value for forms that offer no decline", () => {
+  const gender = {
+    key: "gender-self-id",
+    label: "Gender",
+    patterns: ["gender"],
+    answer: "Decline to self-identify",
+    alternatives: ["I prefer not to say"],
+    allowAutoFill: true,
+    whenNoDecline: "Male",
+  };
+
+  it("uses the stored value when no decline is offered", () => {
+    const { answers } = draftAnswers([choice("What is your gender?", ["Male", "Female"])], profileWith([gender]), makeCampaign());
+
+    expect(answers[0]?.answer).toBe("Male");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("declines whenever a decline is offered", () => {
+    const { answers } = draftAnswers(
+      [choice("What is your gender?", ["Male", "Female", "I'd rather not say"])],
+      profileWith([gender]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).not.toBe("Male");
+  });
+});

@@ -16,6 +16,8 @@ export type PersonalResolution = {
   citation: string;
   /** True when the candidate pre-authorized this exact field. */
   authorized: boolean;
+  /** Value for a required self-identification question that offers no decline. */
+  whenNoDecline?: string;
 };
 
 type Resolver = {
@@ -352,6 +354,7 @@ export function resolvePersonal(label: string, profile: Profile): (PersonalResol
       citation: resolver.citation,
       authorized: stored.autoFill,
       category: resolver.category,
+      ...(stored.whenNoDecline ? { whenNoDecline: stored.whenNoDecline } : {}),
     };
   }
   return null;

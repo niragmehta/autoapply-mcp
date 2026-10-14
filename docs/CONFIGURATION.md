@@ -105,6 +105,8 @@ Pre-approved answers to recurring questions:
 
 `skip: true` records a deliberate decision to leave an optional field blank.
 
+`whenNoDecline` applies to a declined self-identification answer (gender, race, Hispanic or Latino, and so on), on a bank entry or on a `personal.demographics` field. Every decline wording the form offers is still tried first. The stored value is selected only when the question is required and offers no way to decline, such as a gender list of just "Male" and "Female". Without it, such a form stops for you.
+
 The shipped template carries 170 entries, each with a `note` explaining it:
 
 - An entry with an answer is a standing decision.

@@ -20,6 +20,7 @@ export function personalResolverFor(profile: Profile): PersonalResolver {
       citation: resolved.citation,
       category: resolved.category,
       authorized: resolved.authorized,
+      ...(resolved.whenNoDecline ? { whenNoDecline: resolved.whenNoDecline } : {}),
     };
   };
 }

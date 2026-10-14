@@ -788,7 +788,11 @@ const DECLINE_OPTION_CANDIDATES = [
 /** Ordered search strings to try when driving a typeahead combobox. */
 export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnswer, employer?: string): string[] {
   if (DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {
-    return [...DECLINE_OPTION_CANDIDATES];
+    // Every decline wording is tried first; the stored value is reached only
+    // when the form offers no way to decline at all. An optional field is
+    // declined by leaving it blank.
+    const fallback = field.required ? answer.whenNoDecline?.trim() : undefined;
+    return fallback ? [...DECLINE_OPTION_CANDIDATES, fallback] : [...DECLINE_OPTION_CANDIDATES];
   }
   const value = answerValueForField(field, answer);
   const veteran = veteranCandidates(value);
@@ -1524,6 +1528,8 @@ export type ApprovedAnswerEntry = {
   allowAutoFill: boolean;
   /** Other wordings the candidate approved for the same decision. */
   alternatives?: readonly string[];
+  /** Value for a required self-identification question that offers no decline. */
+  whenNoDecline?: string;
 };
 
 /** Resolves a stored personal answer for a live field label. */
@@ -1531,6 +1537,8 @@ export type PersonalResolver = (label: string) => {
   answer: string;
   citation: string;
   category: string;
+  /** Value for a required self-identification question that offers no decline. */
+  whenNoDecline?: string;
   /** Whether the candidate opted this field in for automatic use. */
   authorized: boolean;
 } | null;
@@ -1562,6 +1570,7 @@ function bankEntryAsAnswer(entry: ApprovedAnswerEntry): DraftAnswer {
     required: true,
     category: "general",
     guidance: "",
+    ...(entry.whenNoDecline ? { whenNoDecline: entry.whenNoDecline } : {}),
   };
 }
 
@@ -1792,6 +1801,7 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
           required: match.field.required ?? true,
           category: "general",
           guidance: "",
+          ...(entry.whenNoDecline ? { whenNoDecline: entry.whenNoDecline } : {}),
         });
         continue;
       }
@@ -1819,6 +1829,7 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
         required: match.field.required ?? true,
         category: personal.category,
         guidance: "",
+        ...(personal.whenNoDecline ? { whenNoDecline: personal.whenNoDecline } : {}),
       });
       continue;
     }

@@ -114,6 +114,8 @@ export const DraftAnswerSchema = z.object({
   category: z.string().default("general"),
   /** Advice shown alongside a question that a person must decide. */
   guidance: z.string().default(""),
+  /** See ApprovedAnswerSchema.whenNoDecline: used only when no decline choice is offered. */
+  whenNoDecline: z.string().optional(),
 });
 export type DraftAnswer = z.infer<typeof DraftAnswerSchema>;
 
