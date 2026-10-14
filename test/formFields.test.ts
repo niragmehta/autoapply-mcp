@@ -3069,3 +3069,46 @@ describe("a decline with a value for forms that offer no decline", () => {
     expect(derived[0]?.whenNoDecline).toBe("Male");
   });
 });
+
+/**
+ * Walmart asks "Are you legally able to work in the country where this job is
+ * located?". "located" scored against the stored location, so the city was
+ * offered to a Yes/No menu, nothing matched, and the bank's authorization
+ * answer was never consulted because the field already counted as answered.
+ */
+describe("a work-authorization question worded as legal ability", () => {
+  const legal = field("Are you legally able to work in the country where this job is located?*", {
+    type: "select",
+    required: true,
+    options: ["Select One", "Yes", "No"],
+  });
+  const location: DraftAnswer = {
+    questionKey: "location",
+    label: "Location",
+    answer: "Vancouver, British Columbia, Canada",
+    source: "profile",
+    citation: "identity.location",
+    requiresHuman: false,
+    required: true,
+    category: "contact",
+    guidance: "",
+  };
+
+  it("never takes the stored location", () => {
+    expect(matchFields([legal], [location])[0]?.answer).toBeNull();
+  });
+
+  it("falls through to the authorization answer", () => {
+    const bank = [
+      {
+        key: "auth-country-relative",
+        label: "Authorized in the country where the job is located",
+        patterns: ["legally able to work in the country where this job is located"],
+        answer: "Yes",
+        alternatives: [],
+        allowAutoFill: true,
+      },
+    ];
+    expect(fallbackAnswersForFields([legal], [location], bank)[0]?.answer).toBe("Yes");
+  });
+});

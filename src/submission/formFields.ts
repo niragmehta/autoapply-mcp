@@ -335,7 +335,8 @@ function deniesResidenceOnly(value: string): boolean {
 // The synonyms canonicalizeWorkPermission folds together, plus the British
 // "authorised": SCAN's "legally permitted to work in the country where this job
 // is located" slipped past the location guard and took "Current Location".
-const WORK_AUTHORITY_TEXT = /\b(authori[sz]|sponsor|visa|work permit|(?:eligible|entitled|permitted) to work|right to work)/;
+const WORK_AUTHORITY_TEXT =
+  /\b(authori[sz]|sponsor|visa|work permit|(?:eligible|entitled|permitted) to work|right to work|legally (?:(?:able|allowed|permitted) to )?work|able to work in the country)/;
 const SELF_ID_QUESTION = /\b(disabilit|chronic condition|gender identity|racial|race ethnicity|ethnic background|veteran|protected veteran|sexual orientation|transgender|pronoun)/;
 const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic|hispanic|latino|veteran|military|sexual orientation|transgender|pronoun|self identif|decline|prefer not)/;
 const AGE_QUESTION = /\b(years of age|age of \d|old enough|legal (?:working )?age|18 or older|18 years or older)\b/;
