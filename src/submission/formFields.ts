@@ -690,7 +690,10 @@ export function matchFields(fields: readonly FieldDescriptor[], answers: readonl
   return fields.map((original) => {
     const scopedLabel = original.type === "date" ? workdayDateLabel(original.domId) : null;
     const field = scopedLabel ? { ...original, label: scopedLabel } : original;
-    const compatible = answers.filter((answer) => !isIncompatible(field, answer));
+    const compatible = answers.filter(
+      (answer) =>
+        (answer.fieldIndex === undefined || answer.fieldIndex === original.selectorIndex) && !isIncompatible(field, answer),
+    );
     const scored = compatible
       .map((answer) => ({
         answer,
@@ -1838,6 +1841,9 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
     // position being left rather than the one being applied for, so no broader
     // bank pattern should be able to win them.
     const experience = resolveExperienceAnswer?.(resolverLabel);
+    // Standalone controls are pinned to the answer derived for them; option
+    // groups bind by label because each option arrives as its own field.
+    const pinned = match.field.optionLabel ? {} : { fieldIndex: match.field.selectorIndex };
     if (experience && experience.authorized && experience.answer.trim().length > 0) {
       // Start month and start year cite the same profile value, so the citation
       // alone would let one control spend the other's answer.
@@ -1854,8 +1860,29 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
           required: match.field.required ?? true,
           category: experience.category,
           guidance: "",
+          ...pinned,
         });
       }
+      continue;
+    }
+    // A current role's end date is blank on purpose and "Current role" is
+    // ticked instead. Handing the field on let Zuora's employment "End date
+    // year" take the graduation year, which the board refused as ending before
+    // the job began.
+    if (experience && experience.authorized && experience.citation.endsWith(".end")) {
+      derived.push({
+        questionKey: experience.citation,
+        label: match.field.label,
+        answer: "",
+        source: "profile",
+        citation: experience.citation,
+        requiresHuman: false,
+        required: match.field.required ?? true,
+        notApplicable: true,
+        category: experience.category,
+        guidance: "",
+        ...pinned,
+      });
       continue;
     }
 
@@ -1949,6 +1976,7 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
         category: personal.category,
         guidance: "",
         ...(personal.whenNoDecline ? { whenNoDecline: personal.whenNoDecline } : {}),
+        ...pinned,
       });
       continue;
     }

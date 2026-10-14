@@ -3295,3 +3295,57 @@ describe("contact details offered to yes/no questions", () => {
     );
   });
 });
+
+// Zuora's Greenhouse form carries an employment block and an education block
+// whose date controls share their labels. The current job's blank end date fell
+// through to the graduation date, and the employment start bound to the
+// education block by label, so the board refused both as ending before they began.
+describe("employment and education blocks with the same date labels", () => {
+  const block = [
+    field("Company name*", { domId: "company-name-0", required: true, selectorIndex: 8 }),
+    field("Start date month*", { domId: "start-date-month-0", role: "combobox", required: true, selectorIndex: 10 }),
+    field("Start date year*", { domId: "start-date-year-0", required: true, selectorIndex: 11 }),
+    field("End date month*", { domId: "end-date-month-0", role: "combobox", required: true, selectorIndex: 12 }),
+    field("End date year*", { domId: "end-date-year-0", required: true, selectorIndex: 13 }),
+    field("School", { domId: "school--0", role: "combobox", required: false, selectorIndex: 15 }),
+    field("Start date month", { domId: "start-month--0", role: "combobox", required: false, selectorIndex: 18 }),
+    field("Start date year", { domId: "start-year--0", type: "number", required: false, selectorIndex: 19 }),
+    field("End date month", { domId: "end-month--0", role: "combobox", required: false, selectorIndex: 20 }),
+    field("End date year", { domId: "end-year--0", type: "number", required: false, selectorIndex: 21 }),
+  ];
+  const resolved = (answer: string, citation: string) => ({ answer, citation, category: "history", authorized: true });
+  const experience = (label: string) => {
+    const l = normalizeLabel(label);
+    if (/education|graduation|school/.test(l)) return null;
+    if (l === "company name") return resolved("Hooli", "experience[0].company");
+    if (l === "start date month") return resolved("February", "experience[0].start");
+    if (l === "start date year") return resolved("2021", "experience[0].start");
+    if (l === "end date month" || l === "end date year") return resolved("", "experience[0].end");
+    return null;
+  };
+  const personal = (label: string) => {
+    const l = normalizeLabel(label);
+    if (l === "school") return resolved("Example University", "education[0].institution");
+    if (l === "education start month") return resolved("September", "education[0].start");
+    if (l === "education start year") return resolved("2016", "education[0].start");
+    if (l === "education end month" || l === "end date month") return resolved("December", "education[0].end");
+    if (l === "graduation year" || l === "end date year") return resolved("2020", "education[0].end");
+    return null;
+  };
+
+  it("keeps each block's dates in their own block and leaves a current role's end blank", () => {
+    const plan = buildFillPlan(block, fallbackAnswersForFields(block, [], [], personal, undefined, experience));
+    const filled = new Map(plan.toFill.map((match) => [match.field.selectorIndex, match.answer?.answer]));
+    expect(Object.fromEntries(filled)).toEqual({
+      8: "Hooli",
+      10: "February",
+      11: "2021",
+      15: "Example University",
+      18: "September",
+      19: "2016",
+      20: "December",
+      21: "2020",
+    });
+    expect(plan.unmatchedRequired.map((f) => f.label)).toEqual([]);
+  });
+});

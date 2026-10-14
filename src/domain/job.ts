@@ -111,6 +111,12 @@ export const DraftAnswerSchema = z.object({
    * that is in fact finished.
    */
   notApplicable: z.boolean().optional(),
+  /**
+   * The control an answer was derived for from the live form. Zuora's
+   * employment and education blocks both label their dates "Start date month",
+   * so an answer bound by label alone landed in whichever block came first.
+   */
+  fieldIndex: z.number().int().optional(),
   category: z.string().default("general"),
   /** Advice shown alongside a question that a person must decide. */
   guidance: z.string().default(""),
