@@ -1863,6 +1863,27 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
         pickOptionIndex([match.field.optionLabel ?? ""], optionSearchCandidates(match.field, match.answer)) >= 0;
       if (names) continue;
     }
+    // A form the candidate signs carries the date it was signed, which is today
+    // and nothing else. No stored answer can supply it, and leaving it blank
+    // stops the disability form from saving. It is decided before employment
+    // history: PayPal's declaration asking for today's date also says
+    // "disqualified from being considered for employment", which the
+    // employment resolver read as a start date.
+    if (signatureDateField(match.field)) {
+      derived.push({
+        questionKey: `signature-date#${match.field.selectorIndex}`,
+        label: match.field.label,
+        answer: todayForSignature(),
+        source: "profile",
+        citation: "system.today",
+        requiresHuman: false,
+        required: match.field.required ?? true,
+        category: "general",
+        guidance: "",
+      });
+      continue;
+    }
+
     // Employment history first: these labels are exact, and they name the
     // position being left rather than the one being applied for, so no broader
     // bank pattern should be able to win them.
@@ -1908,24 +1929,6 @@ export function fallbackAnswersForFields(  fields: readonly FieldDescriptor[],
         category: experience.category,
         guidance: "",
         ...pinned,
-      });
-      continue;
-    }
-
-    // A form the candidate signs carries the date it was signed, which is today
-    // and nothing else. No stored answer can supply it, and leaving it blank
-    // stops the disability form from saving.
-    if (signatureDateField(match.field)) {
-      derived.push({
-        questionKey: `signature-date#${match.field.selectorIndex}`,
-        label: match.field.label,
-        answer: todayForSignature(),
-        source: "profile",
-        citation: "system.today",
-        requiresHuman: false,
-        required: match.field.required ?? true,
-        category: "general",
-        guidance: "",
       });
       continue;
     }

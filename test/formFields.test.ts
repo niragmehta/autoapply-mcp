@@ -2791,6 +2791,22 @@ describe("a form the candidate signs", () => {
     const derived = fallbackAnswersForFields([acknowledgement], [], []);
     expect(derived[0]?.citation).toBe("system.today");
   });
+
+  // The same declaration says "disqualified from being considered for
+  // employment", and the employment resolver read "from ... employment ...
+  // date" as the job's start date, so today's date was never reached.
+  it("dates it today even when the employment resolver claims the wording", () => {
+    const acknowledgement = {
+      ...field(
+        "A positive declaration does not mean that I would automatically be disqualified from being considered for employment. Please enter today's date on your acknowledgement.",
+        { type: "date", required: true },
+      ),
+      name: "",
+    };
+    const employment = () => ({ answer: "02/2021", citation: "experience[0].start", category: "employment-history", authorized: true });
+    const derived = fallbackAnswersForFields([acknowledgement], [], [], undefined, undefined, employment);
+    expect(derived.map((a) => a.citation)).toEqual(["system.today"]);
+  });
 });
 
 describe("a date control only takes a date", () => {
