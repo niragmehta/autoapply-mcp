@@ -3472,3 +3472,25 @@ describe("prefix and suffix fields", () => {
     expect(matchFields([prefix], [answer("Prefix", "Dr.")])[0]?.answer?.answer).toBe("Dr.");
   });
 });
+
+// GEICO asked "Do you have a high school diploma or equivalent?" and the
+// personal resolver answered it with the stored university on the word
+// "school". A yes/no question is answered by a decision, not a stored fact.
+describe("stored facts offered to yes/no questions", () => {
+  const resolved = (answer: string, citation: string) => ({ answer, citation, category: "education", authorized: true });
+
+  it("does not answer a yes/no question with a stored institution", () => {
+    const diploma = field("Do you have a high school diploma or equivalent?", { role: "combobox", required: true });
+    const personal = (label: string) =>
+      /\bschool\b/.test(normalizeLabel(label)) ? resolved("Example University", "education[0].institution") : null;
+    const plan = buildFillPlan([diploma], fallbackAnswersForFields([diploma], [], [], personal));
+    expect(plan.toFill).toEqual([]);
+  });
+
+  it("still lets a stored fact that is itself a yes or no answer a yes/no question", () => {
+    const employed = field("Are you currently employed by Hooli?", { role: "combobox", required: true });
+    const experience = () => ({ answer: "Yes", citation: "experience[0].company", category: "employment-history", authorized: true });
+    const plan = buildFillPlan([employed], fallbackAnswersForFields([employed], [], [], undefined, undefined, experience));
+    expect(plan.toFill.map((match) => match.answer?.answer)).toEqual(["Yes"]);
+  });
+});

@@ -218,8 +218,10 @@ const HONORIFIC_VALUE = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|dame|rev|jr|sr|ii|iii
 const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
 const ASKS_FOR_CONTACT = /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address)\b/i;
-/** Answers that are a place the candidate lives: the stored address parts and location. */
-const STORED_PLACE_ANSWER = /^(?:personal\.address\.|identity\.location$|location$|current[_-]location$)/;
+/** Answers drawn from stored facts about the candidate rather than from a decision. */
+const STORED_FACT_ANSWER =
+  /^(?:personal\.|identity\.|education\[|experience\[|location$|current[_-]location$|derived-(?:legal|full)-name$|first_name$|last_name$)/;
+const POLAR_VALUE = /^\s*(?:yes|no|true|false)\b/i;
 
 /**
  * A yes/no question that only mentions a contact detail is not asking for it.
@@ -509,12 +511,18 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // entry matched; searching a suffix list for the whole name left "II" behind.
   if (HONORIFIC_FIELD.test(fieldLabel) && !HONORIFIC_VALUE.test(answer.answer.trim())) return true;
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
-  // Nor is a yes/no question answered with a place. Broadcom asked about being
-  // "employed by any entity of the federal, state or local government", and
-  // the stored province bound to it on the word "state"; Zendesk's "Are you
+  // Nor is a yes/no question answered with a stored fact. Broadcom asked about
+  // being "employed by any entity of the federal, state or local government",
+  // and the stored province bound to it on the word "state"; Zendesk's "Are you
   // open to relocating to the location where this position is based?" took the
-  // stored location on the word "location".
-  if (YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) && STORED_PLACE_ANSWER.test(answer.questionKey)) {
+  // stored location on the word "location"; GEICO's "Do you have a high school
+  // diploma or equivalent?" took the stored university on the word "school". A
+  // fact that is itself a yes or no - "currently employed by Hooli?" - stands.
+  if (
+    YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) &&
+    STORED_FACT_ANSWER.test(answer.questionKey) &&
+    !POLAR_VALUE.test(answer.answer)
+  ) {
     return true;
   }
   // Sponsorship and authorization take opposite answers, so a question asking
