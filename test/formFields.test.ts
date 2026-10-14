@@ -3112,3 +3112,58 @@ describe("a work-authorization question worded as legal ability", () => {
     expect(fallbackAnswersForFields([legal], [location], bank)[0]?.answer).toBe("Yes");
   });
 });
+
+// Nordstrom's onsite question offers two sentences and no Yes/No, so a stored
+// "Yes" matched neither and the required field held the Workday wizard.
+describe("onsite requirement options written as sentences", () => {
+  const onsite = field(
+    "This role requires employees to be physically onsite, as listed in the job posting. Please confirm if you can work onsite at the listed location.",
+    { role: "combobox", required: true },
+  );
+  const nordstrom = [
+    "Select One",
+    "I am able to meet the onsite requirements for the role",
+    "I am unable to meet the onsite requirements for the role",
+  ];
+
+  it("selects the able-to option for a stored Yes", () => {
+    const candidates = optionSearchCandidates(onsite, answer("Onsite", "Yes", { questionKey: "onsite-willing" }));
+    expect(candidates[0]).toBe("Yes");
+    expect(pickOptionIndex(nordstrom, candidates)).toBe(1);
+  });
+
+  it("selects the unable-to option for a stored No", () => {
+    const candidates = optionSearchCandidates(onsite, answer("Onsite", "No", { questionKey: "onsite-willing" }));
+    expect(pickOptionIndex(nordstrom, candidates)).toBe(2);
+  });
+
+  it("still prefers a plain Yes when the board offers one", () => {
+    const candidates = optionSearchCandidates(onsite, answer("Onsite", "Yes"));
+    expect(pickOptionIndex(["No", "Yes"], candidates)).toBe(1);
+  });
+
+  it("never reads an affirmative into an unable or cannot sentence", () => {
+    const candidates = optionSearchCandidates(onsite, answer("Onsite", "Yes"));
+    expect(pickOptionIndex(["I am unable to meet the onsite requirements for the role"], candidates)).toBe(-1);
+    expect(pickOptionIndex(["I cannot work onsite at this location", "Other"], candidates)).toBe(-1);
+    expect(pickOptionIndex(["I am unwilling to work on-site", "Other"], candidates)).toBe(-1);
+  });
+
+  it("leaves questions that are not about working onsite alone", () => {
+    const candidates = optionSearchCandidates(field("Are you willing to travel?", { role: "combobox" }), answer("Travel", "Yes"));
+    expect(candidates).toEqual(["Yes"]);
+  });
+});
+
+describe("overlap matching and negated sentences", () => {
+  // Shares "commute", "downtown" and "office" with the unable-to option, which
+  // the overlap rule used to accept because "unable" did not count as negation.
+  it("does not let shared words carry a positive answer to an unable-to option", () => {
+    expect(
+      pickOptionIndex(
+        ["I am unable to commute to the downtown office three days a week", "Prefer to discuss"],
+        ["Yes - happy to commute to the downtown office"],
+      ),
+    ).toBe(-1);
+  });
+});

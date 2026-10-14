@@ -818,6 +818,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
     const relocationFirst = /^(yes|true|1)$/i.test(value.trim()) && asksResidenceOrRelocation(normalizeLabel(field.label));
     return relocationFirst ? [...relocation, value] : [value, ...relocation];
   }
+  const onsite = onsiteCandidates(field, value);
+  if (onsite.length > 0) return onsite;
   const locality = value.split(",")[0]?.trim() ?? "";
   return locality.length > 1 && locality !== value ? [value, locality] : [value];
 }
@@ -1102,6 +1104,46 @@ function relocationCandidates(field: FieldDescriptor, value: string): string[] {
     return ["am willing to relocate", "open to relocating", "open to relocation", "plan to relocate"];
   }
   if (/^(no|false|0)$/i.test(value.trim())) return ["not willing to relocate", "not open to relocating"];
+  return [];
+}
+
+const ONSITE_QUESTION = /\b(?:on ?site|office|in person|hybrid)\b/;
+
+/**
+ * Nordstrom answers its onsite question with "I am able to meet the onsite
+ * requirements for the role" or "I am unable to ...", so a stored "Yes"
+ * matched neither and a required field held the Workday wizard. The
+ * affirmative phrases open with "am" or "can" for the reason relocation's do:
+ * "able to meet" sits inside "unable to meet", while "am able to meet" does
+ * not, and "can work" is not part of "cannot work".
+ */
+function onsiteCandidates(field: FieldDescriptor, value: string): string[] {
+  if (!ONSITE_QUESTION.test(normalizeLabel(field.label))) return [];
+  if (/^(yes|true|1)$/i.test(value.trim())) {
+    return [
+      value,
+      "am able to meet the onsite",
+      "am able to meet the on site",
+      "am able to work onsite",
+      "am able to work on site",
+      "can work onsite",
+      "can work on site",
+      "am willing to work onsite",
+      "am willing to work on site",
+    ];
+  }
+  if (/^(no|false|0)$/i.test(value.trim())) {
+    return [
+      value,
+      "am unable to meet the onsite",
+      "am unable to meet the on site",
+      "am not able to meet the onsite",
+      "am unable to work onsite",
+      "am not able to work onsite",
+      "cannot work onsite",
+      "cannot work on site",
+    ];
+  }
   return [];
 }
 
@@ -1436,9 +1478,12 @@ const MIN_OVERLAP_WORDS = 2;
  * Overlap counts vocabulary without reading grammar, so "I am a veteran" and "I
  * am not a protected veteran" look similar to it. An option that disagrees with
  * the answer about negation states the opposite of what the candidate said and
- * is never an acceptable substitute for it.
+ * is never an acceptable substitute for it. "Unable", "cannot" and "unwilling"
+ * negate as surely as "not" does: "Yes - happy to commute to the downtown
+ * office" shares three content words with "I am unable to commute to the
+ * downtown office" and says the reverse.
  */
-const NEGATION = /\b(not|never|no|none|neither|decline)\b/;
+const NEGATION = /\b(not|never|no|none|neither|decline|cannot|unable|unwilling)\b/;
 
 function negationDiffers(optionText: string, candidate: string): boolean {
   return NEGATION.test(normalizeOptionText(optionText)) !== NEGATION.test(normalizeOptionText(candidate));
