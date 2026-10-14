@@ -419,3 +419,18 @@ export function resolveExperience(label: string, profile: Profile): ExperienceRe
   }
   return null;
 }
+
+const END_DATE_TESTS = [component("end", "month"), component("end", "year"), employmentDate("end")];
+
+/**
+ * Whether a label asks when the candidate's current role ended. It has not, so
+ * the truthful answer is a deliberate blank beside a ticked "Current role" -
+ * not a missing answer, which reported Zuora's employment end date as a
+ * required gap and left it open to another block's date.
+ */
+export function asksCurrentRoleEnd(label: string, profile: Profile): boolean {
+  const entry = mostRecent(profile);
+  if (!entry || !isCurrent(entry)) return false;
+  const normalized = normalizeLabel(label);
+  return END_DATE_TESTS.some((test) => test(normalized));
+}

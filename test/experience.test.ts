@@ -176,6 +176,33 @@ describe("resolveExperience", () => {
   });
 });
 
+// Zuora's employment block left a current role's end date unanswered, so the
+// plan reported "End date month*" and "End date year*" as required gaps even
+// though ticking "Current role" removes them, and on a form that numbered its
+// blocks differently the graduation date could have filled them instead.
+describe("a current role's end date at fill time", () => {
+  const education = () => ({ answer: "2020", citation: "education[0].end", category: "education", authorized: true });
+
+  it("is a deliberate blank rather than a missing answer", () => {
+    const resolver = experienceResolverFor(profile);
+    expect(resolver("End date year*")).toMatchObject({ answer: "", citation: "experience[0].end", authorized: true });
+    const fields = [
+      field("End date month*", { selectorIndex: 12, role: "combobox" }),
+      field("End date year*", { selectorIndex: 13 }),
+    ];
+    const plan = buildFillPlan(fields, fallbackAnswersForFields(fields, [], [], education, undefined, resolver));
+    expect(plan.toFill).toEqual([]);
+    expect(plan.unmatchedRequired).toEqual([]);
+  });
+
+  it("leaves a role that has ended to its real end date", () => {
+    const past = makeProfile({
+      experience: [{ company: "Phemi", title: "Intern", start: "2018-05", end: "2018-08", highlights: [] }],
+    });
+    expect(experienceResolverFor(past)("End date year")?.answer).toBe("2018");
+  });
+});
+
 describe("employment block fill", () => {
   it("fills every control in the block, including both halves of the start date", () => {
     const fields = [
