@@ -1398,6 +1398,14 @@ export async function fillWorkdayPrompt(
     const band = pickNumericBandIndex(offered, candidates);
     if (band >= 0) {
       onOffer = true;
+      // Read against the whole list, the band is the answer; one an earlier
+      // pass already chose is that answer, and re-clicking it changes nothing
+      // a read-back could confirm.
+      const current = await chosenValues(field);
+      if (current.length === 1 && current[0] === offered[band]) {
+        await closeMenu(page);
+        return { filled: true, detail: `already set to band ${offered[band]}` };
+      }
       await page.locator(WD_MENU_ITEM).nth(band).click({ timeout: 10_000 }).catch(() => undefined);
       await page.waitForTimeout(1_000);
       const after = await chosenValues(field);

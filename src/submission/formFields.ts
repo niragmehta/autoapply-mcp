@@ -820,6 +820,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
   }
   const onsite = onsiteCandidates(field, value);
   if (onsite.length > 0) return onsite;
+  const optChoice = optChoiceCandidates(field, value);
+  if (optChoice.length > 0) return optChoice;
   const locality = value.split(",")[0]?.trim() ?? "";
   return locality.length > 1 && locality !== value ? [value, locality] : [value];
 }
@@ -1144,6 +1146,29 @@ function onsiteCandidates(field: FieldDescriptor, value: string): string[] {
       "cannot work on site",
     ];
   }
+  return [];
+}
+
+/** A question that offers opting in or out, in any of its spellings. */
+const OPT_QUESTION = /\bopt ?(?:in|out)\b/;
+/** A question asking whether to opt out, where "No" means staying opted in. */
+const ASKS_TO_OPT_OUT = /\b(?:like|want|wish|prefer|choose|elect)s? to opt ?out\b/;
+
+/**
+ * Visa answers consent questions with "Opt-In" and "Opt-Out" instead of Yes and
+ * No, so stored consent decisions - "Yes" to AI-assisted review, "No - I do not
+ * consent to receiving text messages" - matched neither option. A stored
+ * consent opts in and a stored refusal opts out. Only a question that speaks
+ * of opting is widened, so other yes/no prompts are not probed for options
+ * they never offer, and one that itself asks whether to opt out inverts the
+ * mapping, so it is left alone.
+ */
+function optChoiceCandidates(field: FieldDescriptor, value: string): string[] {
+  const label = normalizeLabel(field.label);
+  if (!OPT_QUESTION.test(label) || ASKS_TO_OPT_OUT.test(label)) return [];
+  const normalized = normalizeOptionText(value);
+  if (AFFIRMATIVE_CANDIDATE.test(normalized)) return [value, "Opt-In", "Opt In", "I opt in"];
+  if (NEGATIVE_CANDIDATE.test(normalized)) return [value, "Opt-Out", "Opt Out", "I opt out"];
   return [];
 }
 

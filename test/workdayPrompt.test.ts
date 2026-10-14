@@ -590,6 +590,39 @@ describe("fillWorkdayPrompt", () => {
     expect(prompt.selected).toEqual([]);
   });
 
+  // Nordstrom's draft came back holding "5 – 10 years", the very band "5+
+  // years" belongs in. Re-choosing it changed nothing, so the pass read its own
+  // correct answer as a value left over from an earlier run and failed the step.
+  const NORDSTROM_BANDS: Tree = {
+    "Select One": null,
+    "Less than 1 year or no experience": null,
+    "1 – 3 years": null,
+    "3 – 5 years": null,
+    "5 – 10 years": null,
+    "10+ years": null,
+  };
+
+  it("keeps the band an earlier pass already chose for the stated figure", async () => {
+    const prompt = new FakePrompt(NORDSTROM_BANDS, "dropdown");
+    prompt.selected = ["5 – 10 years"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["5+ years"]);
+
+    expect(result.filled).toBe(true);
+    expect(result.strayValue).toBeUndefined();
+    expect(prompt.selected).toEqual(["5 – 10 years"]);
+  });
+
+  it("still replaces a different band an earlier pass left behind", async () => {
+    const prompt = new FakePrompt(NORDSTROM_BANDS, "dropdown");
+    prompt.selected = ["1 – 3 years"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["5+ years"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["5 – 10 years"]);
+  });
+
   // Adobe's "Field of Study" is a flat taxonomy of thousands of majors, so
   // every entry the category probe opened was a value rather than a category.
   const MAJORS: Tree = {
@@ -1225,5 +1258,50 @@ describe("isWorkdayPrompt", () => {
   it("recognises a picker widget", async () => {
     const prompt = new FakePrompt({ Mobile: null });
     expect(await isWorkdayPrompt(fieldOf(prompt))).toBe(true);
+  });
+});
+
+// Visa's SMS and AI-review prompts offer only "Opt-In" and "Opt-Out".
+describe("a Workday consent prompt answered by opting in or out", () => {
+  const candidatesFor = (label: string, value: string, questionKey: string) =>
+    optionSearchCandidates(
+      { selectorIndex: 0, label, type: "select", name: "", required: true },
+      {
+        questionKey,
+        label,
+        answer: value,
+        source: "approved-answer",
+        citation: `profile.answers.${questionKey}`,
+        requiresHuman: false,
+        category: "general",
+      },
+    );
+
+  it("opts out of text messages the candidate declined", async () => {
+    const prompt = new FakePrompt({ "Select One": null, "Opt-In": null, "Opt-Out": null }, "dropdown");
+    const candidates = candidatesFor(
+      "I agree that Visa may reach out to me via SMS regarding my application and candidate experience. Message and data rates may apply. I can opt-out at any time.",
+      "No - I do not consent to receiving text messages",
+      "sms-consent",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Opt-Out"]);
+  });
+
+  it("opts in to AI-assisted review the candidate consented to", async () => {
+    const prompt = new FakePrompt({ "Select One": null, "Opt-In": null, "Opt-Out": null }, "dropdown");
+    const candidates = candidatesFor(
+      "Visa may use automated tools such as AI to support review of your application for this role. If you prefer not to have your application processed by these tools, you can opt-out.",
+      "Yes",
+      "ai-tools-in-process",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Opt-In"]);
   });
 });

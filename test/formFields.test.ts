@@ -3167,3 +3167,42 @@ describe("overlap matching and negated sentences", () => {
     ).toBe(-1);
   });
 });
+
+// Visa answers consent questions with "Opt-In" and "Opt-Out" rather than Yes
+// and No, so stored consent decisions matched neither option.
+describe("opt-in and opt-out choices", () => {
+  const smsLabel =
+    "I agree that Visa may reach out to me via SMS regarding my application and candidate experience. Message and data rates may apply. I can opt-out at any time.";
+  const aiLabel =
+    "Visa may use automated tools such as AI to support review of your application for this role. If you prefer not to have your application processed by these tools, you can opt-out.";
+  const choices = ["Select One", "Opt-In", "Opt-Out"];
+
+  it("opts out for a stored refusal", () => {
+    const candidates = optionSearchCandidates(
+      field(smsLabel, { role: "combobox", required: true }),
+      answer("SMS", "No - I do not consent to receiving text messages", { questionKey: "sms-consent" }),
+    );
+    expect(pickOptionIndex(choices, candidates)).toBe(2);
+  });
+
+  it("opts in for a stored consent", () => {
+    const candidates = optionSearchCandidates(
+      field(aiLabel, { role: "combobox", required: true }),
+      answer("AI review", "Yes", { questionKey: "ai-tools-in-process" }),
+    );
+    expect(pickOptionIndex(choices, candidates)).toBe(1);
+  });
+
+  it("still takes a plain Yes or No when the board offers one", () => {
+    const candidates = optionSearchCandidates(field(aiLabel, { role: "combobox" }), answer("AI review", "Yes"));
+    expect(pickOptionIndex(["No", "Yes"], candidates)).toBe(1);
+  });
+
+  it("does not turn a No into opting out when the question asks whether to opt out", () => {
+    const candidates = optionSearchCandidates(
+      field("Would you like to opt out of automated review of your application?", { role: "combobox" }),
+      answer("Opt out", "No"),
+    );
+    expect(pickOptionIndex(["Opt-In", "Opt-Out"], candidates)).toBe(-1);
+  });
+});
