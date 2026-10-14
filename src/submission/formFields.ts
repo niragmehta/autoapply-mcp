@@ -2353,6 +2353,20 @@ export function detectCaptcha(pageText: string): boolean {
   return CAPTCHA_CHALLENGE_PATTERNS.some((pattern) => pattern.test(haystack));
 }
 
+/**
+ * Workday sometimes completes a submission on the wizard's last step and lands
+ * on Candidate Home, whose "My Applications" table lists the job with the date
+ * it was submitted. F5's tenant did, and the run then looked for a submit
+ * button that no longer existed and reported a failure for an application the
+ * tenant had accepted. The job's own title has to be listed, beside the
+ * table's submission-date column.
+ */
+export function workdayListsSubmitted(pageText: string, jobTitle: string): boolean {
+  const text = pageText.replace(/\s+/g, " ").toLowerCase();
+  const title = jobTitle.replace(/\s+/g, " ").trim().toLowerCase();
+  return title.length > 0 && /\bmy applications\b/.test(text) && /\bdate submitted\b/.test(text) && text.includes(title);
+}
+
 const SUBMISSION_CONFIRMATION_MARKERS = [
   "thank you for applying",
   "thanks for applying",

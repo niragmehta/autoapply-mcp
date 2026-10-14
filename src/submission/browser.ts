@@ -23,6 +23,7 @@ import {
   orderFieldsForBrowser,
   pickOptionIndex,
   stalePlaceholderFields,
+  workdayListsSubmitted,
   type ApprovedAnswerEntry,
   type FieldDescriptor,
   type FillPlan,
@@ -1102,6 +1103,23 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // the code minutes into the future and rejects the very email being waited
     // for.
     const submitClickedAt = new Date();
+    // The wizard walk can complete a Workday submission itself and land on
+    // Candidate Home, where there is no submit control left to find.
+    if (isWorkdayUrl(page.url()) && workdayListsSubmitted(await readBodyText(page), packet.jobTitle)) {
+      page.off?.("response", onResponse as (payload: never) => void);
+      const shot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+      return {
+        status: "submitted",
+        reason: "Workday's Candidate Home lists this application as submitted",
+        filledFields: filled,
+        unmatchedRequired: [],
+        unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+        screenshotPath: shot,
+        finalUrl: page.url(),
+        confirmationText: (await readBodyText(page)).slice(0, 600),
+        captchaDetected: false,
+      };
+    }
     const clicked = await clickSubmit(page);
     if (!clicked) {
       page.off?.("response", onResponse as (payload: never) => void);

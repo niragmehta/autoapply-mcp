@@ -17,6 +17,7 @@ import {
   orderFieldsForBrowser,
   pickOptionIndex,
   stalePlaceholderFields,
+  workdayListsSubmitted,
   type FieldDescriptor,
 } from "../src/submission/formFields.js";
 import type { DraftAnswer } from "../src/domain/job.js";
@@ -3402,5 +3403,22 @@ describe("an option group's own answer against a neighbouring question's", () =>
   it("answers each group with its own question's answer", () => {
     const plan = buildFillPlan(fields, answers);
     expect(plan.toFill.map((match) => match.field.selectorIndex).sort()).toEqual([11, 12]);
+  });
+});
+
+// F5's tenant accepted the application on the wizard's last step and landed on
+// Candidate Home; the run then looked for a submit button that no longer
+// existed and reported a failure for an application the tenant had taken.
+describe("workdayListsSubmitted", () => {
+  const home =
+    "Welcome, Casey Moore My Tasks You have no tasks. My Applications Active (1) Inactive (0) Job Title Job Req My Application Status Date Submitted Action Senior Identity Engineer, Workforce Identity RP1037538 In Process October 13, 2026 Suggested Jobs";
+
+  it("recognises Candidate Home listing the job just applied for", () => {
+    expect(workdayListsSubmitted(home, "Senior Identity Engineer, Workforce Identity")).toBe(true);
+  });
+
+  it("does not count a different job or a page without submission dates", () => {
+    expect(workdayListsSubmitted(home, "Senior Network Engineer")).toBe(false);
+    expect(workdayListsSubmitted("My Applications Senior Identity Engineer, Workforce Identity", "Senior Identity Engineer, Workforce Identity")).toBe(false);
   });
 });
