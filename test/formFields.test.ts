@@ -3422,3 +3422,25 @@ describe("workdayListsSubmitted", () => {
     expect(workdayListsSubmitted("My Applications Senior Identity Engineer, Workforce Identity", "Senior Identity Engineer, Workforce Identity")).toBe(false);
   });
 });
+
+// Zendesk asked "Are you open to relocating to the location where this
+// position is based, if required?" and the stored location bound to it on the
+// word "location", so the run searched a Yes/No list for "Vancouver".
+describe("the stored location offered to a yes/no question", () => {
+  const location = answer("Location", "Vancouver, British Columbia, Canada", {
+    questionKey: "location",
+    citation: "identity.location",
+  });
+
+  it("does not answer a relocation question with where the candidate lives", () => {
+    const relocate = field("Are you open to relocating to the location where this position is based, if required?", {
+      role: "combobox",
+      required: true,
+    });
+    expect(matchFields([relocate], [location])[0]?.answer).toBeNull();
+  });
+
+  it("still fills a location field with it", () => {
+    expect(matchFields([field("Location (City)*")], [location])[0]?.answer?.answer).toBe("Vancouver, British Columbia, Canada");
+  });
+});

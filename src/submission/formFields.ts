@@ -216,6 +216,8 @@ const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b|^(?:n
 const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
 const ASKS_FOR_CONTACT = /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address)\b/i;
+/** Answers that are a place the candidate lives: the stored address parts and location. */
+const STORED_PLACE_ANSWER = /^(?:personal\.address\.|identity\.location$|location$|current[_-]location$)/;
 
 /**
  * A yes/no question that only mentions a contact detail is not asking for it.
@@ -503,8 +505,10 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
   // Nor is a yes/no question answered with a place. Broadcom asked about being
   // "employed by any entity of the federal, state or local government", and
-  // the stored province bound to it on the word "state".
-  if (YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) && /^personal\.address\./.test(answer.questionKey)) {
+  // the stored province bound to it on the word "state"; Zendesk's "Are you
+  // open to relocating to the location where this position is based?" took the
+  // stored location on the word "location".
+  if (YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) && STORED_PLACE_ANSWER.test(answer.questionKey)) {
     return true;
   }
   // Sponsorship and authorization take opposite answers, so a question asking
