@@ -3349,3 +3349,26 @@ describe("employment and education blocks with the same date labels", () => {
     expect(plan.unmatchedRequired.map((f) => f.label)).toEqual([]);
   });
 });
+
+// Broadcom asked whether the candidate had been "employed by any entity of the
+// federal, state or local government", and the stored province bound to it on
+// the word "state". A yes/no question is never answered with a place.
+describe("address details offered to yes/no questions", () => {
+  it("does not answer a yes/no question with the stored region", () => {
+    const government = field(
+      "Are you now, or have you been in the last five years, employed by any entity of the federal, state or local government?",
+      { role: "combobox", required: true },
+    );
+    const personal = (label: string) =>
+      /\bstate\b/.test(normalizeLabel(label))
+        ? { answer: "British Columbia", citation: "personal.address.region", category: "contact", authorized: true }
+        : null;
+    const plan = buildFillPlan([government], fallbackAnswersForFields([government], [], [], personal));
+    expect(plan.toFill).toEqual([]);
+  });
+
+  it("still fills a plain state field with it", () => {
+    const region = answer("State/Province", "British Columbia", { questionKey: "personal.address.region" });
+    expect(matchFields([field("State/Province")], [region])[0]?.answer?.answer).toBe("British Columbia");
+  });
+});

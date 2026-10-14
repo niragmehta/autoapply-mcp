@@ -501,6 +501,12 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
+  // Nor is a yes/no question answered with a place. Broadcom asked about being
+  // "employed by any entity of the federal, state or local government", and
+  // the stored province bound to it on the word "state".
+  if (YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) && /^personal\.address\./.test(answer.questionKey)) {
+    return true;
+  }
   // Sponsorship and authorization take opposite answers, so a question asking
   // whether sponsorship is required is only answered by an answer about
   // sponsorship - or by the drafted answer to that very question. The raw label
