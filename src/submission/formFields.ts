@@ -2583,7 +2583,18 @@ function collapseOptionGroups(
   for (const group of groups.values()) {
     const optionLabels = group.map((match) => match.field.optionLabel ?? "");
     const head = group[0]!;
-    const matched = group.find((match) => match.answer !== null)?.answer ?? null;
+    // Each option is scored alone, so an option the group's own answer
+    // contradicts reaches for a neighbouring question's answer instead.
+    // Betterment's "Yes" box under "Are you currently based in the NYC metro
+    // area?" refused the stored "No" and took the next question's relocation
+    // "Yes" at 0.63, while the "No" box held the group's own answer at 1.00;
+    // taking the first box's answer said the candidate lived in New York. The
+    // answer the group matched best is the group's answer.
+    const matched =
+      group
+        .filter((match) => match.answer !== null)
+        .reduce<FieldMatch | undefined>((best, match) => (!best || match.confidence > best.confidence ? match : best), undefined)
+        ?.answer ?? null;
 
     // A group's answer has to name one of its options. Ashby labels the SMS
     // consent radios "Phone Number", so the phone number itself matches first

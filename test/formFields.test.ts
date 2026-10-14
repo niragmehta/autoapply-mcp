@@ -3372,3 +3372,35 @@ describe("address details offered to yes/no questions", () => {
     expect(matchFields([field("State/Province")], [region])[0]?.answer?.answer).toBe("British Columbia");
   });
 });
+
+// Betterment asks "Are you currently based in the NYC metro area?" and then
+// "If you are NOT currently based in the NYC metro area, do you have plans to
+// relocate in the next 90 days?", each as a Yes/No checkbox group. The first
+// group took the relocation answer from its "Yes" box - the stored "No"
+// conflicts with that box - over its own answer on the "No" box, and the
+// application said the candidate already lived in New York.
+describe("an option group's own answer against a neighbouring question's", () => {
+  const nyc = "Are you currently based in the NYC metro area? *";
+  const relocate = "If you are NOT currently based in the NYC metro area, do you have plans to relocate in the next 90 days? *";
+  const box = (label: string, name: string, optionLabel: string, selectorIndex: number) =>
+    field(label, { type: "checkbox", name, optionLabel, groupKey: label, required: true, selectorIndex });
+  const fields = [
+    box(nyc, "question_69189776[]", "Yes", 10),
+    box(nyc, "question_69189776[]", "No", 11),
+    box(relocate, "question_69189777[]", "Yes", 12),
+    box(relocate, "question_69189777[]", "No", 13),
+  ];
+  const answers = [
+    answer("Are you currently based in the NYC metro area?", "No", { questionKey: "question_69189776[]" }),
+    answer(
+      "If you are NOT currently based in the NYC metro area, do you have plans to relocate in the next 90 days?",
+      "Yes",
+      { questionKey: "question_69189777[]" },
+    ),
+  ];
+
+  it("answers each group with its own question's answer", () => {
+    const plan = buildFillPlan(fields, answers);
+    expect(plan.toFill.map((match) => match.field.selectorIndex).sort()).toEqual([11, 12]);
+  });
+});
