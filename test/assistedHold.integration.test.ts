@@ -17,15 +17,18 @@ const APPLY_URL = "https://jobs.lever.co/example/0000/apply";
  * the open window: that many waits after the form was captured, the page
  * moves to Lever's thank-you route.
  */
-function heldForm(submitAfterPolls: number | null, formText = "Submit your application") {
+function heldForm(submitAfterPolls: number | null, formText = "Submit your application", closeAfterPolls: number | null = null) {
   const fields: FieldDescriptor[] = [
     { selectorIndex: 0, label: "Full name", type: "text", name: "name", required: true },
   ];
   let url = APPLY_URL;
   let body = formText;
   let captured = false;
+  let closed = false;
   let pollsAfterCapture = 0;
+  const closedError = () => new Error("locator.count: Target page, context or browser has been closed");
   const locator = (selector: string): Record<string, unknown> => {
+    if (closed) throw closedError();
     const present = selector === "body" || selector === 'input[type="file"]' || selector.startsWith("[data-autoapply-idx=");
     const self: Record<string, unknown> = {
       first: () => self,
@@ -47,8 +50,13 @@ function heldForm(submitAfterPolls: number | null, formText = "Submit your appli
     url: () => url,
     waitForLoadState: async () => undefined,
     waitForTimeout: vi.fn(async () => {
+      if (closed) throw closedError();
       if (!captured) return;
       pollsAfterCapture += 1;
+      if (closeAfterPolls !== null && pollsAfterCapture === closeAfterPolls) {
+        closed = true;
+        throw closedError();
+      }
       if (submitAfterPolls !== null && pollsAfterCapture === submitAfterPolls) {
         url = "https://jobs.lever.co/example/0000/thanks";
         body = "Application submitted! Thank you for your interest in Example.";
@@ -125,6 +133,15 @@ describe("a form held open for a person to submit", () => {
 
   it("does not mistake confirmation wording already on the form for a submission", async () => {
     heldForm(null, "Submit your application. Thank you for applying to Example!");
+    const { packet, directory } = packetFixture();
+
+    const result = await runApplicationForm(packet, { submit: false, artifactsDir: directory, policy, keepOpenMs: 9_000 });
+
+    expect(result.status).toBe("prepared");
+  });
+
+  it("reports prepared rather than failing when the person closes the window", async () => {
+    heldForm(null, "Submit your application", 2);
     const { packet, directory } = packetFixture();
 
     const result = await runApplicationForm(packet, { submit: false, artifactsDir: directory, policy, keepOpenMs: 9_000 });

@@ -1003,7 +1003,10 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           };
         }
       }
-      if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, filled);
+      // A window the person closed during the hold has no challenge left to
+      // report; the form was prepared and simply not submitted.
+      const challenged = await hasVisibleCaptchaChallenge(page).catch(() => false);
+      if (challenged) return await captureCaptchaAbort(page, packet, options, filled);
       return {
         status: "prepared",
         reason:
