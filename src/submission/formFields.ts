@@ -1788,7 +1788,9 @@ export function educationDateLabels(fields: readonly FieldDescriptor[]): Map<num
 function signatureDateField(field: FieldDescriptor): boolean {
   if (field.type !== "date") return false;
   const hints = `${field.name} ${field.questionLabel ?? ""}`.toLowerCase();
-  return /sign/.test(hints);
+  // PayPal's acknowledgement asks for it outright: "Please enter today's date
+  // on your acknowledgement."
+  return /sign/.test(hints) || /\b(?:enter|provide|input) (?:today['\u2019]?s|the current) date\b/i.test(field.label);
 }
 
 function todayForSignature(): string {

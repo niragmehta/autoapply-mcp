@@ -2777,6 +2777,20 @@ describe("a form the candidate signs", () => {
     // "Start date" is employment history, not a signature.
     expect(fallbackAnswersForFields([dateField("startDate", "start date")], [], [])).toHaveLength(0);
   });
+
+  // PayPal's conflict-of-interest declaration ends "Please enter today's date
+  // on your acknowledgement." in a date control with no "sign" in its name.
+  it("dates an acknowledgement that asks for today's date", () => {
+    const acknowledgement = {
+      ...field(
+        "I understand that a false declaration may render me ineligible to be considered for employment. Please enter today's date on your acknowledgement.",
+        { type: "date", required: true },
+      ),
+      name: "",
+    };
+    const derived = fallbackAnswersForFields([acknowledgement], [], []);
+    expect(derived[0]?.citation).toBe("system.today");
+  });
 });
 
 describe("a date control only takes a date", () => {
