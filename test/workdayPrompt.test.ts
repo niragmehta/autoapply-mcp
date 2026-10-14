@@ -1305,3 +1305,20 @@ describe("a Workday consent prompt answered by opting in or out", () => {
     expect(prompt.selected).toEqual(["Opt-In"]);
   });
 });
+
+// CoStar's tenant writes "Bachelor’s Degree" with a typographic apostrophe; the
+// approved "Bachelor's Degree" differed by that one character and matched
+// nothing, failing a required question.
+describe("a Workday option written with typographic quotes", () => {
+  it("matches an answer written with plain ones", async () => {
+    const prompt = new FakePrompt(
+      { "Select One": null, "Associate\u2019s Degree": null, "Bachelor\u2019s Degree": null, "Master\u2019s Degree": null },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Bachelor's Degree"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Bachelor\u2019s Degree"]);
+  });
+});

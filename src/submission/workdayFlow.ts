@@ -377,9 +377,14 @@ function negated(text: string): boolean {
   return WD_NEGATION.test(text.replace(/n['\u2019]t\b/g, " not"));
 }
 
+/** Folds typographic quotes into plain ones: CoStar writes "Bachelor’s Degree". */
+function plainQuotes(text: string): string {
+  return text.replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"');
+}
+
 function matches(optionText: string, candidate: string): boolean {
-  const option = optionText.replace(/\s+/g, " ").trim().toLowerCase();
-  const wanted = candidate.replace(/\s+/g, " ").trim().toLowerCase();
+  const option = plainQuotes(optionText).replace(/\s+/g, " ").trim().toLowerCase();
+  const wanted = plainQuotes(candidate).replace(/\s+/g, " ").trim().toLowerCase();
   if (!option || !wanted) return false;
   if (WD_PLACEHOLDER.test(option)) return false;
   if (isRefusal(option) && isRefusal(wanted)) return true;
