@@ -327,6 +327,14 @@ const RESOLVERS: readonly Resolver[] = [
     citation: "experience[].start",
     resolve: (_entry, profile, label) => answerYearsThreshold(label, profile),
   },
+  {
+    // Workday's work-history block can require a "Role Description". The
+    // profile's highlights are the verified account of the job, used as written.
+    test: exact("role description", "job description", "position description", "description of role", "description of your role"),
+    category: "employment-history",
+    citation: "experience[0].highlights",
+    resolve: (entry) => entry.highlights.join(" "),
+  },
 ];
 
 /**

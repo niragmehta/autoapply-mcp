@@ -272,3 +272,31 @@ describe("month options", () => {  /** Boards write the same month as "February"
     expect(candidates).toEqual(["Hooli"]);
   });
 });
+
+/**
+ * Omnissa's Workday work-history block requires a "Role Description" text box
+ * and would not advance past it. The profile's highlights for the job are the
+ * verified account of the role, so they are used as written.
+ */
+describe("the role description in a work-history block", () => {
+  it("is the most recent job's highlights", () => {
+    expect(resolveExperience("Role Description*", profile)?.answer).toBe("Built guardrails");
+  });
+
+  it("is filled on a live text box", () => {
+    const derived = fallbackAnswersForFields(
+      [field("Role Description*", { type: "textarea", name: "roleDescription" })],
+      [],
+      [],
+      undefined,
+      undefined,
+      experienceResolverFor(profile),
+    );
+    expect(derived[0]?.answer).toBe("Built guardrails");
+  });
+
+  it("is nothing when the profile records no highlights", () => {
+    const bare = { ...profile, experience: profile.experience.map((job) => ({ ...job, highlights: [] })) };
+    expect(resolveExperience("Role Description", bare)).toBeNull();
+  });
+});
