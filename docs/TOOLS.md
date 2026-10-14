@@ -134,10 +134,10 @@ Runs every guard, then acts according to mode.
 | `applicationId` | `string` | |
 | `mode` | `"manual" \| "assisted" \| "auto"` | Cannot exceed the campaign's configured mode |
 | `headless` | `boolean?` | Ignored in assisted mode |
-| `keepOpenSeconds` | `number?` | Assisted mode: how long to leave the filled form open |
+| `keepOpenSeconds` | `number?` | Assisted mode: how long to leave the filled form open (at most 1800) |
 
 - `manual` returns the packet and apply URL for you to submit.
-- `assisted` fills the hosted form in a visible browser, screenshots it, and leaves it open for you to review and submit.
+- `assisted` fills the hosted form in a visible browser, screenshots it, and leaves it open for you to review and submit. If your submission reaches the board's confirmation page during the hold, the run returns at once and records it as submitted with that page as evidence; otherwise it returns `prepared` and you call `record_submission` yourself.
 - `auto` fills and clicks submit. Requires campaign mode `auto`, an allowlisted company, every required field fillable, and no unresolved questions.
 
 SmartRecruiters, Workable and Recruitee are discovery-only integrations.

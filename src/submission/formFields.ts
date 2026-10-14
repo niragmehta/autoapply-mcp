@@ -2337,11 +2337,12 @@ const SUBMISSION_CONFIRMATION_PATTERNS = [
  * is accepted, so the path is a stronger signal than employer copy. Pinterest
  * writes "Good news: your application is in!" and Greenhouse still landed on
  * /job_app/confirmation, which no marker list would have covered in advance.
+ * Lever routes a submitted application to /thanks.
  * The check is anchored to a whole path segment so a posting that merely
  * mentions the word cannot pass.
  */
 const CONFIRMATION_URL_PATTERN =
-  /(?:^|[/?&#])(?:confirmation|confirmed|application[_-]?(?:submitted|complete|received)|thank[_-]?you|success)(?:$|[/?&#])/i;
+  /(?:^|[/?&#])(?:confirmation|confirmed|application[_-]?(?:submitted|complete|received)|thank[_-]?you|thanks|success)(?:$|[/?&#])/i;
 
 /** True when the ATS itself routed to a post-submission confirmation page. */
 export function isConfirmationUrl(url: string): boolean {

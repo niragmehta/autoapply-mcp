@@ -986,7 +986,22 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       const keepOpenMs = options.keepOpenMs ?? 0;
       if (keepOpenMs > 0) {
         logger.info("holding form open for human review", { keepOpenMs, url: page.url() });
-        await page.waitForTimeout(keepOpenMs);
+        const confirmation = await awaitHumanSubmission(page, keepOpenMs);
+        if (confirmation !== undefined) {
+          const shot = await capture(page, options.artifactsDir, packet.applicationId, "confirmation");
+          logger.info("the person submitted the held form", { url: page.url() });
+          return {
+            status: "submitted",
+            reason: "submitted by a person in the held window; confirmation detected and captured",
+            filledFields: filled,
+            unmatchedRequired: [],
+            unusedAnswers: plan.unusedAnswers.map((answer) => answer.label),
+            screenshotPath: shot,
+            finalUrl: page.url(),
+            confirmationText: confirmation.slice(0, 600),
+            captchaDetected: false,
+          };
+        }
       }
       if (await hasVisibleCaptchaChallenge(page)) return await captureCaptchaAbort(page, packet, options, filled);
       return {
@@ -2283,6 +2298,32 @@ async function describeSubmitControl(page: AnyPage): Promise<string> {
 
 async function readBodyText(page: AnyPage): Promise<string> {
   return page.locator("body").first().innerText().catch(() => "");
+}
+
+const HOLD_POLL_MS = 3_000;
+
+/**
+ * Waits out an assisted hold, returning the confirmation as soon as the
+ * person's own submission lands rather than keeping a finished window open for
+ * the rest of the hold, which also left the submission unrecorded until a
+ * person said so. Wording already on the form before anything was submitted is
+ * not evidence, so then only a move to a new page counts. Undefined when the
+ * hold ends, or the window is closed, without a confirmation.
+ */
+async function awaitHumanSubmission(page: AnyPage, keepOpenMs: number): Promise<string | undefined> {
+  const startUrl = page.url();
+  const confirmedBefore = detectSubmissionConfirmation(await readBodyText(page), startUrl);
+  for (let waited = 0; waited < keepOpenMs; waited += HOLD_POLL_MS) {
+    try {
+      await page.waitForTimeout(Math.min(HOLD_POLL_MS, keepOpenMs - waited));
+    } catch {
+      return undefined;
+    }
+    const url = page.url();
+    const text = await readBodyText(page);
+    if (detectSubmissionConfirmation(text, url) && (!confirmedBefore || url !== startUrl)) return text || url;
+  }
+  return undefined;
 }
 
 /**
