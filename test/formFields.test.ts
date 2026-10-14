@@ -3494,3 +3494,11 @@ describe("stored facts offered to yes/no questions", () => {
     expect(plan.toFill.map((match) => match.answer?.answer)).toEqual(["Yes"]);
   });
 });
+
+// Broadcom's Workday confirms in a modal: "Congratulations! Your application
+// has successfully been submitted." - the adverb before "been", not after it.
+describe("confirmation wording with the adverb before been", () => {
+  it("recognises 'has successfully been submitted'", () => {
+    expect(detectSubmissionConfirmation("Congratulations! Your application has successfully been submitted.")).toBe(true);
+  });
+});

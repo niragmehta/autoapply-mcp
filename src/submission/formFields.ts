@@ -2409,8 +2409,10 @@ const SUBMISSION_CONFIRMATION_MARKERS = [
  * and participle are still both required, so unrelated page copy cannot pass.
  */
 const SUBMISSION_CONFIRMATION_PATTERNS = [
-  /\byour application (?:was|has been|is)(?: \w+ly)? (?:submitted|received|sent|complete[d]?)\b/,
-  /\bapplication (?:was|has been)(?: \w+ly)? (?:submitted|received)\b/,
+  // Broadcom's Workday puts the adverb before "been": "Your application has
+  // successfully been submitted."
+  /\byour application (?:was|has(?: \w+ly)? been|is)(?: \w+ly)? (?:submitted|received|sent|complete[d]?)\b/,
+  /\bapplication (?:was|has(?: \w+ly)? been)(?: \w+ly)? (?:submitted|received)\b/,
   // "already submitted/applied" is deliberately absent: it reads the same in an
   // employer's application-limits policy as in a real confirmation, so it is
   // handled by detectAlreadyApplied, which rejects conditional phrasing.
