@@ -495,3 +495,52 @@ describe("a contact detail the third party will use to reach the candidate", () 
     expect(answers[0]?.source).not.toBe("profile");
   });
 });
+
+/**
+ * Accordion asked "Describe a specific AI-assisted workflow you've built or
+ * refined in the last 6 months - what it does, what you tried that didn't
+ * work...". A stored "No" written for "Have you applied in the last 6 months?"
+ * matched the trailing clause, and the whole essay went out as that one word.
+ */
+describe("a stored yes/no answer and a free-text prompt", () => {
+  const recentProcess = {
+    key: "recent-hiring-process",
+    label: "Participated in a hiring process with us recently",
+    patterns: ["in the last 6 months"],
+    answer: "No",
+    alternatives: ["No"],
+    allowAutoFill: true,
+  };
+
+  it("never answers an essay prompt with Yes or No", () => {
+    const { answers } = draftAnswers(
+      [
+        text(
+          "Describe a specific AI-assisted workflow you've built or refined in the last 6 months \u2014 what it does, what you tried that didn't work, and what you'd change if you rebuilt it today.",
+          "textarea",
+        ),
+      ],
+      profileWith([recentProcess]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+
+  it("still answers a yes/no question asked in a text box", () => {
+    const { answers } = draftAnswers(
+      [text("Have you applied to Acme in the last 6 months? If so, please tell us when.", "textarea")],
+      profileWith([recentProcess]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("No");
+  });
+
+  it("still answers the yes/no question the entry was written for", () => {
+    const { answers } = draftAnswers([yesNo("Have you applied to Acme in the last 6 months?")], profileWith([recentProcess]), makeCampaign());
+
+    expect(answers[0]?.answer).toBe("No");
+  });
+});

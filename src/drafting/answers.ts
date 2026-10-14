@@ -296,6 +296,26 @@ function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boo
   return entry.allowAutoFill && entry.answer.trim().length > 0;
 }
 
+/** A sentence in the label that is itself a yes/no question. */
+const YES_NO_QUESTION = /(?:^|[.!?:;\u2014]\s*)(?:do|does|did|are|is|was|were|have|has|had|will|would|can|could|should)\s[^?]*\?/i;
+
+/**
+ * A free-text prompt asking for prose cannot be answered "Yes" or "No".
+ * Accordion's "Describe a specific AI-assisted workflow you've built or refined
+ * in the last 6 months - what it does, what you tried that didn't work..."
+ * matched a stored "No" written for "Have you applied in the last 6 months?" on
+ * its trailing clause, and the whole essay went out as that one word. A text
+ * box that does pose a yes/no question - "Do you have a non-compete? If so,
+ * please describe." - still takes the stored answer.
+ */
+function yesNoForEssay(question: FormQuestion, answer: string): boolean {
+  return (
+    looksLikeEssay(question.label, question.type) &&
+    /^(?:yes|no)[.!]?$/i.test(answer.trim()) &&
+    !YES_NO_QUESTION.test(withoutAsides(question.label))
+  );
+}
+
 /**
  * Employers word the sponsorship question in endlessly many ways, and a stored
  * pattern list can only ever chase them. Abnormal Security asks "Do you need,
@@ -687,7 +707,7 @@ function answerOne(
     category === "contact" &&
     resolveApprovedValue(approvedEarly, asked).unmatchedChoice &&
     CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
-  if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback) {
+  if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback && !yesNoForEssay(question, approvedEarly.answer)) {
     const resolved = resolveApprovedValue(approvedEarly, asked);
     // An optional choice question offering none of the stored preferences needs
     // no decision: leaving it blank is the honest outcome, and for a decline

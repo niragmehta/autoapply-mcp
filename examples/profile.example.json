@@ -1822,8 +1822,11 @@
         "been through our hiring process",
         "interviewed with us in the last",
         "applied to or interviewed with",
-        "in the last 6 months",
-        "in the last six months"
+        "applied in the last 6 months",
+        "applied in the last six months",
+        "with us in the last 6 months",
+        "with us in the last six months",
+        "interviewed in the last 6 months"
       ],
       "answer": "",
       "allowAutoFill": true,
