@@ -1502,6 +1502,17 @@ export async function fillWorkdayPrompt(
     // value wrong. The phone-code prompt is searched with the phone number,
     // which matches no country; the draft's "Canada (+1)" is correct and
     // stands. It is only replaced when a candidate is confirmed on offer.
+    //
+    // A decline is the exception: it asks for the question to go unanswered,
+    // so whatever an earlier run left is an answer the candidate chose not to
+    // give. Disney's draft came back holding "No" for "Are you Hispanic or
+    // Latino?", which offers no way to decline, and "kept" would have sent it.
+    if (candidates.some((candidate) => isRefusal(candidate.toLowerCase()))) {
+      const cleared = await clearToPlaceholder(page, field);
+      return cleared.filled
+        ? { filled: true, detail: `declined: cleared ${stale.join(", ")} left over from an earlier run` }
+        : cleared;
+    }
     return {
       filled: true,
       detail: `kept ${stale.join(", ")}; no candidate of ${JSON.stringify(candidates)} is on offer`,

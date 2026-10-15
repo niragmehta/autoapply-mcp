@@ -856,6 +856,20 @@ describe("a single-select that a probe replaced", () => {
     expect(result.strayValue).toBeFalsy();
     expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
   });
+
+  it("does not keep an answer an earlier run left when the candidate declines", async () => {
+    // Disney's draft came back holding "No" for "Are you Hispanic or Latino?",
+    // which offers no way to decline. "Kept" would submit an answer the
+    // candidate chose not to give.
+    const prompt = new FakePrompt({ "Select One": null, Yes: null, No: null }, "dropdown");
+    prompt.selected = ["No"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["wish to answer", "Decline to self identify"]);
+
+    expect(result.detail).not.toContain("kept");
+    expect(result.strayValue).toBeFalsy();
+    expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
+  });
 });
 
 describe("a row chosen with the keyboard", () => {
