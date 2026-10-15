@@ -235,7 +235,13 @@ const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b|^(?:n
 const HONORIFIC_FIELD = /^(?:name )?(?:prefix|suffix|salutation|honorific)$/;
 const HONORIFIC_VALUE = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|dame|rev|jr|sr|ii|iii|iv|v|esq|phd|md)\.?$/i;
 
-const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
+/**
+ * A label that opens as a yes/no question, after any number a form puts in
+ * front of it: Intel numbers its questions, and "3) Are you an immediate family
+ * member ...?" read as a statement and took the stored location.
+ */
+const YES_NO_LEAD =
+  /^\s*(?:(?:\(?\d{1,2}[.):]|\(?[a-z][.)]|q\d{1,2}[.:)]?)\s*)?(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
 const ASKS_FOR_CONTACT =
   /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address|github|gitlab|portfolio|page|site|handle|account)\b/i;

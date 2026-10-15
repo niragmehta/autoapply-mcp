@@ -3508,6 +3508,17 @@ describe("the stored location offered to a yes/no question", () => {
     expect(matchFields([relocate], [location])[0]?.answer).toBeNull();
   });
 
+  it("recognises a yes/no question behind its number", () => {
+    // Intel numbers its auditor-independence questions, and "3) Are you an
+    // immediate family member ... based out of the San Jose, California
+    // office?" was offered the stored location on the word "California".
+    const numbered = field(
+      "3) Are you an immediate family member (parent, child, sibling, spouse/partner) of a partner at Ernst & Young who is based out of the San Jose, California office?",
+      { role: "combobox", required: true },
+    );
+    expect(matchFields([numbered], [location])[0]?.answer).toBeNull();
+  });
+
   it("still fills a location field with it", () => {
     expect(matchFields([field("Location (City)*")], [location])[0]?.answer?.answer).toBe("Vancouver, British Columbia, Canada");
   });
