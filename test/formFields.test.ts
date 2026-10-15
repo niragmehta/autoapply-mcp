@@ -3590,3 +3590,30 @@ describe("declinesByLeavingBlank", () => {
     expect(declinesByLeavingBlank(field("Please select your gender", { type: "select" }), decline)).toBe(false);
   });
 });
+
+// Babylist asks "By providing your phone number in this application you may
+// receive text messages ..." as a select offering consent choices. "Phone" sits
+// inside that label, so the stored number tied with the question's own answer
+// and won, and a phone number was searched for among the consent options.
+describe("a list of choices whose label mentions a contact detail", () => {
+  const SMS =
+    "By providing your phone number in this application you may receive text messages from Babylist regarding updates about your job application, interview scheduling, and other recruitment-related information.";
+
+  it("never takes the phone number, email or a URL", () => {
+    const matches = matchFields(
+      [field(SMS, { role: "combobox", required: true })],
+      [
+        answer("Phone", "+1 604 555 0100"),
+        answer(`${SMS} Message and data rates may apply.`, "No, I do not consent to text messages"),
+      ],
+    );
+
+    expect(matches[0]?.answer?.answer).toBe("No, I do not consent to text messages");
+  });
+
+  it("still fills a phone number into a text box", () => {
+    const matches = matchFields([field("Phone Number", { type: "tel" })], [answer("Phone", "+1 604 555 0100")]);
+
+    expect(matches[0]?.answer?.answer).toBe("+1 604 555 0100");
+  });
+});

@@ -538,6 +538,11 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
+  // A list of choices never takes a phone number, email address or URL.
+  // Babylist's SMS-consent select opens "By providing your phone number...",
+  // which put the stored number level with the question's own answer, and the
+  // number won the tie.
+  if (offersOptions(field) && CONTACT_VALUE.test(answer.answer.trim())) return true;
   // Nor is a yes/no question answered with a stored fact. Broadcom asked about
   // being "employed by any entity of the federal, state or local government",
   // and the stored province bound to it on the word "state"; Zendesk's "Are you
