@@ -126,9 +126,10 @@ class FakePrompt {
         allInnerTexts: async () => pills,
         locator: (child: string) => self.locator(child),
         fill: async () => undefined,
-        // A pill is its own delete control on a real widget.
+        // A pill is its own delete control on a real widget. A dropdown has no
+        // pills, so there is nothing to click and its value stays.
         click: async () => {
-          if (!self.pillDeletes) return;
+          if (!self.pillDeletes || self.kind !== "picker") return;
           const at = index ?? 0;
           self.selected = self.selected.filter((_, position) => position !== at);
         },
@@ -843,6 +844,18 @@ describe("a single-select that a probe replaced", () => {
     expect(result.filled).toBe(false);
     expect(prompt.selected).toEqual(["Findem"]);
   });
+
+  it("puts a single-select that began blank back to Select One when a search commits a row", async () => {
+    // Disney's "Are you Hispanic or Latino?" began blank. Declining it, a
+    // search committed "No", and with no pill to remove, the stray answer
+    // stayed and stopped the application.
+    const prompt = new EnterCommitsRowPrompt({ "Select One": null, Yes: null, No: null }, "No");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["wish to answer", "Decline to self identify"]);
+
+    expect(result.strayValue).toBeFalsy();
+    expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
+  });
 });
 
 describe("a row chosen with the keyboard", () => {
@@ -1164,6 +1177,31 @@ class SearchablePrompt extends FakePrompt {
             return;
           }
           this.focused = false;
+          this.menu = [];
+        },
+      },
+    };
+  }
+}
+
+/** A dropdown whose search commits a row on Enter whether or not its list is open, as Disney's did. */
+class EnterCommitsRowPrompt extends SearchablePrompt {
+  constructor(
+    tree: Tree,
+    private readonly row: string,
+  ) {
+    super(tree, [], "enter", false, false, { kind: "dropdown" });
+  }
+
+  override asPage() {
+    const page = super.asPage();
+    return {
+      ...page,
+      keyboard: {
+        ...page.keyboard,
+        press: async (key: string) => {
+          if (key !== "Enter") return page.keyboard.press(key);
+          this.selected = [this.row];
           this.menu = [];
         },
       },

@@ -876,6 +876,12 @@ async function clearAddedValues(
     // The pill only becomes clickable once the popup stops covering it.
     await closeMenu(page);
     const pills = field.locator(WD_PILL);
+    // A single-select shows its value as text, with no pill to remove. One that
+    // began blank is put back by choosing its "Select One" row: Disney's
+    // "Are you Hispanic or Latino?" otherwise kept a "No" a search committed.
+    if ((await pills.count()) === 0) {
+      return before.length === 0 && (await clearToPlaceholder(page, field)).filled;
+    }
     const pill = pills.nth(Math.max((await pills.count()) - 1, 0));
     const remove = pill.locator('button, [role="button"], [data-automation-id*="delete" i], svg').first();
     const target = (await remove.count()) > 0 ? remove : pill;
