@@ -299,6 +299,22 @@ function canAutoFill(entry: { answer: string; allowAutoFill: boolean; skip?: boo
 /** A sentence in the label that is itself a yes/no question. */
 const YES_NO_QUESTION = /(?:^|[.!?:;\u2014]\s*)(?:do|does|did|are|is|was|were|have|has|had|will|would|can|could|should)\s[^?]*\?/i;
 
+/**
+ * Asks which place the candidate is in rather than whether he is in one.
+ * Nanit's free-text "What city and state are you currently based in?" matched
+ * the stored "No - based in Vancouver, Canada and willing to relocate." on its
+ * wording, and a free-text box offers no list that could have refused it, so
+ * the employer was told his city and state were "No - ...".
+ */
+const ASKS_WHICH_PLACE =
+  /\b(?:what|which)\b[^?]*\b(?:city|town|state|province|region|country|location|metro(?:politan)? area)\b|\bwhere\s+(?:are|do|is)\s+you\b/i;
+
+/** A stored answer that opens with yes or no cannot name a place. */
+function polarAnswerToWhichPlace(label: string, answer: string): boolean {
+  const asked = withoutAsides(label);
+  return /^\s*(?:yes|no)\b/i.test(answer) && ASKS_WHICH_PLACE.test(asked) && !YES_NO_QUESTION.test(asked);
+}
+
 /** A choice that lets the candidate decline to self-identify. */
 const OFFERS_DECLINE =
   /\b(?:decline|prefer not|rather not|not (?:wish|want) to|don'?t (?:wish|want) to|choose not to|not to (?:say|answer|disclose|self[- ]?identify))/i;
@@ -735,11 +751,12 @@ function answerOne(
   // ("No - based in Vancouver...") matched the question's wording, matched none
   // of the 61 options, and so held up an otherwise complete application. A
   // question asking *which* place wants a value, not a yes/no.
+  const contactValueAsked = CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
   const factualFallback =
     approvedEarly !== undefined &&
     category === "contact" &&
-    resolveApprovedValue(approvedEarly, asked, profile).unmatchedChoice &&
-    CONTACT_RESOLVERS.some(([pattern]) => pattern.test(withoutAsides(question.label)));
+    contactValueAsked &&
+    (resolveApprovedValue(approvedEarly, asked, profile).unmatchedChoice || polarAnswerToWhichPlace(question.label, approvedEarly.answer));
   if (approvedEarly && canAutoFill(approvedEarly) && !factualFallback && !yesNoForEssay(question, approvedEarly.answer)) {
     const stated = resolveApprovedValue(approvedEarly, asked, profile);
     // A required self-identification question that offers no way to decline

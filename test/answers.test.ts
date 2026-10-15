@@ -898,6 +898,34 @@ describe("location questions that ask which place, not whether", () => {
       expect(answers[0]?.answer).toBe("(CAN) British Columbia");
       expect(answers[0]?.requiresHuman).toBe(false);
     });
+
+    // Nanit, 2026-10-14: "What city and state are you currently based in?" is a
+    // free-text box, so nothing rejected the stored residence answer and the
+    // employer was told the candidate's city and state were "No - based in
+    // Vancouver, Canada and willing to relocate.".
+    it("answers a free-text question about which city with the place, not a denial", () => {
+      const p = ProfileSchema.parse({
+        ...withAddress,
+        answers: [{ ...residence, patterns: [...residence.patterns, "currently based in"] }],
+      });
+      const { answers } = draftAnswers(
+        [question("What city and state are you currently based in?", { required: true, type: "input_text" })],
+        p,
+        campaign,
+      );
+      expect(answers[0]?.answer).toBe("Coquitlam, British Columbia");
+      expect(answers[0]?.requiresHuman).toBe(false);
+    });
+
+    it("still gives the qualified denial to a free-text question asking whether", () => {
+      const p = ProfileSchema.parse({ ...withAddress, answers: [residence] });
+      const { answers } = draftAnswers(
+        [question("Are you located in the Bay Area?", { required: true, type: "input_text" })],
+        p,
+        campaign,
+      );
+      expect(answers[0]?.answer).toBe("No - based in Vancouver, Canada and willing to relocate.");
+    });
   });
 });
 
