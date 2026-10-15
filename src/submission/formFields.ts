@@ -804,6 +804,20 @@ const DECLINE_ANSWER_PATTERN =
   /^(?:i\s+)?(?:decline to (?:self[\s-]?identify|answer|state)|(?:do not|don't) wish to (?:answer|self[\s-]?identify)|wish not to (?:answer|self[\s-]?identify|disclose)|prefer not to (?:answer|say|disclose))\b/i;
 
 /**
+ * A label telling the candidate to decline by selecting nothing. Thomson
+ * Reuters asks "Please select your gender; if you would prefer not to specify
+ * your gender, do not select any option or chose the "select one" option." and
+ * offers only Female and Male, so no decline wording can ever be found there.
+ */
+const LEAVE_UNSELECTED_TO_DECLINE =
+  /\b(?:do not|don['\u2019]t)\s+select\s+any\s+(?:option|answer|response)s?\b|\bcho{1,2}se\s+the\s+["'\u201C\u201D]?select one["'\u201C\u201D]?\s+option\b|\bleave\s+(?:this|it|the\s+(?:field|question))\s+blank\b/i;
+
+/** An optional question that the form itself says is declined by selecting nothing. */
+export function declinesByLeavingBlank(field: FieldDescriptor, answer: DraftAnswer): boolean {
+  return !field.required && DECLINE_ANSWER_PATTERN.test(answer.answer.trim()) && LEAVE_UNSELECTED_TO_DECLINE.test(field.label);
+}
+
+/**
  * Boards word the "decline to answer" option differently — Greenhouse alone
  * ships "Decline to self identify", "I don't wish to answer" and "Prefer not to
  * say" across customers. Offer every phrasing so one approved answer works

@@ -4,6 +4,7 @@ import {
   buildFillPlan,
   answerValueForField,
   augmentAnswersForBrowser,
+  declinesByLeavingBlank,
   detectCaptcha,
   detectSubmissionConfirmation,
   educationDateLabels,
@@ -3558,5 +3559,27 @@ describe("stored facts offered to yes/no questions", () => {
 describe("confirmation wording with the adverb before been", () => {
   it("recognises 'has successfully been submitted'", () => {
     expect(detectSubmissionConfirmation("Congratulations! Your application has successfully been submitted.")).toBe(true);
+  });
+});
+
+// Thomson Reuters' Voluntary Disclosures offer only Female/Male and the race
+// list, and say to decline by selecting nothing. Driving each widget through
+// every decline wording took 90 seconds apiece and could only fail.
+describe("declinesByLeavingBlank", () => {
+  const decline = answer("Gender", "Decline to self-identify", { category: "demographic" });
+  const GENDER =
+    "Please select your gender; if you would prefer not to specify your gender, do not select any option or chose the \u201Cselect one\u201D option.";
+  const RACE =
+    "Using the definitions included in the Race/Ethnicity Definitions link above, please select the race/ethnicity in the drop down below which most accurately describes how you identify yourself. If you prefer not to specify your Race/Ethnicity, do not select any option.";
+
+  it("leaves an optional question blank when its label says that is how to decline", () => {
+    expect(declinesByLeavingBlank(field(GENDER, { type: "select" }), decline)).toBe(true);
+    expect(declinesByLeavingBlank(field(RACE, { type: "select" }), decline)).toBe(true);
+  });
+
+  it("still drives a required question, a non-decline answer, or a label without the instruction", () => {
+    expect(declinesByLeavingBlank(field(GENDER, { type: "select", required: true }), decline)).toBe(false);
+    expect(declinesByLeavingBlank(field(GENDER, { type: "select" }), answer("Gender", "Male"))).toBe(false);
+    expect(declinesByLeavingBlank(field("Please select your gender", { type: "select" }), decline)).toBe(false);
   });
 });

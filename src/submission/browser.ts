@@ -10,6 +10,7 @@ import {
   answerValueForField,
   augmentAnswersForBrowser,
   buildFillPlan,
+  declinesByLeavingBlank,
   detectCaptcha,
   detectSubmissionConfirmation,
   detectSubmissionRejection,
@@ -599,6 +600,13 @@ async function fillFormPage(
   });
 
   for (const match of orderFieldsForBrowser(plan.toFill)) {
+    // Selecting nothing is this form's own way to decline, so driving the
+    // widget through every decline wording could only end in "no option
+    // matched" - after 90 seconds a field on Thomson Reuters' form.
+    if (declinesByLeavingBlank(match.field, match.answer!)) {
+      logger.info("left blank to decline, as the form instructs", { label: match.field.label.slice(0, 120) });
+      continue;
+    }
     const locator = page.locator(`[data-autoapply-idx="${match.field.selectorIndex}"]`).first();
     const value = answerValueForField(match.field, match.answer!);
     const candidates = optionSearchCandidates(match.field, match.answer!, packet.company);
