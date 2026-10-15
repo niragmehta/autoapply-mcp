@@ -237,7 +237,8 @@ const HONORIFIC_VALUE = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|dame|rev|jr|sr|ii|iii
 
 const YES_NO_LEAD = /^\s*(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
-const ASKS_FOR_CONTACT = /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address)\b/i;
+const ASKS_FOR_CONTACT =
+  /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address|github|gitlab|portfolio|page|site|handle|account)\b/i;
 /** Answers drawn from stored facts about the candidate rather than from a decision. */
 const STORED_FACT_ANSWER =
   /^(?:personal\.|identity\.|education\[|experience\[|location$|current[_-]location$|derived-(?:legal|full)-name$|first_name$|last_name$)/;

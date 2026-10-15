@@ -3354,6 +3354,15 @@ describe("contact details offered to yes/no questions", () => {
       "casey@example.com",
     );
   });
+
+  it("gives the stored link to a yes/no-worded question asking for a profile page", () => {
+    // Old Mission's "Do you have a GitHub page?" is a text box that wants the
+    // link itself; refusing it left a required question empty.
+    const github = answer("Do you have a GitHub page?", "https://github.com/example");
+    expect(matchFields([field("Do you have a GitHub page? *", { required: true })], [github])[0]?.answer?.answer).toBe(
+      "https://github.com/example",
+    );
+  });
 });
 
 // Zuora's Greenhouse form carries an employment block and an education block
