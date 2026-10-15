@@ -878,6 +878,11 @@ const DECLINE_OPTION_CANDIDATES = [
   "declined to state",
 ];
 
+/** Whether a candidate list is the decline search `optionSearchCandidates` builds. */
+export function isDeclineSearch(candidates: readonly string[]): boolean {
+  return DECLINE_OPTION_CANDIDATES.every((decline) => candidates.includes(decline));
+}
+
 /** Ordered search strings to try when driving a typeahead combobox. */
 export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnswer, employer?: string): string[] {
   if (DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {

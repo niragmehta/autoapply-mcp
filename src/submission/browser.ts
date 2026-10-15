@@ -17,6 +17,7 @@ import {
   detectAlreadyApplied,
   fallbackAnswersForFields,
   isAffirmativeAnswer,
+  isDeclineSearch,
   isGroupedOption,
   looksLikeApplicationForm,
   normalizeLabel,
@@ -1831,6 +1832,22 @@ export async function fillCombobox(
   candidates: readonly string[],
 ): Promise<void> {
   try {
+    // A decline is asked of a short demographic list, which the unfiltered
+    // look shows in full. If no way to decline is on it, typing each wording
+    // can only narrow it further: Doximity's three such dropdowns took two
+    // minutes apiece to report what this one read says.
+    if (isDeclineSearch(candidates)) {
+      await openFlyout(locator);
+      await locator.fill("");
+      const selector = await optionSelectorFor(page, locator);
+      const optionTexts = await waitForVisibleOptions(page, OPTION_WAIT_MS, selector);
+      const index = pickOptionIndex(optionTexts, candidates);
+      if (index >= 0) {
+        await page.locator(selector).nth(index).click();
+        return;
+      }
+      if (optionTexts.length > 0) throw new Error(`no visible option matched ${JSON.stringify(candidates)}`);
+    }
     for (const candidate of [...candidates, ""]) {
       await closeFlyout(page);
       await openFlyout(locator);

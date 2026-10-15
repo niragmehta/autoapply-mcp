@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLLECT_FIELDS, READ_VALIDATION_ERRORS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
-import type { FieldDescriptor, FillPlan } from "../src/submission/formFields.js";
+import { optionSearchCandidates, type FieldDescriptor, type FillPlan } from "../src/submission/formFields.js";
 
 describe("COLLECT_FIELDS", () => {
   it("executes immediately and returns field descriptors", () => {
@@ -623,6 +623,31 @@ describe("fillCombobox", () => {
     const fake = fakeCombobox({ Yes: ["Yes"] });
     await fillCombobox(fake.page, fake.locator, ["Yes"]);
     expect(fake.events.at(-1)).toBe("key:Escape");
+  });
+
+  // Doximity's demographic dropdowns offer no way to decline. Typing each of
+  // the 21 decline wordings in turn took two minutes a field and could only
+  // fail: filtering narrows a list, it never adds to it.
+  it("gives up on a decline after one look at a full list that offers no way to decline", async () => {
+    const fake = fakeCombobox({ "": ["Male", "Female", "Non-binary"] });
+    const declines = optionSearchCandidates(
+      { selectorIndex: 0, label: "What gender do you identify with?", type: "text", name: "", required: false, role: "combobox" },
+      { questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" },
+    );
+
+    await expect(fillCombobox(fake.page, fake.locator, declines)).rejects.toThrow(/no visible option/);
+    expect(fake.events.filter((event) => event.startsWith("fill:"))).toEqual(["fill:"]);
+  });
+
+  it("still takes a decline option the full list offers", async () => {
+    const fake = fakeCombobox({ "": ["Male", "Female", "I don't wish to answer"] });
+    const declines = optionSearchCandidates(
+      { selectorIndex: 0, label: "Gender", type: "text", name: "", required: false, role: "combobox" },
+      { questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" },
+    );
+
+    await fillCombobox(fake.page, fake.locator, declines);
+    expect(fake.events).toContain("click-option:I don't wish to answer");
   });
 
   // Greenhouse keeps the phone field's country picker rendered, so a page-wide
