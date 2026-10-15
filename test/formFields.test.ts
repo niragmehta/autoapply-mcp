@@ -3530,6 +3530,13 @@ describe("prefix and suffix fields", () => {
     const prefix = field("Prefix", { role: "combobox", required: false });
     expect(matchFields([prefix], [answer("Prefix", "Dr.")])[0]?.answer?.answer).toBe("Dr.");
   });
+
+  it("take the placeholder itself, which asks for the field to be cleared", () => {
+    // Disney's saved draft still held the stray "II"; answering the Suffix with
+    // its own "Select One" is how that value is taken back.
+    const suffix = field("Suffix", { role: "combobox", required: false });
+    expect(matchFields([suffix], [answer("Suffix", "Select One")])[0]?.answer?.answer).toBe("Select One");
+  });
 });
 
 // GEICO asked "Do you have a high school diploma or equivalent?" and the

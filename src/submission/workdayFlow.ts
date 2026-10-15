@@ -886,6 +886,42 @@ async function clearAddedValues(
 }
 
 /**
+ * An answer naming the placeholder itself, which asks for the field to be blank.
+ * No matcher may choose "Select One" as a value, so without this a stray value
+ * Workday kept in a saved draft could never be taken back: Disney's draft held
+ * a Suffix of "II" from an earlier mis-fill, a suffix nobody has.
+ */
+const PLACEHOLDER_CHOICE = /^\s*select one\s*$/i;
+
+/**
+ * Empties a prompt and confirms it reads back blank. A single-select is reset by
+ * choosing its "Select One" row; a picker by removing its pills. A value that
+ * survives is reported as stray, because the field would then state something
+ * nobody answered.
+ */
+async function clearToPlaceholder(page: Page, field: Locator): Promise<WorkdayPromptResult> {
+  const held = await chosenValues(field);
+  if (held.length === 0) return { filled: true, detail: "already blank" };
+  if ((await field.locator(WD_PILL).count()) > 0) {
+    await clearAddedValues(page, field, []);
+  } else {
+    await closeMenu(page);
+    if (await openMenu(page, field)) {
+      const placeholder = (await menuItems(page)).find((row) => PLACEHOLDER_CHOICE.test(row));
+      if (placeholder) await clickExact(page, placeholder);
+    }
+    await closeMenu(page);
+  }
+  const left = await chosenValues(field);
+  if (left.length === 0) return { filled: true, detail: `cleared ${JSON.stringify(held)} back to Select One` };
+  return {
+    filled: false,
+    detail: `left ${JSON.stringify(left)} selected and could not clear it; the field now states something that was never answered`,
+    strayValue: true,
+  };
+}
+
+/**
  * Puts a single-select back to the value it held when the pass began.
  *
  * `clearAddedValues` removes pills a picker gained, but a single-select has
@@ -1130,6 +1166,9 @@ export async function fillWorkdayPrompt(
   field: Locator,
   candidates: readonly string[],
 ): Promise<WorkdayPromptResult> {
+  if (candidates.length > 0 && candidates.every((candidate) => PLACEHOLDER_CHOICE.test(candidate))) {
+    return clearToPlaceholder(page, field);
+  }
   const before = await chosenValues(field);
   const already = before.find((value) => candidates.some((candidate) => matches(value, candidate)));
   if (already) return { filled: true, detail: `already set to ${already}` };

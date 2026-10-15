@@ -529,7 +529,14 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // A prefix or suffix holds an honorific and nothing else. Disney's Prefix and
   // Suffix sit under the heading "Legal Name", which the bank's "legal name"
   // entry matched; searching a suffix list for the whole name left "II" behind.
-  if (HONORIFIC_FIELD.test(fieldLabel) && !HONORIFIC_VALUE.test(answer.answer.trim())) return true;
+  // The placeholder itself is the one other answer, and it clears the field.
+  if (
+    HONORIFIC_FIELD.test(fieldLabel) &&
+    !HONORIFIC_VALUE.test(answer.answer.trim()) &&
+    !/^select one$/i.test(answer.answer.trim())
+  ) {
+    return true;
+  }
   if (yesNoQuestionTakesContact(field.label, answer.answer)) return true;
   // Nor is a yes/no question answered with a stored fact. Broadcom asked about
   // being "employed by any entity of the federal, state or local government",

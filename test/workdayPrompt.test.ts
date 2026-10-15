@@ -1336,3 +1336,38 @@ describe("a skill named in fewer than three characters", () => {
     expect(prompt.selected).toEqual(["C#"]);
   });
 });
+
+// Disney's saved draft kept a Suffix of "II" from an earlier mis-fill. No
+// matcher may pick "Select One", so nothing could take the value back, and the
+// application could neither go out with it nor be repaired.
+describe("a single-select answered with its own placeholder", () => {
+  it("clears a stray value back to Select One", async () => {
+    const prompt = new FakePrompt({ "Select One": null, "Jr.": null, II: null, III: null }, "dropdown");
+    prompt.selected = ["II"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Select One"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Select One"]);
+  });
+
+  it("leaves a single-select that is already blank alone", async () => {
+    const prompt = new FakePrompt({ "Select One": null, "Jr.": null, II: null }, "dropdown");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Select One"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.clicked).toEqual([]);
+  });
+
+  it("reports a stray value it could not clear", async () => {
+    const prompt = new FakePrompt({ "Select One": null, "Jr.": null, II: null }, "dropdown");
+    prompt.selected = ["II"];
+    prompt.refuses = ["Select One"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Select One"]);
+
+    expect(result.filled).toBe(false);
+    expect(result.strayValue).toBe(true);
+  });
+});
