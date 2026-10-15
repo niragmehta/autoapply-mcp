@@ -123,12 +123,32 @@ function containsPhrase(haystack: string, needle: string): boolean {
   return false;
 }
 
+/**
+ * Whether `container` is so much longer than `contained` that finding the one
+ * inside the other says nothing about them asking the same thing. A one-word
+ * field such as PayPal's "Language" turns up inside any long question that
+ * mentions the word, such as "Do you have professional experience working with
+ * the specific language or tech stack for this role ...?".
+ */
+function dwarfs(container: string, contained: string): boolean {
+  const containerTokens = tokens(container).length;
+  return containerTokens >= 6 && containerTokens >= 4 * Math.max(1, tokens(contained).length);
+}
+
+/**
+ * Scores how alike a field label and an answer label are, in that order. The
+ * order matters for containment: a long field label holding a short answer
+ * label ("Please share your LinkedIn profile URL" / "LinkedIn Profile") is the
+ * ordinary case, while a short field label found inside a long answer label is
+ * only as good as their token overlap once the answer dwarfs it.
+ */
 function similarity(a: string, b: string): number {
   const left = normalizeLabel(a);
   const right = normalizeLabel(b);
   if (left.length === 0 || right.length === 0) return 0;
   if (left === right) return 1;
-  if (containsPhrase(left, right) || containsPhrase(right, left)) return 0.85;
+  if (containsPhrase(left, right)) return 0.85;
+  if (containsPhrase(right, left) && !dwarfs(right, left)) return 0.85;
   const leftTokens = new Set(tokens(left));
   const rightTokens = tokens(right);
   if (leftTokens.size === 0 || rightTokens.length === 0) return 0;

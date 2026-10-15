@@ -90,6 +90,34 @@ describe("matchFields", () => {
     expect(matches[0]?.answer?.answer).toBe("Alex Kim");
   });
 
+  it("will not let a one-word field take a long question that merely mentions the word", () => {
+    // PayPal's Self Identify step opens with a "Language" dropdown for the form
+    // itself. The application's own tech-stack question contains "language" as
+    // a whole word, so containment scored it 0.85 and claimed the dropdown for
+    // that question's "Yes".
+    const matches = matchFields(
+      [field("Language", { type: "select" })],
+      [
+        answer(
+          "Do you have professional experience working with the specific language or tech stack for this role (e.g., Python, Java, React)? By clicking yes, you are confirming you have necessary requirements for this position.",
+          "Yes",
+          { source: "human", questionKey: "discovered_33e3188233b189cd" },
+        ),
+      ],
+    );
+
+    expect(matches[0]?.answer).toBeNull();
+  });
+
+  it("still lets a short field take a slightly longer answer label that contains it", () => {
+    const matches = matchFields(
+      [field("Phone"), field("Pronouns")],
+      [answer("Phone Number", "+1 555 0100"), answer("What are your pronouns? (optional)", "Prefer not to say")],
+    );
+
+    expect(matches.map((match) => match.answer?.label)).toEqual(["Phone Number", "What are your pronouns? (optional)"]);
+  });
+
   it("does not fill a city field from an answer about relocating or an office", () => {
     // A bare City sits in an address block and takes the stored address city
     // through the personal resolver, so no location-flavoured answer may claim
