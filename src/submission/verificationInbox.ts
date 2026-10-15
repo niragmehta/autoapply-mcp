@@ -15,7 +15,7 @@
  * candidate account; see fetchVerificationLink.
  */
 import { logger } from "../util/logger.js";
-import { chooseVerificationLink, decodeQuotedPrintable, isWorkdaySender } from "./verificationLinks.js";
+import { chooseVerificationLink, decodeQuotedPrintable, isWorkdaySender, LINK_CLOCK_TOLERANCE_MS } from "./verificationLinks.js";
 
 export type VerificationInboxConfig = {
   host: string;
@@ -34,6 +34,11 @@ export type VerificationInboxConfig = {
    * readable but an inbox-only reader will never look.
    */
   mailboxes: string[];
+  /**
+   * How long one mailbox read may take before it is abandoned and left to the
+   * next poll. Defaults to READ_TIMEOUT_MS.
+   */
+  readTimeoutMs?: number;
 };
 
 /**
@@ -187,10 +192,10 @@ const SEARCH_BACKDATE_MS = 36 * 60 * 60 * 1000;
 export async function fetchVerificationCode(
   config: VerificationInboxConfig,
   since: Date,
-  fetchMessages: (config: VerificationInboxConfig, since: Date) => Promise<ImapMessage[]> = readMailbox,
+  fetchMessages: (config: VerificationInboxConfig, since: Date, notBefore?: Date) => Promise<ImapMessage[]> = readMailbox,
 ): Promise<string | null> {
-  const messages = await fetchMessages(config, new Date(since.getTime() - SEARCH_BACKDATE_MS));
   const floor = since.getTime() - CLOCK_TOLERANCE_MS;
+  const messages = await fetchMessages(config, new Date(since.getTime() - SEARCH_BACKDATE_MS), new Date(floor));
   const fresh = messages
     .filter((message) => message.receivedAt.getTime() >= floor)
     .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime());
@@ -228,13 +233,14 @@ const LINK_POLL_MS = 5_000;
 export async function fetchVerificationLink(
   config: VerificationInboxConfig,
   query: VerificationLinkQuery,
-  fetchMessages: (config: VerificationInboxConfig, since: Date) => Promise<ImapMessage[]> = readWorkdayMail,
+  fetchMessages: (config: VerificationInboxConfig, since: Date, notBefore?: Date) => Promise<ImapMessage[]> = readWorkdayMail,
 ): Promise<string | null> {
   const deadline = Date.now() + Math.max(0, query.timeoutMs);
   const pollMs = Math.max(1, query.pollMs ?? LINK_POLL_MS);
   const searchFrom = new Date(query.since.getTime() - SEARCH_BACKDATE_MS);
+  const notBefore = new Date(query.since.getTime() - LINK_CLOCK_TOLERANCE_MS);
   for (;;) {
-    const messages = await fetchMessages(config, searchFrom).catch((error: unknown) => {
+    const messages = await fetchMessages(config, searchFrom, notBefore).catch((error: unknown) => {
       logger.warn("verification inbox unreadable", { detail: String(error) });
       return [] as ImapMessage[];
     });
@@ -269,12 +275,23 @@ type ImapFlowLike = {
   on: (event: "error", listener: (error: Error & { code?: unknown }) => void) => unknown;
   connect: () => Promise<void>;
   logout: () => Promise<void>;
+  /** Drops the connection without the LOGOUT round trip a stalled server would never answer. */
+  close?: () => void;
   getMailboxLock: (mailbox: string) => Promise<{ release: () => void }>;
   fetch: (
     range: unknown,
     query: unknown,
-  ) => AsyncIterable<{ envelope?: { date?: Date; from?: Array<{ address?: string }> }; source?: Buffer }>;
+    options?: unknown,
+  ) => AsyncIterable<{ uid?: number; envelope?: { date?: Date; from?: Array<{ address?: string }> }; source?: Buffer }>;
 };
+
+/**
+ * The longest a single mailbox read may take. Gmail throttled the relay while a
+ * Greenhouse code was awaited, a read hung for twelve minutes, and the code had
+ * expired by the time it was typed. A read abandoned here is simply retried by
+ * the next poll.
+ */
+const READ_TIMEOUT_MS = 45_000;
 
 /**
  * Reads every message from an accepted sender that the server files on or
@@ -285,6 +302,7 @@ type ImapFlowLike = {
 async function readMailbox(
   config: VerificationInboxConfig,
   since: Date,
+  notBefore?: Date,
   acceptSender: (address: string) => boolean = (address) =>
     !config.from || address.toLowerCase().includes(config.from.toLowerCase()),
   decode: (source: Buffer | undefined) => string = decodeMessageText,
@@ -308,6 +326,32 @@ async function readMailbox(
       detail: String(error.message ?? "").slice(0, 120),
     });
   });
+  const timeoutMs = config.readTimeoutMs ?? READ_TIMEOUT_MS;
+  const reading = readWithClient(client, config, since, notBefore, acceptSender, decode);
+  // A read abandoned below still settles later; nothing may be left to reject unheard.
+  reading.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      client.close?.();
+      reject(Object.assign(new Error(`mailbox read stalled for ${timeoutMs}ms`), { code: "ReadTimeout" }));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([reading, stalled]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readWithClient(
+  client: ImapFlowLike,
+  config: VerificationInboxConfig,
+  since: Date,
+  notBefore: Date | undefined,
+  acceptSender: (address: string) => boolean,
+  decode: (source: Buffer | undefined) => string,
+): Promise<ImapMessage[]> {
   const messages: ImapMessage[] = [];
   await client.connect();
   try {
@@ -321,12 +365,24 @@ async function readMailbox(
         continue;
       }
       try {
-        for await (const message of client.fetch({ since }, { envelope: true, source: true })) {
+        // Envelopes first, sources only for accepted senders dated after the
+        // request. The relay holds every message of the last day and a half -
+        // 190 when Gremlin's code was awaited - and downloading each in full on
+        // every poll, only to discard nearly all of them, made a single read
+        // slow enough to outlive the code and pushed the relay into Gmail's
+        // bandwidth limits.
+        const wanted: number[] = [];
+        for await (const message of client.fetch({ since }, { envelope: true, uid: true })) {
           const sender = message.envelope?.from?.[0]?.address ?? "";
-          if (!acceptSender(sender)) continue;
+          const dated = message.envelope?.date ?? new Date(0);
+          if (notBefore && dated.getTime() < notBefore.getTime()) continue;
+          if (acceptSender(sender) && typeof message.uid === "number") wanted.push(message.uid);
+        }
+        if (wanted.length === 0) continue;
+        for await (const message of client.fetch(wanted.join(","), { envelope: true, source: true }, { uid: true })) {
           messages.push({
             receivedAt: message.envelope?.date ?? new Date(0),
-            sender,
+            sender: message.envelope?.from?.[0]?.address ?? "",
             body: decode(message.source),
           });
         }
@@ -344,8 +400,8 @@ async function readMailbox(
 }
 
 /** Workday's mail, left raw: the link reader decodes each MIME part itself. */
-function readWorkdayMail(config: VerificationInboxConfig, since: Date): Promise<ImapMessage[]> {
-  return readMailbox(config, since, isWorkdaySender, (source) => source?.toString("utf8") ?? "");
+function readWorkdayMail(config: VerificationInboxConfig, since: Date, notBefore?: Date): Promise<ImapMessage[]> {
+  return readMailbox(config, since, notBefore, isWorkdaySender, (source) => source?.toString("utf8") ?? "");
 }
 
 /**

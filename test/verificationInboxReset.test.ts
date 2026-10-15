@@ -35,7 +35,10 @@ vi.mock("imapflow", async () => {
       return { release: () => undefined };
     }
 
-    async *fetch(): AsyncGenerator<{ envelope: unknown; source: Buffer }> {
+    async *fetch(
+      range: unknown,
+      query: { source?: boolean } = {},
+    ): AsyncGenerator<{ uid: number; envelope: unknown; source?: Buffer }> {
       const step = this.step;
       if (step === "reset") {
         await new Promise<void>((_resolve, reject) => {
@@ -54,10 +57,15 @@ vi.mock("imapflow", async () => {
         });
         return;
       }
-      for (const message of step) {
+      // Like IMAP, a source is served only when asked for, by UID list.
+      const wanted = query.source && typeof range === "string" ? new Set(range.split(",").map(Number)) : null;
+      for (const [index, message] of step.entries()) {
+        const uid = index + 1;
+        if (wanted && !wanted.has(uid)) continue;
         yield {
+          uid,
           envelope: { date: message.date, from: [{ address: message.from }] },
-          source: Buffer.from(message.body, "utf8"),
+          ...(query.source ? { source: Buffer.from(message.body, "utf8") } : {}),
         };
       }
     }
