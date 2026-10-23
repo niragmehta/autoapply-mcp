@@ -887,6 +887,10 @@ const DECLINE_OPTION_CANDIDATES = [
   // Adobe's ethnicity prompt words the decline in the past tense, as
   // "Declined to State (United States of America)".
   "declined to state",
+  // Riot Games' Greenhouse race and gender questions offer "Decline to state",
+  // which the past tense above is not a substring of, so a required race
+  // question failed with the decline sitting in its own list.
+  "Decline to state",
   // Trend Micro's veteran prompt offers only "Yes", "No" and "Opt-Out".
   "Opt-Out",
   "Opt out",

@@ -773,6 +773,27 @@ describe("optionSearchCandidates", () => {
     expect(pickOptionIndex(["Select One", "Yes", "No", "Opt-Out"], candidates)).toBe(3);
   });
 
+  it("covers a decline worded as Decline to state", () => {
+    // Riot Games' required race question; the past tense "declined to state"
+    // is not a substring of it.
+    const candidates = optionSearchCandidates(
+      field("Please indicate the option that best describes your race or ethnic identity.", { role: "combobox", required: true }),
+      answer("Race", "Decline to self-identify", { category: "demographic" }),
+    );
+    expect(
+      pickOptionIndex(
+        [
+          "Hispanic or Latino",
+          "White (not Hispanic or Latino)",
+          "Asian (not Hispanic or Latino)",
+          "Two or More Races (Not Hispanic or Latino)",
+          "Decline to state",
+        ],
+        candidates,
+      ),
+    ).toBe(4);
+  });
+
   // Palo Alto Networks' race question is a "choose all that apply" list whose
   // only decline reads "Wish Not To Answer" - a refusal worded as a wish.
   it("covers a decline worded as a wish not to answer", () => {
