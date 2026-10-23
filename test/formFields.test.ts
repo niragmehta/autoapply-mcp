@@ -2026,6 +2026,26 @@ describe("permission and date-component questions", () => {
     expect(matches[0]?.answer?.answer).toBe("No");
   });
 
+  // T. Rowe Price's non-compete question mentions "a prior or current
+  // employer", and the stored current-company answer took it on that phrase.
+  const NON_COMPETE =
+    "Do you have a non-compete contract, agreement, non-solicitation agreement, or any other type of agreement with a prior or current employer that would in any way prohibit or restrict your ability to work for T. Rowe Price?";
+
+  it("refuses to answer a restrictive-agreement question with an employer name", () => {
+    const matches = matchFields([field(NON_COMPETE, { required: true })], [answer("Current employer", "Hooli")]);
+    expect(matches[0]?.answer ?? undefined).toBeUndefined();
+  });
+
+  it("answers a restrictive-agreement question from the agreement entry, not the employer's name", () => {
+    const bank = [
+      { key: "current-company", label: "Current company", patterns: ["current employer", "current company"], answer: "Hooli", allowAutoFill: true },
+      { key: "restrictive-agreements", label: "Bound by agreements", patterns: ["non-compete", "bound by any agreements"], answer: "No", allowAutoFill: true },
+    ];
+    const derived = fallbackAnswersForFields([field(NON_COMPETE, { required: true })], [], bank);
+    expect(derived[0]?.answer).toBe("No");
+    expect(derived[0]?.citation).toBe("profile.answers.restrictive-agreements");
+  });
+
   it("refuses to put a notice period into an employment-history date select", () => {
     const matches = matchFields(
       [field("Start date month*", { required: true })],

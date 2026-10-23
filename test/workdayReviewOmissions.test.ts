@@ -38,6 +38,13 @@ describe("reviewOmissions", () => {
       { label: RACE, value: "Decline to self-identify" },
     ]);
   });
+
+  it("accepts the tenant's synonym for an answer", async () => {
+    // NVIDIA's phone types are "Home" and "Home Cellular"; "Mobile" selected the latter.
+    const page = reviewPage("My Information Phone Device Type Home Cellular Country Phone Code Canada (+1)");
+
+    expect(await reviewOmissions(page, [{ label: "Phone Device Type", value: "Mobile" }], "NVIDIA")).toEqual([]);
+  });
   it("flags an answer naming the employer when the page only names the employer", async () => {
     // Every Review page says "Adobe", so finding the word proves nothing about
     // whether the source prompt says "Adobe.com" or the vendor a draft kept.

@@ -393,6 +393,16 @@ const SELF_ID_ANSWER = /\b(disabilit|chronic condition|gender|racial|race|ethnic
 const AGE_QUESTION = /\b(years of age|age of \d|old enough|legal (?:working )?age|18 or older|18 years or older)\b/;
 const EXPERIENCE_ANSWER = /\byears of (?:relevant |professional |industry |software |engineering )?experience\b/;
 const PERMISSION_QUESTION = /^(?:may|can|do) we\b|\bhave (?:our|your) permission\b|\bmay we contact\b/;
+/**
+ * Whether the candidate is bound by an agreement that restricts the work, which
+ * is asked as a yes/no question however long it runs. T. Rowe Price asks "Do
+ * you have a non-compete contract ... with a prior or current employer that
+ * would ... restrict your ability to work for T. Rowe Price?", and the stored
+ * current-company answer won on "current employer", the longest phrase that
+ * matched, so the employer's name was offered to a Yes/No prompt.
+ */
+const RESTRICTIVE_AGREEMENT_QUESTION =
+  /\b(?:non[\s-]?compete|noncompetition|non[\s-]?solicit\w*|nonsolicitation|restrictive covenant|post[\s-]?employment restriction)/;
 const SPECIFIC_LINK_SERVICES = ["linkedin", "github", "twitter", "dribbble", "behance"] as const;
 const GENERIC_LINK_FIELDS = ["portfolio", "website", "blog", "personal site"] as const;
 
@@ -608,6 +618,12 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   // matcher tried to answer it with "Hooli". A permission question can only
   // take a yes/no answer; anything else is a category error, not a near miss.
   if (PERMISSION_QUESTION.test(fieldLabel) && !BOOLEAN_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
+  // An answer naming a company or describing an agreement still opens with
+  // its yes or no ("No, I don't have an agreement"), so only an answer that
+  // opens otherwise is refused.
+  if (RESTRICTIVE_AGREEMENT_QUESTION.test(fieldLabel) && !BOOLEAN_ANSWER.test(answer.answer.trim())) {
     return true;
   }
   if (namesDifferentLinkService(fieldLabel, answerLabel)) {
@@ -2226,8 +2242,12 @@ function bestBankEntry(
   // See asksResidenceOrRelocation: on a choice control the residence denial is
   // no answer to a question that relocating satisfies.
   const residenceOrRelocation = offersOptions(field) && candidates.some((value) => asksResidenceOrRelocation(value));
+  // See RESTRICTIVE_AGREEMENT_QUESTION: such a question takes a yes or no, so
+  // an entry answering anything else steps aside for the next one that does.
+  const restrictiveAgreement = candidates.some((value) => RESTRICTIVE_AGREEMENT_QUESTION.test(value));
   let best: { entry: ApprovedAnswerEntry; length: number } | undefined;
   for (const entry of bank) {
+    if (restrictiveAgreement && !BOOLEAN_ANSWER.test(entry.answer.trim())) continue;
     if (reserved && ![entry.label, ...entry.patterns].some((text) => RESERVED_FOR_HUMAN.test(text))) continue;
     if (residenceOrRelocation && deniesResidenceOnly(entry.answer)) continue;
     if (candidates.some((value) => statesUnrelatedExperience(value, [entry.label, ...entry.patterns]))) continue;

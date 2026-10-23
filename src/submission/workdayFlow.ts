@@ -2463,9 +2463,10 @@ export async function reviewOmissions(
     if (/^(?:yes|no|true|false|n\/a|none)$/i.test(value)) continue;
     if (haystack.includes(value.toLowerCase())) continue;
     // A tenant may render its own wording for the same choice, so accept the
-    // answer when every significant word of it is present.
+    // answer when every significant word of it - or the tenant's synonym for
+    // it - is present. NVIDIA prints an approved "Mobile" as "Home Cellular".
     const words = significantWords(value).filter((word) => !employerWords.has(word));
-    if (words.length > 0 && words.every((word) => haystack.includes(word))) continue;
+    if (words.length > 0 && words.every((word) => namesWordOrSynonym(haystack, word))) continue;
     if (statesFigure(haystack, value)) continue;
     if (DECLINE_VALUE.test(value) && declineStatedAfter(haystack, entry.label)) continue;
     missing.push({ label: entry.label, value });
@@ -2520,6 +2521,13 @@ function statesFigure(haystack: string, value: string): boolean {
 
 function significantWords(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+}
+
+/** Whether the page names a word, or the tenant vocabulary {@link WD_SYNONYMS} gives for it. */
+function namesWordOrSynonym(haystack: string, word: string): boolean {
+  if (haystack.includes(word)) return true;
+  const group = WD_SYNONYMS.find((words) => words.includes(word));
+  return group !== undefined && group.some((synonym) => synonym !== word && haystack.includes(synonym));
 }
 
 /**
