@@ -95,6 +95,14 @@ single-select's unchanged "1 item selected" announcement is not evidence. The
 Review-page check does not count the employer's own name as confirming an
 answer, since it appears on every page.
 
+A Workday "Take Assessment" step is declined only when it is the Work
+Opportunity Tax Credit questionnaire and the step itself offers an opt-out. The
+run presses "Take Assessment", then the vendor's opt-out, so nothing about
+veteran status, public assistance or similar circumstances is disclosed.
+Cookie and marketing opt-outs are never pressed, a confirmation is answered
+only when the vendor explicitly asks "are you sure", and only the vendor's host
+is logged. Any other assessment, such as a skills test, is left for a person.
+
 A bare "Yes" or "No" option stands only for an answer that opens with that word
 followed by punctuation, on every board. "Not Applicable/No Driving
 Requirements" therefore never selects "No", and a refusal never selects either.

@@ -40,6 +40,7 @@ import { fillLeverLocation } from "./leverLocation.js";
 import { hasVisibleCaptchaChallenge } from "./captcha.js";
 import { ashbyEmbedFallbackUrl } from "./ashbyEmbed.js";
 import { workdayDateParts } from "./workdayDates.js";
+import { isTaxCreditOptOutStep, optOutOfTaxCreditAssessment } from "./workdayAssessment.js";
 import { inertControlIndexes } from "./inertControls.js";
 import { READ_VALIDATION_ERRORS } from "./validationErrors.js";
 import { recordStepFailures, stepFailureList, wizardStepKey, type StepFailures } from "./wizardFailures.js";
@@ -862,6 +863,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     const priorFailedRequired: string[] = [];
     let stepFailures: StepFailures = new Map();
     let workdayRetries = 0;
+    let assessmentAttempts = 0;
     let resumeAttached = false;
     if (isWorkdayUrl(page.url())) {
       const entry = await enterWorkdayApplication(page, options.accountEmail ?? "", {
@@ -937,6 +939,26 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           }
         }
         if (resumeAttached) await dedupeResumeAttachments(page);
+        // A tax-credit questionnaire step holds no fields to fill and will not
+        // save until the questionnaire is taken or declined. Declining is the
+        // candidate's standing choice for every voluntary disclosure.
+        if (/assessment/i.test(name) && assessmentAttempts < 2) {
+          const stepText = await page.locator("body").innerText().catch(() => "");
+          if (isTaxCreditOptOutStep(stepText)) {
+            assessmentAttempts += 1;
+            const outcome = await optOutOfTaxCreditAssessment(page as never, async (target, stage) => {
+              await capture(target as never, options.artifactsDir, packet.applicationId, stage);
+            }).catch((error: unknown) => ({
+              optedOut: false,
+              detail: `the assessment could not be declined: ${String((error as Error)?.message ?? error).slice(0, 200)}`,
+            }));
+            logger.info("workday tax-credit assessment", outcome);
+            if (outcome.optedOut && (await advanceWorkdayStep(page as never))) {
+              await page.waitForTimeout(1500);
+              continue;
+            }
+          }
+        }
         const stepFill = await guardedFillFormPage(page, packet, options, true);
         if ("status" in stepFill) return { ...stepFill, filledFields: [...priorFilled, ...stepFill.filledFields] };
         await clearPhoneExtension(page);
