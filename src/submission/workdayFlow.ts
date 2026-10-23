@@ -384,13 +384,27 @@ function plainQuotes(text: string): string {
   return text.replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"');
 }
 
+/**
+ * A first-person consent sentence: S&P Global's HiredScore question offers only
+ * "I consent to ..." and "I DO NOT consent to ...", which a bare "Yes" or "No"
+ * opens neither of, so the required field failed. A refusal answers "No" and
+ * the plain consent answers "Yes"; the shared negation test keeps them apart.
+ */
+const CONSENT_SENTENCE = /^i\s+(?:(?:do\s+not|don't)\s+)?(?:consent|agree|authori[sz]e|accept|opt[\s-]?(?:in|out))\b/;
+
+function consentPolarityMatches(option: string, wanted: string): boolean {
+  if (!CONSENT_SENTENCE.test(option)) return false;
+  const refuses = negated(option) || /\bopt[\s-]?out\b/.test(option);
+  return wanted === "no" ? refuses : !refuses;
+}
+
 function matches(optionText: string, candidate: string): boolean {
   const option = plainQuotes(optionText).replace(/\s+/g, " ").trim().toLowerCase();
   const wanted = plainQuotes(candidate).replace(/\s+/g, " ").trim().toLowerCase();
   if (!option || !wanted) return false;
   if (WD_PLACEHOLDER.test(option)) return false;
   if (isRefusal(option) && isRefusal(wanted)) return true;
-  if (WD_POLARITY.test(wanted)) return new RegExp(`^${wanted}\\b`, "i").test(option);
+  if (WD_POLARITY.test(wanted)) return new RegExp(`^${wanted}\\b`, "i").test(option) || consentPolarityMatches(option, wanted);
   // A bare "Yes" or "No" is a whole answer, so it stands only for a candidate
   // that opens with it: "No, I will not require sponsorship". Taken as a word
   // anywhere, SCAN's "No" answered "Not Applicable/No Driving Requirements"

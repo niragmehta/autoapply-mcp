@@ -477,6 +477,20 @@ describe("fillWorkdayPrompt", () => {
     expect(prompt.selected).toEqual(["Acknowledged"]);
   });
 
+  it("answers a consent question written as two sentences", async () => {
+    // S&P Global's HiredScore question offers "I consent to ..." and "I DO NOT
+    // consent to ...". A bare "No" opened neither, so the required field failed.
+    const consent = "I consent to S&P Global using HiredScore to evaluate my application as described above.";
+    const refusal = "I DO NOT consent to S&P Global using HiredScore to evaluate my application as described above.";
+    const declined = new FakePrompt({ "Select One": null, [consent]: null, [refusal]: null }, "dropdown");
+    expect((await fillWorkdayPrompt(declined.asPage(), fieldOf(declined), ["No"])).filled).toBe(true);
+    expect(declined.selected).toEqual([refusal]);
+
+    const agreed = new FakePrompt({ "Select One": null, [consent]: null, [refusal]: null }, "dropdown");
+    expect((await fillWorkdayPrompt(agreed.asPage(), fieldOf(agreed), ["Yes"])).filled).toBe(true);
+    expect(agreed.selected).toEqual([consent]);
+  });
+
   it("still lets a negative answer take the matching negative option", async () => {
     // Unity's export-control question lists countries and "Not Applicable".
     const prompt = new FakePrompt({ Cuba: null, Iran: null, "Not Applicable": null }, "dropdown");
