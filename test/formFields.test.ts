@@ -2041,6 +2041,18 @@ describe("link fields", () => {
     const matches = matchFields([field("GitHub URL")], [answer("GitHub", "https://github.com/example")]);
     expect(matches[0]?.answer?.answer).toBe("https://github.com/example");
   });
+
+  it("does not put a LinkedIn address into a Facebook field", () => {
+    // KLA's Workday lists "Please provide your Linkedin profile:" and "Please
+    // provide your Facebook profile:" together. The LinkedIn URL went into both,
+    // Workday rejected it as an invalid Facebook URL and My Experience would not
+    // advance, although the Facebook field is optional.
+    const matches = matchFields(
+      [field("Please provide your Facebook profile:"), field("Please provide your Instagram handle:")],
+      [answer("LinkedIn Profile", "https://www.linkedin.com/in/example/")],
+    );
+    expect(matches.map((match) => match.answer ?? undefined)).toEqual([undefined, undefined]);
+  });
 });
 
 describe("permission and date-component questions", () => {
@@ -3490,6 +3502,20 @@ describe("stalePlaceholderFields", () => {
     const planned = field("Comments (Optional)", { type: "textarea", required: false, selectorIndex: 8, value: "N/A" });
     const plan = buildFillPlan([required, real, prompt, planned], [answer("Comments (Optional)", "Happy to discuss.")]);
     expect(stalePlaceholderFields([required, real, prompt, planned], plan)).toEqual([]);
+  });
+
+  it("names an optional link field holding another service's address", () => {
+    // KLA's optional "Please provide your Facebook profile:" ended up holding the
+    // LinkedIn URL, failed Workday's URL check and held My Experience. Whatever
+    // put it there, an address for the wrong service is no answer at all.
+    const url = "https://www.linkedin.com/in/example/";
+    const facebook = field("Please provide your Facebook profile:", { type: "text", required: false, selectorIndex: 9, value: url });
+    const linkedin = field("Please provide your Linkedin profile:", { type: "text", required: false, selectorIndex: 10, value: url });
+    const handle = field("Please provide your Twitter handle:", { type: "text", required: false, selectorIndex: 11, value: "@example" });
+    const plan = buildFillPlan([facebook, linkedin, handle], []);
+    expect(stalePlaceholderFields([facebook, linkedin, handle], plan).map((f) => f.label)).toEqual([
+      "Please provide your Facebook profile:",
+    ]);
   });
 });
 

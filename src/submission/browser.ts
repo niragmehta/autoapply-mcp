@@ -686,7 +686,7 @@ async function fillFormPage(
       .first()
       .fill("")
       .catch(() => undefined);
-    logger.info("cleared a placeholder an earlier run left", { label: field.label });
+    logger.info("cleared a stale optional value", { label: field.label });
   }
 
   return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups };

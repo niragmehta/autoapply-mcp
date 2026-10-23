@@ -1933,12 +1933,36 @@ const PLACEHOLDER_ANSWER = /^(?:n\/?a|none|not applicable|-+)\.?$/i;
 
 const TEXT_ENTRY_TYPES = new Set(["text", "url", "email", "tel", "search", "textarea"]);
 
+/** Where each named service's profile addresses live. */
+const LINK_SERVICE_HOSTS: ReadonlyArray<readonly [string, RegExp]> = [
+  ["linkedin", /\blinkedin\.com\b/i],
+  ["github", /\bgithub\.com\b/i],
+  ["twitter", /\b(?:twitter|x)\.com\b/i],
+  ["facebook", /\b(?:facebook|fb)\.com\b/i],
+  ["instagram", /\binstagram\.com\b/i],
+];
+
+/**
+ * An optional link field whose label names one service while it holds another
+ * service's address. KLA's "Please provide your Facebook profile:" ended up with
+ * the LinkedIn URL, failed Workday's URL check and held My Experience, though
+ * the field is optional. An address for the wrong account answers nothing.
+ */
+function holdsOtherServiceLink(field: FieldDescriptor): boolean {
+  const label = normalizeLabel(field.label).replace(/\s+/g, "");
+  const named = LINK_SERVICE_HOSTS.filter(([service]) => label.includes(service));
+  if (named.length !== 1) return false;
+  const value = (field.value ?? "").trim();
+  const held = LINK_SERVICE_HOSTS.find(([, host]) => host.test(value));
+  return held !== undefined && held[0] !== named[0]![0];
+}
+
 /**
  * Optional text fields still holding a placeholder that nothing now fills.
  * Workday keeps a draft's values between runs, so the "N/A" an earlier run
  * typed into Zendesk's "Twitter (Optional)" stayed, failed URL validation and
  * held My Experience on every later attempt. An empty optional field says
- * the same thing and passes.
+ * the same thing and passes. A link to the wrong service is cleared the same way.
  */
 export function stalePlaceholderFields(fields: readonly FieldDescriptor[], plan: FillPlan): FieldDescriptor[] {
   const planned = new Set(plan.toFill.map((match) => match.field.selectorIndex));
@@ -1948,7 +1972,7 @@ export function stalePlaceholderFields(fields: readonly FieldDescriptor[], plan:
       field.role !== "combobox" &&
       TEXT_ENTRY_TYPES.has(field.type) &&
       !planned.has(field.selectorIndex) &&
-      PLACEHOLDER_ANSWER.test((field.value ?? "").trim()),
+      (PLACEHOLDER_ANSWER.test((field.value ?? "").trim()) || holdsOtherServiceLink(field)),
   );
 }
 
