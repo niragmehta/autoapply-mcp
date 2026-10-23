@@ -1,6 +1,6 @@
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
-import { pickNumericBandIndex } from "../drafting/numericBands.js";
+import { bandHoldsFigure, pickNumericBandIndex } from "../drafting/numericBands.js";
 import { numberInputValue } from "../drafting/valueShape.js";
 import { getAtsCredentials, lengthenedPassword, type AtsCredentials } from "./credentials.js";
 import { isWorkdayHost } from "./verificationLinks.js";
@@ -2482,6 +2482,7 @@ export async function reviewOmissions(
     const words = significantWords(value).filter((word) => !employerWords.has(word));
     if (words.length > 0 && words.every((word) => namesWordOrSynonym(haystack, word))) continue;
     if (statesFigure(haystack, value)) continue;
+    if (bandStatedAfter(haystack, entry.label, value)) continue;
     if (DECLINE_VALUE.test(value) && declineStatedAfter(haystack, entry.label)) continue;
     missing.push({ label: entry.label, value });
   }
@@ -2498,6 +2499,20 @@ const DECLINE_VALUE =
  */
 const DECLINE_STATED =
   /\b(?:wish not to|not wish to|(?:do not|don't|don’t) wish to|declines? to|declined to|prefer not to|rather not|not to disclose|not to self[\s-]?identify|not declared|undeclared|not specified|unspecified|did not provide)\b/;
+
+/**
+ * Whether the page states, directly after the question, a band holding the
+ * figure that was answered: CVS Health's Review prints "$220,000 - $240,000" for
+ * an answer of "Around USD 222,480 base", so the figure never appears. Only the
+ * text right after this question's label counts.
+ */
+function bandStatedAfter(haystack: string, label: string, value: string): boolean {
+  const needle = label.replace(/\s+/g, " ").trim().toLowerCase();
+  if (needle.length < 8) return false;
+  const at = haystack.indexOf(needle);
+  if (at === -1) return false;
+  return bandHoldsFigure(haystack.slice(at + needle.length, at + needle.length + 60), value);
+}
 
 /**
  * Whether the page states a refusal directly after the question. Palo Alto

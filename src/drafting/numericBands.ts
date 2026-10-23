@@ -153,3 +153,14 @@ export function pickNumericBandIndex(
 
   return -1;
 }
+
+/**
+ * Whether text opening with a band - a Review page's "$220,000 - $240,000" -
+ * holds the figure a stored answer states. CVS Health's Review prints the band
+ * chosen for "Around USD 222,480 base", never the figure itself.
+ */
+export function bandHoldsFigure(text: string, candidate: string): boolean {
+  const band = parseBand(text);
+  const figure = parseStatedFigure(candidate);
+  return band !== undefined && figure !== undefined && figure >= band.min && figure <= band.max;
+}

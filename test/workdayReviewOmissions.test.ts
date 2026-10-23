@@ -13,6 +13,25 @@ const SOURCE = "How Did You Hear About Us?";
 const RACE = "Please indicate your race / ethnic group (choose all that apply).";
 
 describe("reviewOmissions", () => {
+  it("accepts a pay band on the page that holds the stated figure", async () => {
+    // CVS Health's Review prints the selected band "$220,000 - $240,000" for an
+    // answer of "Around USD 222,480 base ...", so the figure itself never
+    // appears and a correct application was stopped before submitting.
+    const label = "What is your base pay expectation for this position?";
+    const value = "Around USD 222,480 base (the top of the posted range), flexible depending on level and total compensation.";
+    const page = reviewPage(`Application Questions ${label} $220,000 - $240,000 Do you currently work at CVS Health? No`);
+
+    expect(await reviewOmissions(page, [{ label, value }], "CVS Health")).toEqual([]);
+  });
+
+  it("still stops on a band that does not hold the stated figure", async () => {
+    const label = "What is your base pay expectation for this position?";
+    const value = "Around USD 222,480 base";
+    const page = reviewPage(`Application Questions ${label} $80,000 - $100,000 Do you currently work at CVS Health? No`);
+
+    expect(await reviewOmissions(page, [{ label, value }], "CVS Health")).toEqual([{ label, value }]);
+  });
+
   it("accepts a decline the tenant prints in its own words after the question", async () => {
     const page = reviewPage(
       `Voluntary Disclosures Please indicate your gender. Wish Not To Answer ${RACE} Wish Not To Answer (United States of America) Are you hispanic or Latino descent? No`,
