@@ -1,5 +1,6 @@
 import type { Profile } from "../domain/profile.js";
 import { normalizeLabel } from "../submission/formFields.js";
+import { SKILLS_CITATION, profileSkillsAnswer } from "./skillsAnswer.js";
 
 type Experience = Profile["experience"][number];
 
@@ -340,6 +341,14 @@ const RESOLVERS: readonly Resolver[] = [
     category: "employment-history",
     citation: "experience[0].highlights",
     resolve: (entry) => entry.highlights.join(" "),
+  },
+  {
+    // Workday's My Experience step can require "Type to Add Skills"; the
+    // profile's own skills answer it, strongest first.
+    test: exact("skills", "type to add skills", "add skills", "your skills", "key skills", "technical skills", "skills and expertise"),
+    category: "skills",
+    citation: SKILLS_CITATION,
+    resolve: (_entry, profile) => profileSkillsAnswer(profile),
   },
 ];
 

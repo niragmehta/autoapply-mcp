@@ -3,6 +3,7 @@ import { pickNumericBandIndex } from "../drafting/numericBands.js";
 import { countsYearsAsLookback, statesUnrelatedExperience } from "../drafting/experienceSubject.js";
 import { ratingSubjectMismatch } from "../drafting/ratingSubject.js";
 import { numberInputValue, valueShapeMismatch } from "../drafting/valueShape.js";
+import { skillSearches } from "../drafting/skillsAnswer.js";
 import {
   asksWhetherSponsorshipRequired,
   canonicalizeWorkPermission,
@@ -911,6 +912,8 @@ export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnsw
     return fallback ? [...DECLINE_OPTION_CANDIDATES, fallback] : [...DECLINE_OPTION_CANDIDATES];
   }
   const value = answerValueForField(field, answer);
+  const skills = skillSearches(answer.citation, value);
+  if (skills.length > 0) return skills;
   const veteran = veteranCandidates(value);
   if (veteran.length > 0) return veteran;
   const source = sourceCandidates(field, value, employer);

@@ -58,6 +58,7 @@ import {
   workdayStepName,
   workdayTenant,
   reviewOmissions,
+  retriesEmptyWorkdayStep,
   workdayRequiredErrors,
 } from "./workdayFlow.js";
 
@@ -967,7 +968,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         // and the run ends up reporting a live posting as removed, so the same
         // step is reloaded and retried before that conclusion is drawn.
         const collected = stepFill.plan.toFill.length + stepFill.plan.unfilled.length;
-        if (collected === 0 && workdayRetries < WORKDAY_MAX_RETRIES) {
+        if (retriesEmptyWorkdayStep(name, collected, workdayRetries, WORKDAY_MAX_RETRIES)) {
           workdayRetries += 1;
           logger.warn("workday step collected nothing, retrying", { step: name || `step ${step + 1}` });
           await recoverWorkdayError(page as never);

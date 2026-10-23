@@ -2547,6 +2547,18 @@ export async function workdayRequiredErrors(page: Page): Promise<string[]> {
   return parseWorkdayRequiredErrors(typeof body === "string" ? body : "");
 }
 
+/**
+ * Whether a wizard step that collected nothing should be reloaded and tried
+ * again. Workday's transient fault can blank a step, and reloading recovers
+ * it. The Review page is different: some tenants put no inputs on it at all -
+ * Tempus's collects nothing - and the walk stops there anyway, so reloading it
+ * three times only ran the stall guard out and failed a finished application
+ * as "Review would not advance".
+ */
+export function retriesEmptyWorkdayStep(stepName: string, collected: number, retries: number, maxRetries: number): boolean {
+  return collected === 0 && retries < maxRetries && !/\breview\b/i.test(stepName);
+}
+
 export function assertWorkdaySupported(rawUrl: string): void {
   if (!isWorkdayUrl(rawUrl)) {
     throw new AppError("not_workday", `${rawUrl} is not a Workday board`);

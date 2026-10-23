@@ -344,3 +344,41 @@ describe("the role description in a work-history block", () => {
     expect(resolveExperience("Role Description", bare)).toBeNull();
   });
 });
+
+/**
+ * Thomson Reuters' Workday tenant requires "Type to Add Skills" on My
+ * Experience. Nothing answered it, so every application there stopped.
+ */
+describe("a skills question", () => {
+  it("is answered from the profile's own skills, strongest first", () => {
+    const withWorking = {
+      ...profile,
+      skills: [...profile.skills, { name: "Cedar", aliases: [], level: "working" as const, tags: [] }],
+    };
+    expect(resolveExperience("Type to Add Skills*", withWorking)?.answer).toBe(
+      "Python, Open Policy Agent, Azure, threat modeling",
+    );
+  });
+
+  it("is searched one skill at a time on a picker", () => {
+    const derived = fallbackAnswersForFields(
+      [field("Type to Add Skills*", { name: "skills" })],
+      [],
+      [],
+      undefined,
+      undefined,
+      experienceResolverFor(profile),
+    );
+    expect(derived[0]?.answer).toBe("Python, Open Policy Agent, Azure, threat modeling");
+    expect(optionSearchCandidates(field("Type to Add Skills*", { role: "combobox" }), derived[0]!)).toEqual([
+      "Python",
+      "Open Policy Agent",
+      "Azure",
+      "threat modeling",
+    ]);
+  });
+
+  it("does not take over a question that only mentions skills", () => {
+    expect(resolveExperience("Which skills would you like to develop in this role?", profile)).toBeNull();
+  });
+});
