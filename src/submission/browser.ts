@@ -60,6 +60,7 @@ import {
   reviewOmissions,
   retriesEmptyWorkdayStep,
   workdayRequiredErrors,
+  clearInvalidOptionalFields,
 } from "./workdayFlow.js";
 
 /**
@@ -1026,6 +1027,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         // fill-only run must never do, and a submitting run must only do
         // through the guarded submit path below. So the walk stops here.
         if (/review/i.test(name)) break;
+        // A value the step rejected holds it on every attempt, even in an
+        // optional field: KLA's Facebook field held the LinkedIn URL. The banner
+        // from the last attempt names it, and an empty optional field passes.
+        const clearedInvalid = await clearInvalidOptionalFields(page as never).catch(() => [] as string[]);
+        if (clearedInvalid.length > 0) logger.info("cleared optional fields Workday rejected", { labels: clearedInvalid });
         if (!(await advanceWorkdayStep(page))) break;
         await page.waitForTimeout(1500);
       }

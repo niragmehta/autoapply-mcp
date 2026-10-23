@@ -2556,6 +2556,54 @@ export async function workdayRequiredErrors(page: Page): Promise<string[]> {
 }
 
 /**
+ * The fields Workday's "Errors Found" banner rejects for their value rather
+ * than for being empty. KLA's optional "Please provide your Facebook profile:"
+ * ended up holding the LinkedIn URL; the banner said "Invalid Facebook URL" and
+ * My Experience would not advance on any attempt.
+ */
+export function parseWorkdayInvalidFieldErrors(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.replace(/\s+/g, " ").matchAll(/\bError\s*[-–]\s*(.{3,200}?):?\s+Invalid\b/g)) {
+    const label = (match[1] ?? "").replace(/\*/g, "").replace(/\s*:\s*$/, "").replace(/\s+/g, " ").trim();
+    if (label && !/\bis required and must have a value\b/.test(label)) found.add(label);
+  }
+  return [...found];
+}
+
+/**
+ * Empties the optional fields {@link parseWorkdayInvalidFieldErrors} names and
+ * returns their labels. However a rejected value got there, an empty optional
+ * field passes, so clearing it is always safe; a required one is left for the
+ * required-field report.
+ */
+export async function clearInvalidOptionalFields(page: Page): Promise<string[]> {
+  const body = await visibleText(page, "body").catch(() => "");
+  const labels = parseWorkdayInvalidFieldErrors(typeof body === "string" ? body : "");
+  if (labels.length === 0) return [];
+  const script = `((wanted) => {
+    const norm = (s) => String(s || "").replace(/\\*/g, "").replace(/\\s+/g, " ").replace(/\\s*:\\s*$/, "").trim().toLowerCase();
+    const targets = new Set(wanted.map(norm));
+    const hits = [];
+    for (const label of Array.from(document.querySelectorAll("label"))) {
+      if (!targets.has(norm(label.textContent))) continue;
+      const id = label.getAttribute("for");
+      const wrapper = label.closest('[data-automation-id^="formField"]');
+      const input = (id && document.getElementById(id)) || (wrapper && wrapper.querySelector("input, textarea"));
+      if (!input || !("value" in input) || !input.value) continue;
+      if (input.getAttribute("aria-required") === "true" || input.required) continue;
+      input.setAttribute("data-autoapply-invalid", "1");
+      hits.push((label.textContent || "").trim());
+    }
+    return hits;
+  })(${JSON.stringify(labels)})`;
+  const marked = ((await page.evaluate(script).catch(() => [])) as string[] | null) ?? [];
+  const fields = page.locator('[data-autoapply-invalid="1"]');
+  const count = await fields.count().catch(() => 0);
+  for (let index = 0; index < count; index += 1) await fields.nth(index).fill("").catch(() => undefined);
+  return marked;
+}
+
+/**
  * Whether a wizard step that collected nothing should be reloaded and tried
  * again. Workday's transient fault can blank a step, and reloading recovers
  * it. The Review page is different: some tenants put no inputs on it at all -
