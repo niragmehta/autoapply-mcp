@@ -2667,6 +2667,12 @@ describe("the employer's own site answers a careers-page source", () => {
     expect(candidates.indexOf("Career site")).toBeLessThan(candidates.indexOf("Job board"));
   });
 
+  it("reaches a careers channel named in the plural", () => {
+    // Bio-Techne offers "Career Websites", "Company Recruiter", "Job Sites"...
+    const options = ["Career Websites", "Company Recruiter", "Employee Referral", "Job Fair", "Job Sites", "Talent Agency"];
+    expect(options[pickOptionIndex(options, optionSearchCandidates(source, careers, "Bio-Techne"))]).toBe("Career Websites");
+  });
+
   it("never offers the bare employer name, which also names its events and teams", () => {
     expect(optionSearchCandidates(source, careers, "Adobe")).not.toContain("Adobe");
   });
@@ -2861,6 +2867,15 @@ describe("a form the candidate signs", () => {
   it("leaves a remembered date to the profile", () => {
     // "Start date" is employment history, not a signature.
     expect(fallbackAnswersForFields([dateField("startDate", "start date")], [], [])).toHaveLength(0);
+  });
+
+  it("never signs with a start-date answer", () => {
+    // Tealium's disability form took "What is your desired start date?" -
+    // a date six weeks out - in its signature Date, which must be today.
+    const signed = dateField("dateSignedOn", "date signed on");
+    const startDate = answer("What is your desired start date?", "12/07/2026", { questionKey: "discovered_start", source: "human" });
+    const plan = buildFillPlan([signed], [startDate, ...fallbackAnswersForFields([signed], [startDate], [])]);
+    expect(plan.toFill[0]?.answer?.citation).toBe("system.today");
   });
 
   // PayPal's conflict-of-interest declaration ends "Please enter today's date

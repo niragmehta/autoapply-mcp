@@ -508,6 +508,10 @@ function trailingOrdinal(normalizedLabel: string): number | null {
 function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
   const fieldLabel = normalizeLabel(field.label);
   const answerLabel = normalizeLabel(answer.label);
+  // A signature is dated today by definition, so a signature date takes only
+  // that answer. Tealium's disability form put a desired start date - six weeks
+  // out - in its signature Date on the word "date", and the step would not save.
+  if (signatureDateField(field) && !answer.questionKey.startsWith("signature-date")) return true;
   if (answer.questionKey === "derived-country" && !RESIDENCE_COUNTRY_FIELD.test(fieldLabel)) return true;
   if (phoneCodeMismatch(fieldLabel, answer, answerLabel)) return true;
   // An option named "website" is not evidence that a personal URL was the job source.
@@ -1135,6 +1139,9 @@ const OWN_SITE_SOURCE = /\b(careers?|company (?:website|site)|website)\b/i;
 const IMPERSONAL_SOURCE_CANDIDATES = [
   "Careers page",
   "Career site",
+  // Bio-Techne offers "Career Websites", and Nasdaq "Career Websites and Job
+  // Boards"; the plural is no whole-word match for "Website".
+  "Career Websites",
   "Company website",
   "Website",
   "Job board",
@@ -1638,6 +1645,9 @@ function bestCoverageMatch(optionTexts: readonly string[], candidate: string): n
     const normalized = normalizeOptionText(text);
     const words = new Set(normalized.split(" "));
     const coverage = wanted.filter((word) => words.has(word)).length;
+    // The tie rule below would otherwise accept an option sharing a single
+    // word: "Company Careers Page" chose "Company Recruiter" on "company".
+    if (coverage < MIN_OVERLAP_WORDS) continue;
     if (coverage > bestCoverage || (coverage === bestCoverage && normalized.length < bestLength)) {
       best = index;
       bestCoverage = coverage;
