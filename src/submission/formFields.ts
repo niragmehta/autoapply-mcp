@@ -918,8 +918,26 @@ export function isDeclineSearch(candidates: readonly string[]): boolean {
   return DECLINE_OPTION_CANDIDATES.every((decline) => candidates.includes(decline));
 }
 
+/**
+ * The page extractor keeps a Greenhouse label to its first 200 characters,
+ * which can cut off the words that say what a question asks: Justworks'
+ * education question ended at "...Please select the highest level of", so the
+ * degree wording was never offered and a required select failed while the
+ * accurate answer sat in the packet. Where the drafted answer carries that
+ * question in full - the cut label is the start of its own text - the option
+ * search reads the full question. Short labels are never treated as cut.
+ */
+function withFullQuestion(field: FieldDescriptor, answer: DraftAnswer): FieldDescriptor {
+  const fieldLabel = normalizeLabel(field.label);
+  const answerLabel = normalizeLabel(answer.label);
+  const cut =
+    fieldLabel.length >= TRUNCATED_LABEL_MIN_LENGTH && answerLabel.length > fieldLabel.length && answerLabel.startsWith(fieldLabel);
+  return cut ? { ...field, label: answer.label } : field;
+}
+
 /** Ordered search strings to try when driving a typeahead combobox. */
-export function optionSearchCandidates(field: FieldDescriptor, answer: DraftAnswer, employer?: string): string[] {
+export function optionSearchCandidates(pageField: FieldDescriptor, answer: DraftAnswer, employer?: string): string[] {
+  const field = withFullQuestion(pageField, answer);
   if (DECLINE_ANSWER_PATTERN.test(answer.answer.trim())) {
     // Every decline wording is tried first; the stored value is reached only
     // when the form offers no way to decline at all. An optional field is
@@ -2296,6 +2314,11 @@ function bestBankEntry(
  */
 const RESERVED_FOR_HUMAN =
   /arbitration|unauthorized outside assistance|\b(?:AI|A\.I\.|artificial intelligence)\b.{0,40}(?:policy|consent|notetak|transcri|attest|record)|(?:notetak|transcri|attest).{0,40}(?:\b(?:AI|A\.I\.)(?!\w)|consent)/i;
+
+/** True for a question a person answers every time, whatever was decided before. */
+export function isReservedForHuman(label: string): boolean {
+  return RESERVED_FOR_HUMAN.test(label.replace(/\s+/g, " "));
+}
 
 /**
  * Prompts that exist to tell software from a person: FloQast's Lever form asks

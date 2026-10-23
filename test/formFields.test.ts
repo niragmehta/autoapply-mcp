@@ -1911,6 +1911,27 @@ describe("degree option candidates", () => {
     const candidates = optionSearchCandidates(field("School"), answer("School", "Example State University"));
     expect(candidates).toEqual(["Example State University"]);
   });
+
+  it("reads a question in full when the page cut its label short", () => {
+    // Justworks asks for "the highest level of education or training that you
+    // have", but the page extractor keeps a Greenhouse label to its first 200
+    // characters, which end at "highest level of". The degree wording was never
+    // offered and the required select failed with the accurate answer in hand.
+    const question =
+      "Educational and learning experiences | We understand that folks gain expertise and knowledge through a variety of means. So, how did you get to know what you know?! Please select the highest level of education or training that you have";
+    const cut = field(question.slice(0, 200).trim(), { type: "select" });
+    const options = ["High school diploma or equivalent", "Associate's degree", "Bachelor's degree", "Master's degree", "I don't wish to answer"];
+    const candidates = optionSearchCandidates(cut, answer(question, "Bachelor of Science (BSc)"));
+    expect(options[pickOptionIndex(options, candidates)]).toBe("Bachelor's degree");
+  });
+
+  it("does not borrow a longer question the page label does not begin", () => {
+    const candidates = optionSearchCandidates(
+      field("Please select one", { type: "select" }),
+      answer("Please select the highest level of education you have completed", "Bachelor of Science (BSc)"),
+    );
+    expect(candidates).toEqual(["Bachelor of Science (BSc)"]);
+  });
 });
 
 describe("field of study option candidates", () => {
