@@ -2694,6 +2694,18 @@ describe("the employer's own site answers a careers-page source", () => {
     expect(options[pickOptionIndex(options, optionSearchCandidates(source, careers, "Bio-Techne"))]).toBe("Career Websites");
   });
 
+  it("reaches a careers site written as one word", () => {
+    // Netflix's "Applied" category holds "Netflix Careersite" beside "Netflix
+    // Employee". Workday matches whole words, so a search that landed on
+    // "Netflix Careersite" was undone as unapproved until the wording itself
+    // was a candidate.
+    const candidates = optionSearchCandidates(source, careers, "Netflix");
+    expect(candidates).toContain("Netflix Careersite");
+    expect(candidates).toContain("Careersite");
+    const options = ["Netflix Employee", "Netflix Careersite"];
+    expect(options[pickOptionIndex(options, candidates)]).toBe("Netflix Careersite");
+  });
+
   it("never offers the bare employer name, which also names its events and teams", () => {
     expect(optionSearchCandidates(source, careers, "Adobe")).not.toContain("Adobe");
   });

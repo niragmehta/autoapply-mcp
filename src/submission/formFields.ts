@@ -1143,6 +1143,7 @@ const OWN_SITE_SOURCE = /\b(careers?|company (?:website|site)|website)\b/i;
 const IMPERSONAL_SOURCE_CANDIDATES = [
   "Careers page",
   "Career site",
+  "Careersite",
   // Bio-Techne offers "Career Websites", and Nasdaq "Career Websites and Job
   // Boards"; the plural is no whole-word match for "Website".
   "Career Websites",
@@ -1172,6 +1173,9 @@ function employerSiteCandidates(employer?: string): string[] {
     `${name} Careers Page`,
     `${name} Careers Website`,
     `${name} Career Site`,
+    // Netflix files its careers page as "Netflix Careersite", one word, which
+    // shares no whole word with "Careers" or "Career Site".
+    `${name} Careersite`,
     `${name} Website`,
   ];
 }
