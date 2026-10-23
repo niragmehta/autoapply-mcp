@@ -50,18 +50,26 @@ export type DiscoveryResult = {
 /**
  * Fetches every configured board. One failing board never aborts the run; it is
  * reported as an issue so a stale slug can be fixed.
+ *
+ * `onBoard` receives each board's postings as soon as they are fetched, so a
+ * caller can store them before the next board starts. A run across hundreds of
+ * boards takes well over an hour, and holding everything until the end meant a
+ * client timeout at 90 minutes discarded every board already fetched.
  */
-export async function discoverJobs(companies: readonly Company[]): Promise<DiscoveryResult> {
+export async function discoverJobs(
+  companies: readonly Company[],
+  onBoard?: (jobs: readonly Job[], company: Company) => void,
+): Promise<DiscoveryResult> {
   const capturedAt = nowIso();
   const issues: DiscoveryIssue[] = [];
   const jobs: Job[] = [];
   const active = companies.filter((company) => company.active);
 
   for (const company of active) {
+    let found: Job[];
     try {
       const adapter = adapterFor(company.ats);
-      const found = await adapter.listJobs(company, capturedAt);
-      jobs.push(...found);
+      found = await adapter.listJobs(company, capturedAt);
       logger.debug("board fetched", { company: company.name, ats: company.ats, count: found.length });
     } catch (error) {
       issues.push({
@@ -72,7 +80,12 @@ export async function discoverJobs(companies: readonly Company[]): Promise<Disco
         message: toErrorMessage(error),
       });
       logger.warn("board fetch failed", { company: company.name, error: toErrorMessage(error) });
+      continue;
     }
+    jobs.push(...found);
+    // Outside the fetch's try: a failure to store is not a board issue and
+    // must not be reported as one.
+    onBoard?.(found, company);
   }
 
   return { jobs, issues, boardsQueried: active.length };

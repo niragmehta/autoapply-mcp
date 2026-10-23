@@ -93,3 +93,23 @@ export function evaluateAndStore(
 
   return { evaluated: jobs.length, accepted, review, rejected, duplicates, topRejectionRules };
 }
+
+/** Adds up the summaries of jobs evaluated in separate batches, such as one per board. */
+export function mergeSummaries(summaries: readonly PipelineSummary[]): PipelineSummary {
+  const ruleCounts = new Map<string, number>();
+  for (const summary of summaries) {
+    for (const { rule, count } of summary.topRejectionRules) ruleCounts.set(rule, (ruleCounts.get(rule) ?? 0) + count);
+  }
+  const total = (pick: (summary: PipelineSummary) => number): number => summaries.reduce((sum, summary) => sum + pick(summary), 0);
+  return {
+    evaluated: total((summary) => summary.evaluated),
+    accepted: total((summary) => summary.accepted),
+    review: total((summary) => summary.review),
+    rejected: total((summary) => summary.rejected),
+    duplicates: total((summary) => summary.duplicates),
+    topRejectionRules: [...ruleCounts.entries()]
+      .map(([rule, count]) => ({ rule, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
+  };
+}

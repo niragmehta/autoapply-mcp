@@ -5,7 +5,7 @@ import { upsertCompany } from "../config/companies.js";
 import { appendEvent } from "../db/repositories/events.js";
 import { countJobs, listQueue, rejectionBreakdown, tierBreakdown, upsertJobs, getJob, getEvaluation } from "../db/repositories/jobs.js";
 import { countSubmittedSince, listApplications } from "../db/repositories/applications.js";
-import { evaluateAndStore } from "../pipeline.js";
+import { evaluateAndStore, mergeSummaries, type PipelineSummary } from "../pipeline.js";
 import { discoverJobs, resolveBoards, verifyBoard } from "../sources/registry.js";
 import { scanHiringThread } from "../sources/hackernews.js";
 import { AtsKindSchema, CompanySchema, type AtsKind } from "../domain/campaign.js";
@@ -41,9 +41,19 @@ export function registerDiscoveryTools(server: McpServer): void {
         throw new AppError("no_companies", "no matching companies configured; check companies.json");
       }
 
-      const discovery = await discoverJobs(selected);
-      const stored = upsertJobs(workspace.db, discovery.jobs);
-      const summary = evaluateAndStore(workspace.db, discovery.jobs, workspace.campaign, workspace.profile);
+      // Each board is stored and evaluated as soon as it is fetched, so a run
+      // that outlives its client still keeps every board it reached.
+      let inserted = 0;
+      let updated = 0;
+      const summaries: PipelineSummary[] = [];
+      const discovery = await discoverJobs(selected, (found) => {
+        if (found.length === 0) return;
+        const stored = upsertJobs(workspace.db, found);
+        inserted += stored.inserted;
+        updated += stored.updated;
+        summaries.push(evaluateAndStore(workspace.db, found, workspace.campaign, workspace.profile));
+      });
+      const summary = mergeSummaries(summaries);
 
       appendEvent(workspace.db, "discovery.run", "campaign", {
         boards: discovery.boardsQueried,
@@ -54,8 +64,8 @@ export function registerDiscoveryTools(server: McpServer): void {
       return ok({
         boardsQueried: discovery.boardsQueried,
         postingsFetched: discovery.jobs.length,
-        newPostings: stored.inserted,
-        refreshedPostings: stored.updated,
+        newPostings: inserted,
+        refreshedPostings: updated,
         evaluation: summary,
         totalStoredJobs: countJobs(workspace.db),
         boardIssues: args.includeIssues === false ? undefined : discovery.issues,

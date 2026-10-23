@@ -118,6 +118,38 @@ describe("source registry", () => {
     expect(result.issues[0]?.company).toBe("Broken");
   });
 
+  it("hands each fetched board to the caller before fetching the next", async () => {
+    // A run across hundreds of boards outlived its 90-minute client and, with
+    // nothing stored until the end, lost every board it had fetched.
+    const order: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        const href = typeof url === "string" ? url : url.toString();
+        order.push(`fetch ${href.includes("first") ? "first" : href.includes("broken") ? "broken" : "last"}`);
+        if (href.includes("broken")) return jsonResponse({}, 404);
+        return jsonResponse({ jobs: [] });
+      }),
+    );
+
+    const result = await discoverJobs(
+      [
+        CompanySchema.parse({ name: "First", ats: "greenhouse", board: "first" }),
+        CompanySchema.parse({ name: "Broken", ats: "greenhouse", board: "broken" }),
+        CompanySchema.parse({ name: "Last", ats: "greenhouse", board: "last" }),
+      ],
+      (_jobs, company) => order.push(`store ${company.name}`),
+    );
+
+    expect(order.filter((step) => !step.startsWith("fetch broken"))).toEqual([
+      "fetch first",
+      "store First",
+      "fetch last",
+      "store Last",
+    ]);
+    expect(result.issues.map((issue) => issue.company)).toEqual(["Broken"]);
+  });
+
   it("reports verified board slugs when probing", async () => {
     vi.stubGlobal(
       "fetch",
