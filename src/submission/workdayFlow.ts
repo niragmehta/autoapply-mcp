@@ -2463,9 +2463,39 @@ export async function reviewOmissions(
     const words = significantWords(value).filter((word) => !employerWords.has(word));
     if (words.length > 0 && words.every((word) => haystack.includes(word))) continue;
     if (statesFigure(haystack, value)) continue;
+    if (DECLINE_VALUE.test(value) && declineStatedAfter(haystack, entry.label)) continue;
     missing.push({ label: entry.label, value });
   }
   return missing;
+}
+
+/** An approved refusal to answer, in any of the wordings the profile uses. */
+const DECLINE_VALUE =
+  /^(?:i\s+)?(?:decline to (?:self[\s-]?identify|answer|state)|(?:do not|don't|don’t) wish to (?:answer|self[\s-]?identify)|wish not to (?:answer|self[\s-]?identify|disclose)|prefer not to (?:answer|say|disclose))\b/i;
+
+/**
+ * A refusal as a tenant prints it back. "No Response" is deliberately absent:
+ * Workday shows it for a question left unanswered, which is not a decline.
+ */
+const DECLINE_STATED =
+  /\b(?:wish not to|not wish to|(?:do not|don't|don’t) wish to|declines? to|declined to|prefer not to|rather not|not to disclose|not to self[\s-]?identify|not declared|undeclared|not specified|unspecified|did not provide)\b/;
+
+/**
+ * Whether the page states a refusal directly after the question. Palo Alto
+ * Networks prints an approved "Decline to self-identify" back as "Wish Not To
+ * Answer (United States of America)": the right choice in the tenant's own
+ * words, which shares no significant word with the approved value, so the
+ * read-back stopped a correct application. Only the text right after this
+ * question's label counts, so another question's refusal cannot vouch for it.
+ */
+function declineStatedAfter(haystack: string, label: string): boolean {
+  const needle = label.replace(/\s+/g, " ").trim().toLowerCase();
+  if (needle.length < 8) return false;
+  const at = haystack.indexOf(needle);
+  if (at === -1) return false;
+  // The answer ends where the next question's sentence does.
+  const answer = haystack.slice(at + needle.length, at + needle.length + 120).split(/[.?!:]/)[0] ?? "";
+  return DECLINE_STATED.test(answer);
 }
 
 /**

@@ -137,6 +137,23 @@ describe("resolveExperience", () => {
     expect(resolveExperience("Do you currently work with Python in your current role?", profile)?.answer).not.toBe("No");
   });
 
+  // Snap's question is about past employment at Snap; its trailing note about
+  // current Snap employees and the internal "job board" made it read as a
+  // current-role question, and the current role answered Yes.
+  it.each([
+    "Have you ever worked for Snap Inc. or one of its subsidiaries? **If you are a current Snap employee - please apply on the Snap internal job board in Workday***",
+    "Have you previously worked at Snap? If you are a current employee, apply on the internal job board.",
+    "Have you ever held a job here before? Current employees should use the internal job board.",
+  ])("never answers past employment at the hiring company from the current role: %s", (label) => {
+    expect(resolveExperience(label, profile)?.answer).not.toBe("Yes");
+  });
+
+  it("still answers the plain current-role questions", () => {
+    expect(resolveExperience("Is this your current position?", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("Do you currently work here?", profile)?.answer).toBe("Yes");
+    expect(resolveExperience("Are you currently employed by Acme?", profile)?.answer).toBe("Yes");
+  });
+
   it("gives the end date once a position has one", () => {    const past = makeProfile({
       experience: [{ company: "Phemi", title: "Intern", start: "2018-05", end: "2018-08", highlights: [] }],
     });

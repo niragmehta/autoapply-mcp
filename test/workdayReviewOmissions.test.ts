@@ -10,8 +10,34 @@ function reviewPage(body: string): Parameters<typeof reviewOmissions>[0] {
 }
 
 const SOURCE = "How Did You Hear About Us?";
+const RACE = "Please indicate your race / ethnic group (choose all that apply).";
 
 describe("reviewOmissions", () => {
+  it("accepts a decline the tenant prints in its own words after the question", async () => {
+    const page = reviewPage(
+      `Voluntary Disclosures Please indicate your gender. Wish Not To Answer ${RACE} Wish Not To Answer (United States of America) Are you hispanic or Latino descent? No`,
+    );
+
+    expect(await reviewOmissions(page, [{ label: RACE, value: "Decline to self-identify" }], "Palo Alto Networks")).toEqual([]);
+  });
+
+  it("does not take an unanswered question for a decline", async () => {
+    const page = reviewPage(`Voluntary Disclosures ${RACE} No Response Please indicate your gender. Wish Not To Answer`);
+
+    expect(await reviewOmissions(page, [{ label: RACE, value: "Decline to self-identify" }], "Palo Alto Networks")).toEqual([
+      { label: RACE, value: "Decline to self-identify" },
+    ]);
+  });
+
+  it("does not let another question's refusal vouch for this one", async () => {
+    const page = reviewPage(
+      `Voluntary Disclosures ${RACE} Asian (United States of America) Please indicate your gender. Wish Not To Answer`,
+    );
+
+    expect(await reviewOmissions(page, [{ label: RACE, value: "Decline to self-identify" }], "Palo Alto Networks")).toEqual([
+      { label: RACE, value: "Decline to self-identify" },
+    ]);
+  });
   it("flags an answer naming the employer when the page only names the employer", async () => {
     // Every Review page says "Adobe", so finding the word proves nothing about
     // whether the source prompt says "Adobe.com" or the vendor a draft kept.

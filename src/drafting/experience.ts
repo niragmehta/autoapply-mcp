@@ -154,7 +154,7 @@ const NAMES_AN_ATTRIBUTE =
  * names a skill, not an employer.
  */
 const EMPLOYER_CLAUSE =
-  /\b(?:employed\s+(?:by|at|with)|employee\s+(?:of|at)|work(?:ing)?\s+for)\s+(.+?)(?=\s+(?:in|if|or|and|as|on|either|currently|today|now)\b|$)/;
+  /\b(?:employed\s+(?:by|at|with)|employee\s+(?:of|at)|work(?:ing)?\s+for|worked\s+(?:for|at))\s+(.+?)(?=\s+(?:in|if|or|and|as|on|either|currently|today|now)\b|$)/;
 
 /** A description of an employer rather than a name: who is meant cannot be known here. */
 const DESCRIBED_EMPLOYER =
@@ -200,6 +200,12 @@ function currentRoleBoolean(label: string): boolean {
   // Employment by a named or described employer is a different question, and
   // Yes to it can claim a job at the hiring company that does not exist.
   if (EMPLOYER_CLAUSE.test(label)) return false;
+  // A question reaching past the current job is not about it. Snap asks "Have
+  // you ever worked for Snap Inc.?" and adds "If you are a current Snap
+  // employee, please apply on the internal job board": "current", "job" from
+  // "job board" and the leading "Have" read as "is this your current job?", and
+  // the current role answered Yes - a claim to have worked at Snap.
+  if (BEYOND_CURRENT_EMPLOYMENT.test(label)) return false;
   // Whether the candidate may lawfully work is never a fact about their current
   // employer. Abnormal Security asks "Are you currently eligible to work in the
   // country in which this job is posted?" - "currently", "job" and a leading
