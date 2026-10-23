@@ -41,4 +41,27 @@ describe("reviewOmissions", () => {
       { label: SOURCE, value: "Adobe Employee Referral" },
     ]);
   });
+
+  it("accepts a sentence answer whose figure a number field kept", async () => {
+    // Cboe's Salary Expectations is a number field: the sentence went in as
+    // 192500, and that is what its Review page says back.
+    const page = reviewPage("Cboe Review Application Questions Salary Expectations* 192500 Are you 18 years of age or older? Yes");
+    const answer = "Around USD 192,500 base (the top of the posted range), flexible depending on level and total compensation.";
+
+    expect(await reviewOmissions(page, [{ label: "Salary Expectations", value: answer }], "Cboe")).toEqual([]);
+  });
+
+  it("accepts the figure with digit grouping", async () => {
+    const page = reviewPage("Review Salary Expectations 192,500");
+
+    expect(await reviewOmissions(page, [{ label: "Salary Expectations", value: "Around USD 192,500 base" }], "Cboe")).toEqual([]);
+  });
+
+  it("flags a figure the page states differently", async () => {
+    const page = reviewPage("Review Salary Expectations 1925000");
+
+    expect(await reviewOmissions(page, [{ label: "Salary Expectations", value: "Around USD 192,500 base" }], "Cboe")).toEqual([
+      { label: "Salary Expectations", value: "Around USD 192,500 base" },
+    ]);
+  });
 });

@@ -94,6 +94,7 @@ Builds the match report, loads the employer's application questions, drafts only
 |---|---|---|
 | `jobId` | `string` | |
 | `force` | `boolean?` | Prepare even if the job failed the gates |
+| `resumeId` | `string?` | A `profile.resumes` id to use instead of the matched track's variant, e.g. the security variant for a security role the classifier filed under a general software track |
 
 Returns the application id, status, packet hash, the match report, the questions needing a human, and the answers that were auto-filled with their citations.
 

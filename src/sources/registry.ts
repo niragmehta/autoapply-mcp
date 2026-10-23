@@ -10,6 +10,10 @@ import { workdayAdapter } from "./workday.js";
 import { smartrecruitersAdapter } from "./smartrecruiters.js";
 import { workableAdapter } from "./workable.js";
 import { recruiteeAdapter } from "./recruitee.js";
+import { googleCareersAdapter } from "./googleCareers.js";
+import { metaCareersAdapter } from "./metaCareers.js";
+import { amazonJobsAdapter } from "./amazonJobs.js";
+import { appleJobsAdapter } from "./appleJobs.js";
 import { probeJson } from "./http.js";
 import type { BoardVerification, DiscoveryIssue, SourceAdapter } from "./types.js";
 
@@ -21,6 +25,10 @@ const ADAPTERS: Record<AtsKind, SourceAdapter> = {
   smartrecruiters: smartrecruitersAdapter,
   workable: workableAdapter,
   recruitee: recruiteeAdapter,
+  google: googleCareersAdapter,
+  meta: metaCareersAdapter,
+  amazon: amazonJobsAdapter,
+  apple: appleJobsAdapter,
 };
 
 export function adapterFor(kind: AtsKind): SourceAdapter {

@@ -79,7 +79,11 @@ describe("source registry", () => {
     expect(adapterFor("smartrecruiters").kind).toBe("smartrecruiters");
     expect(adapterFor("workable").kind).toBe("workable");
     expect(adapterFor("recruitee").kind).toBe("recruitee");
-    expect(allAdapters()).toHaveLength(7);
+    expect(adapterFor("google").kind).toBe("google");
+    expect(adapterFor("meta").kind).toBe("meta");
+    expect(adapterFor("amazon").kind).toBe("amazon");
+    expect(adapterFor("apple").kind).toBe("apple");
+    expect(allAdapters()).toHaveLength(11);
   });
 
   it("throws for an unknown ATS", () => {

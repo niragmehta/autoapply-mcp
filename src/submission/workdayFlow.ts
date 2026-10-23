@@ -1,6 +1,7 @@
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
+import { numberInputValue } from "../drafting/valueShape.js";
 import { getAtsCredentials, lengthenedPassword, type AtsCredentials } from "./credentials.js";
 import { isWorkdayHost } from "./verificationLinks.js";
 
@@ -2445,13 +2446,55 @@ export async function reviewOmissions(
     // answer when every significant word of it is present.
     const words = significantWords(value).filter((word) => !employerWords.has(word));
     if (words.length > 0 && words.every((word) => haystack.includes(word))) continue;
+    if (statesFigure(haystack, value)) continue;
     missing.push({ label: entry.label, value });
   }
   return missing;
 }
 
+/**
+ * A number field keeps only the figure of a sentence answer: Cboe's "Salary
+ * Expectations" took "Around USD 192,500 base (...)" as 192500, which is what
+ * its Review page says back. The figure must stand alone, plain or grouped, and
+ * have at least four digits, since a short number appears all over a page.
+ */
+function statesFigure(haystack: string, value: string): boolean {
+  const figure = numberInputValue(value);
+  if (!figure || figure.replace(/\D/g, "").length < 4) return false;
+  const forms = new Set([figure, Number(figure).toLocaleString("en-US")]);
+  return [...forms].some((form) => {
+    const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?<![\\d.,])${escaped}(?!\\d|[.,]\\d)`).test(haystack);
+  });
+}
+
 function significantWords(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+}
+
+/**
+ * The fields Workday's "Errors Found" banner names as required and empty.
+ *
+ * A question revealed by an earlier answer is not on the page when the step is
+ * collected: Intel shows "11d) Please indicate your current immigration status"
+ * only once 11c is answered, and Nasdaq's residence question appeared the same
+ * way. The step then refused to advance and the run reported nothing but "would
+ * not advance", which gives a person nothing to answer. The banner names each
+ * field in a fixed sentence, so those names become the questions to answer.
+ */
+export function parseWorkdayRequiredErrors(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.replace(/\s+/g, " ").matchAll(/The field (.{3,400}?) is required and must have a value/g)) {
+    const label = (match[1] ?? "").replace(/\*/g, "").replace(/\s*:\s*$/, "").replace(/\s+/g, " ").trim();
+    if (label) found.add(label);
+  }
+  return [...found];
+}
+
+/** Reads {@link parseWorkdayRequiredErrors} off the live page. */
+export async function workdayRequiredErrors(page: Page): Promise<string[]> {
+  const body = await visibleText(page, "body").catch(() => "");
+  return parseWorkdayRequiredErrors(typeof body === "string" ? body : "");
 }
 
 export function assertWorkdaySupported(rawUrl: string): void {

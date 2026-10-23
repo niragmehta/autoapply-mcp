@@ -26,7 +26,7 @@ import {
   relocationOption,
   writtenForChoiceList,
 } from "../text/questionIntent.js";
-import { statesUnrelatedExperience } from "./experienceSubject.js";
+import { countsYearsAsLookback, statesUnrelatedExperience } from "./experienceSubject.js";
 import { ratingSubjectMismatch } from "./ratingSubject.js";
 import { consentsToDocument } from "./documentConsent.js";
 import { valueShapeMismatch, type TextControl } from "./valueShape.js";
@@ -176,6 +176,7 @@ function matchApprovedAnswer(profile: Profile, label: string, offered?: Pick<For
     // A question naming a subject may only be answered by an entry naming the
     // same subject; see experienceSubject.ts.
     if (statesUnrelatedExperience(haystack, [entry.label, ...entry.patterns])) continue;
+    if (countsYearsAsLookback(haystack, [entry.label, ...entry.patterns])) continue;
     if (ratingSubjectMismatch(haystack, [entry.label, ...entry.patterns])) continue;
     if (workPermissionScopeMismatch(haystack, [entry.label, ...entry.patterns])) continue;
     if (sponsorshipIntentMismatch(label, [entry.key, entry.label, ...entry.patterns])) continue;

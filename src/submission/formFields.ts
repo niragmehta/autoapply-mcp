@@ -1,6 +1,6 @@
 import type { DraftAnswer } from "../domain/job.js";
 import { pickNumericBandIndex } from "../drafting/numericBands.js";
-import { statesUnrelatedExperience } from "../drafting/experienceSubject.js";
+import { countsYearsAsLookback, statesUnrelatedExperience } from "../drafting/experienceSubject.js";
 import { ratingSubjectMismatch } from "../drafting/ratingSubject.js";
 import { numberInputValue, valueShapeMismatch } from "../drafting/valueShape.js";
 import {
@@ -883,6 +883,9 @@ const DECLINE_OPTION_CANDIDATES = [
   // Adobe's ethnicity prompt words the decline in the past tense, as
   // "Declined to State (United States of America)".
   "declined to state",
+  // Trend Micro's veteran prompt offers only "Yes", "No" and "Opt-Out".
+  "Opt-Out",
+  "Opt out",
 ];
 
 /** Whether a candidate list is the decline search `optionSearchCandidates` builds. */
@@ -1009,8 +1012,10 @@ function degreeCandidates(field: FieldDescriptor, value: string): string[] {
   return level ? [value, ...level.candidates] : [];
 }
 
-const MASTERS_WORDING = ["Master's Degree", "Masters Degree", "Master's", "Master"] as const;
-const BACHELORS_WORDING = ["Bachelor's Degree", "Bachelors Degree", "Bachelor's", "Bachelor"] as const;
+const MASTERS_WORDING = ["Master's Degree", "Masters Degree", "Master's", "Masters", "Master"] as const;
+// HP's Workday spells the level "Bachelors (±16 years of education)", which
+// neither "Bachelor's" nor the whole word "Bachelor" matches.
+const BACHELORS_WORDING = ["Bachelor's Degree", "Bachelors Degree", "Bachelor's", "Bachelors", "Bachelor"] as const;
 
 /**
  * Some boards list only abbreviations - Snap's Workday offers "B.A.", "B.S.",
@@ -2205,6 +2210,7 @@ function bestBankEntry(
     if (reserved && ![entry.label, ...entry.patterns].some((text) => RESERVED_FOR_HUMAN.test(text))) continue;
     if (residenceOrRelocation && deniesResidenceOnly(entry.answer)) continue;
     if (candidates.some((value) => statesUnrelatedExperience(value, [entry.label, ...entry.patterns]))) continue;
+    if (candidates.some((value) => countsYearsAsLookback(value, [entry.label, ...entry.patterns]))) continue;
     if (candidates.some((value) => ratingSubjectMismatch(value, [entry.label, ...entry.patterns]))) continue;
     if (candidates.some((value) => workPermissionScopeMismatch(value, [entry.label, ...entry.patterns]))) continue;
     if (rawTexts.some((value) => sponsorshipIntentMismatch(value, [entry.key, entry.label, ...entry.patterns]))) continue;
@@ -2457,7 +2463,6 @@ const SUBMISSION_CONFIRMATION_MARKERS = [
   "we received your application",
   "we've received your application",
   "we have received your application",
-  "your application is in",
   "your application has been received",
   "we've got your application",
   "we have your application",
@@ -2480,6 +2485,10 @@ const SUBMISSION_CONFIRMATION_PATTERNS = [
   // employer's application-limits policy as in a real confirmation, so it is
   // handled by detectAlreadyApplied, which rejects conditional phrasing.
   /\bsuccessfully (?:submitted|applied)\b/,
+  // Pinterest writes "Good news: your application is in!". As a bare phrase it
+  // also matched "your application is incomplete" and "is in progress", which
+  // recorded unfinished applications as sent, so the sentence has to end there.
+  /\byour application is in(?=\s*[!.]|\s*$)/,
 ];
 
 /**
@@ -2706,6 +2715,19 @@ function collapseOptionGroups(
     }
 
     let selected: { index: number; answer: DraftAnswer } | undefined;
+    // A "select all that apply" box group can hold several true answers: GEICO's
+    // "Please select all days you are able to work" ticked Monday alone from
+    // "Monday through Friday". An answer that lists options with semicolons
+    // ticks each of them - only when every item names a distinct option
+    // exactly, so nothing beyond what the answer states is ever ticked, and
+    // never for radios, which hold one choice by construction.
+    const listed = head.field.type === "checkbox" ? listedOptions(optionLabels, candidates) : null;
+    if (listed) {
+      for (const { index, answer } of listed) {
+        out.push({ ...group[index]!, answer, confidence: similarity(head.field.label, answer.label) });
+      }
+      continue;
+    }
     for (const answer of candidates) {
       const index = pickOptionIndex(optionLabels, optionSearchCandidates(head.field, answer));
       if (index >= 0) {
@@ -2747,6 +2769,24 @@ function collapseOptionGroups(
     });
   }
   return out;
+}
+
+/**
+ * The options a semicolon-separated answer names, one per item, or null unless
+ * the answer lists at least two items and each names a distinct option exactly.
+ */
+function listedOptions(
+  optionLabels: readonly string[],
+  candidates: readonly DraftAnswer[],
+): Array<{ index: number; answer: DraftAnswer }> | null {
+  for (const answer of candidates) {
+    const items = answer.answer.split(";").map((item) => item.trim()).filter((item) => item.length > 0);
+    if (items.length < 2) continue;
+    const indexes = items.map((item) => optionLabels.findIndex((label) => normalizeLabel(label) === normalizeLabel(item)));
+    if (indexes.some((index) => index < 0) || new Set(indexes).size !== indexes.length) continue;
+    return indexes.map((index) => ({ index, answer: { ...answer, answer: optionLabels[index]! } }));
+  }
+  return null;
 }
 
 /**

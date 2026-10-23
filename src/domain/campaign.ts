@@ -159,7 +159,24 @@ export type ScoringWeights = z.infer<typeof ScoringWeightsSchema>;
 export type CompensationPolicy = z.infer<typeof CompensationPolicySchema>;
 export type SubmissionPolicy = z.infer<typeof SubmissionPolicySchema>;
 
-export const AtsKindSchema = z.enum(["greenhouse", "lever", "ashby", "workday", "smartrecruiters", "workable", "recruitee"]);
+/**
+ * `google`, `meta`, `amazon` and `apple` are the employers' own career sites.
+ * They only take applications from a signed-in account, so submitting to them
+ * runs in a browser profile the candidate signed in to by hand.
+ */
+export const AtsKindSchema = z.enum([
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workday",
+  "smartrecruiters",
+  "workable",
+  "recruitee",
+  "google",
+  "meta",
+  "amazon",
+  "apple",
+]);
 export type AtsKind = z.infer<typeof AtsKindSchema>;
 
 export const CompanySchema = z.object({

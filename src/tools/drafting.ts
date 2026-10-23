@@ -37,10 +37,15 @@ export function registerDraftingTools(server: McpServer): void {
       inputSchema: {
         jobId: z.string().min(1),
         force: z.boolean().optional().describe("Prepare even if the job did not pass the campaign gates."),
+        resumeId: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Resume variant id from profile.resumes to use instead of the matched track's own variant."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    handler(async (args: { jobId: string; force?: boolean }) => {
+    handler(async (args: { jobId: string; force?: boolean; resumeId?: string }) => {
       const workspace = getWorkspace();
       const job = getJob(workspace.db, args.jobId);
       if (!job) throw new AppError("job_not_found", `no job stored with id ${args.jobId}`);
@@ -71,6 +76,7 @@ export function registerDraftingTools(server: McpServer): void {
         evaluation,
         workspace.profile,
         workspace.campaign,
+        { resumeId: args.resumeId },
       );
       const { application, report, resumeCheck } = prepared;
       appendEvent(workspace.db, "application.prepared", application.id, { jobId: job.id, status: application.status });

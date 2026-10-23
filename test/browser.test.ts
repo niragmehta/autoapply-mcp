@@ -207,6 +207,22 @@ describe("COLLECT_FIELDS", () => {
     expect(field?.label).toBe("Submit Application");
     expect(field?.questionLabel).toBe(title);
   });
+
+  it("reads a radio group's question through aria-labelledby, whole, on any site", () => {
+    // Amazon names its question only through aria-labelledby and defines
+    // sponsorship to include TN after the first 200 characters; cut there,
+    // the question took the generic sponsorship "No".
+    const question =
+      "Your response is mandatory when applying for a U.S.-based position. Do you need, or will you need in the future, any immigration related support or sponsorship from Amazon in order to begin or continue employment with Amazon? This includes support (such as J-1, F-1 CPT letter or STEM OPT Training Plan), visa sponsorship for employment (H-1B, H-1B1, E-3, O-1, or TN)";
+    const group = { getAttribute: (key: string) => (key === "aria-labelledby" ? "REQUIRE_SPONSORSHIP-label" : null) };
+    const base = element({ type: "radio", name: "REQUIRE_SPONSORSHIP", id: "radio-yes", rect: { width: 16, height: 16 } });
+    const radio = { ...base, closest: (selector: string) => (selector === '[role="radiogroup"]' ? group : null) };
+
+    const [field] = collect([radio], { "radio-yes": "Yes" }, { "REQUIRE_SPONSORSHIP-label": question });
+
+    expect(field?.label).toBe(question);
+    expect(field?.optionLabel).toBe("Yes");
+  });
 });
 
 function leverQuestion(title: string): Record<string, unknown> {
@@ -264,8 +280,12 @@ function element(spec: FakeElementSpec): Record<string, unknown> {
   };
 }
 
-/** Runs COLLECT_FIELDS against a fake DOM whose labels come from `labels`. */
-function collect(elements: Array<Record<string, unknown>>, labels: Record<string, string>): FieldDescriptor[] {
+/** Runs COLLECT_FIELDS against a fake DOM whose labels come from `labels`, and id targets from `byId`. */
+function collect(
+  elements: Array<Record<string, unknown>>,
+  labels: Record<string, string>,
+  byId: Record<string, string> = {},
+): FieldDescriptor[] {
   const evaluate = new Function("document", "window", "CSS", `return ${COLLECT_FIELDS}`);
   const document = {
     querySelectorAll: () => elements,
@@ -274,7 +294,7 @@ function collect(elements: Array<Record<string, unknown>>, labels: Record<string
       const text = match ? labels[match[1]!] : undefined;
       return text ? { innerText: text } : null;
     },
-    getElementById: () => null,
+    getElementById: (id: string) => (byId[id] ? { innerText: byId[id], textContent: byId[id] } : null),
   };
   return evaluate(document, { getComputedStyle: () => ({ display: "block", visibility: "visible" }) }, {
     escape: (value: string) => value,

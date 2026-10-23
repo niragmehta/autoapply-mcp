@@ -229,7 +229,7 @@ connections so they load the new schema. Once the new code is running,
 }
 ```
 
-`ats` is `greenhouse`, `lever`, `ashby` or `workday`. `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it. For Workday there is no single slug: `board` is the `tenant/datacenter/site` triple read off the employer's career-site URL, e.g. `nvidia/wd5/NVIDIAExternalCareerSite`, and it cannot be guessed, so record it with `add_company_board`. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances. `query` is a server-side search filter, worth setting on large Workday tenants that publish thousands of unrelated postings.
+`ats` is `greenhouse`, `lever`, `ashby` or `workday` (also `smartrecruiters`, `workable` and `recruitee`, and the career sites below). `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it. For Workday there is no single slug: `board` is the `tenant/datacenter/site` triple read off the employer's career-site URL, e.g. `nvidia/wd5/NVIDIAExternalCareerSite`, and it cannot be guessed, so record it with `add_company_board`. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances. `query` is a server-side search filter, worth setting on large Workday tenants that publish thousands of unrelated postings.
 
 `name` is an identity, not a label. Boards are matched on it case-insensitively, and `submission.maxPerCompany` is keyed by it, so two spellings of one employer become two boards with two separate ceilings.
 
@@ -301,3 +301,59 @@ the request, are followed; a link naming another tenant is skipped, and the
 link itself is never logged.
 
 Requires `npm install imapflow`, an optional peer dependency.
+
+## Career sites: Google, Meta, Amazon and Apple
+
+Four employers run their own career sites rather than a shared ATS, and each
+needs a signed-in account to apply. They are boards like any other in
+`companies.json`, with these `ats` values and `board` formats:
+
+| `ats` | `board` | Example |
+|---|---|---|
+| `google` | Search location, optionally `;` and Google's levels | `United States;MID,ADVANCED` |
+| `meta` | Any fixed label; `query` carries the search | `metacareers` |
+| `amazon` | Country code | `USA` |
+| `apple` | Apple's location slug | `united-states-USA` |
+
+Set `query` on each (for example `security engineer`) and add the site's domain
+to `campaign.json` `allowedAtsDomains` (`google.com`, `metacareers.com`,
+`amazon.jobs`, `jobs.apple.com`).
+
+**Signing in.** The server never signs in, creates an account or answers a
+challenge on these sites. Sign in once by hand in Chrome using a dedicated
+profile directory, then close that window:
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="$env:USERPROFILE\.autoapply\browser-profiles\careers"
+```
+
+Submissions reuse that profile's session through Playwright. A session that has
+lapsed (Apple's lasts hours, not days) ends the run with a request to sign in
+again. Only one process can hold the profile at a time, so close the Chrome
+window before a run.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AUTOAPPLY_BROWSER_PROFILE` | `<home>/browser-profiles/careers` | The signed-in profile directory. |
+| `AUTOAPPLY_BROWSER_CHANNEL` | `chrome` | Browser build; `chromium` selects Playwright's own, which cannot read a profile Chrome created. |
+| `AUTOAPPLY_CAREERS_MAX_PAGES` | `10` | Google search pages read per board. |
+| `AUTOAPPLY_CAREERS_MAX_POSTINGS` | `500` | Amazon postings read per board. |
+| `AUTOAPPLY_META_SEARCH_DOC_ID` | built in | Meta's persisted search query id, for when Meta rotates it. |
+
+What each site's walker does:
+
+- **Google** replaces the profile résumé (unticking "Fill out your application
+  with your résumé", which otherwise rewrites profile fields), answers the
+  minimum-qualification statements only from recorded answers, declines
+  self-identification and confirms on the applications dashboard. Google allows
+  three applications per 30 days and may submit an older draft alongside the
+  new one, so check the dashboard for stray drafts first.
+- **Meta** replaces the résumé, picks a location from your relocation targets,
+  declines self-identification and stops on any empty field.
+- **Amazon** fills job-specific Select2 questions and radio groups from recorded
+  answers, replaces the résumé from the review page, then reads every stated
+  answer back. It stops before Submit when a self-identification answer on file
+  is not a decline, or when an eligibility answer contradicts the record. The
+  AI-preference consent appears in a dialog after Submit and is answered only
+  from a recorded answer.
+- **Apple** is discovery only; applications there are not automated.

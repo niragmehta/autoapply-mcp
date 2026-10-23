@@ -108,3 +108,22 @@ export function statesUnrelatedExperience(label: string, describedBy: readonly s
   const described = words(describedBy.join(" "));
   return !subjects.some((subject) => described.includes(subject));
 }
+
+/**
+ * "In the past 7 years" counts back over a window of time; it is not a length
+ * of career. The threshold entry's pattern "7+ years" loses its plus sign to
+ * normalization and reads as "7 years", which Amazon's export-control question
+ * "In the past 7 years, have you lived ... outside of the US for 12 consecutive
+ * months or more?" contains - so the experience threshold answered "No" to a
+ * question about where the candidate has lived, and the false answer was saved
+ * to the draft.
+ */
+const LOOKBACK_WINDOW =
+  /\b(?:in|within|during|over|for)\s+the\s+(?:past|last|previous|preceding|prior)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen)\s+(?:years?|months?)\b/i;
+const ABOUT_EXPERIENCE = /\bexperience\b/i;
+
+/** True when an entry about experience meets a question whose years are a lookback window, not experience. */
+export function countsYearsAsLookback(label: string, describedBy: readonly string[]): boolean {
+  if (!describedBy.some((text) => ABOUT_EXPERIENCE.test(text))) return false;
+  return LOOKBACK_WINDOW.test(label) && !ABOUT_EXPERIENCE.test(label);
+}

@@ -15,6 +15,14 @@ describe("selectResume", () => {
     expect(selectResume(profile, "unknown-track").id).toBe("general");
     expect(selectResume(profile, null).id).toBe("general");
   });
+
+  it("honours an explicitly chosen variant over the track's own", () => {
+    expect(selectResume(profile, "ai-security", "general").id).toBe("general");
+  });
+
+  it("refuses a variant id the profile does not define", () => {
+    expect(() => selectResume(profile, "ai-security", "no-such-resume")).toThrow(/no-such-resume/);
+  });
 });
 
 describe("rankFacts", () => {

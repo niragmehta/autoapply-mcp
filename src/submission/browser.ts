@@ -1,7 +1,8 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SubmissionPolicy } from "../domain/campaign.js";
+import { resolvePaths } from "../config/paths.js";
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
 import { numberInputValue } from "../drafting/valueShape.js";
@@ -56,6 +57,7 @@ import {
   workdayStepName,
   workdayTenant,
   reviewOmissions,
+  workdayRequiredErrors,
 } from "./workdayFlow.js";
 
 /**
@@ -73,6 +75,14 @@ import {
   type VerificationInboxConfig,
 } from "./verificationInbox.js";
 import type { SubmissionPacket } from "./packet.js";
+import {
+  careerBrowserChannel,
+  careerProfileDir,
+  careerSiteFor,
+  runCareerSiteApplication,
+  type CareerSite,
+  type SitePage,
+} from "./careerSites.js";
 
 /**
  * Browser automation for hosted ATS application forms.
@@ -158,6 +168,11 @@ export type BrowserRunOptions = {
   timeoutMs?: number;
   /** Email for boards that require an account, defaulting to the profile's own. */
   accountEmail?: string;
+  /**
+   * Places the candidate would move to, used where a career site asks which of
+   * a posting's locations to be considered for.
+   */
+  relocationTargets?: readonly string[];
   /**
    * Permits registering a new account on an employer's tenant. Off by default:
    * creating a credentialed account in the candidate's name is a larger step
@@ -324,7 +339,23 @@ export const COLLECT_FIELDS = `(() => {
     if (entryTitle && entryTitle.innerText.trim()) return entryTitle.innerText.trim();
     const radiogroup = el.closest('[role="radiogroup"]');
     const aria = radiogroup && radiogroup.getAttribute('aria-label');
-    return aria ? aria.trim() : '';
+    if (aria && aria.trim()) return aria.trim();
+    // Amazon names a group's question only through aria-labelledby, pointing at
+    // a label hidden from assistive tech. Unread, its sponsorship question was
+    // matched by the field name REQUIRE_SPONSORSHIP alone, which skips the rule
+    // for a definition of sponsorship that names TN.
+    const labelledBy = radiogroup && radiogroup.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const text = labelledBy
+        .split(/\\s+/)
+        .map((id) => document.getElementById(id))
+        .filter(Boolean)
+        .map((node) => (node.innerText || node.textContent || '').trim())
+        .join(' ')
+        .trim();
+      if (text) return text;
+    }
+    return '';
   };
   // A required multi-select question is satisfied by ticking any one of its
   // boxes, so the options have to be reported as one group. Without this each
@@ -450,7 +481,11 @@ export const COLLECT_FIELDS = `(() => {
         : plainLabel(el)
     ).slice(0, labelLimit);
     const group = isRadio
-      ? groupLabel(el).slice(0, labelLimit)
+      ? // A radio group's label is the question itself, and a question's last
+        // clause can decide it on any site: Amazon names TN as sponsorship
+        // after its first 200 characters, and the cut-off question took the
+        // generic sponsorship "No".
+        groupLabel(el).slice(0, 2000)
       : container
         ? checkboxGroupLabel(el, container).slice(0, labelLimit)
         : '';
@@ -672,6 +707,105 @@ async function guardedFillFormPage(
   }
 }
 
+type PersistentContext = {
+  pages: () => AnyPage[];
+  newPage: () => Promise<AnyPage>;
+  close: () => Promise<void>;
+};
+type PersistentLauncher = {
+  launchPersistentContext: (userDataDir: string, options: unknown) => Promise<PersistentContext>;
+};
+
+/**
+ * Runs an application on an employer's own career site in the candidate's
+ * signed-in browser profile. Always headed: these sites re-challenge sessions
+ * they see in a headless browser, and a person may need to see what happened.
+ */
+async function runCareerSite(
+  chromium: PersistentLauncher,
+  site: CareerSite,
+  packet: SubmissionPacket,
+  options: BrowserRunOptions,
+): Promise<BrowserRunResult> {
+  const profileDir = careerProfileDir(resolvePaths().home);
+  if (!existsSync(profileDir)) {
+    return aborted(
+      `no signed-in browser profile at ${profileDir}; open Chrome with --user-data-dir pointing there, sign in to the ${site} career site by hand, close it, and run again`,
+      packet.applyUrl,
+    );
+  }
+  let context: PersistentContext;
+  try {
+    context = await chromium.launchPersistentContext(profileDir, {
+      channel: careerBrowserChannel(),
+      headless: false,
+      viewport: { width: 1280, height: 1000 },
+      acceptDownloads: false,
+    });
+  } catch (error) {
+    return aborted(
+      `could not open the signed-in browser profile (close any Chrome window using ${profileDir}): ${String(error instanceof Error ? error.message : error).split("\n")[0]}`,
+      packet.applyUrl,
+    );
+  }
+  try {
+    const page = context.pages()[0] ?? (await context.newPage());
+    return await runCareerSiteApplication({
+      site,
+      page: page as unknown as SitePage,
+      packet,
+      submit: options.submit,
+      relocationTargets: options.relocationTargets ?? [],
+      hooks: {
+        fillStep: async () => {
+          const step = await guardedFillFormPage(page, packet, options, true);
+          if ("status" in step) return step;
+          const problems = [
+            ...step.plan.unmatchedRequired.map((field) => field.label),
+            ...step.failedRequired,
+          ].filter((label, index, labels) => label.trim().length > 0 && labels.indexOf(label) === index);
+          return { filled: step.filled, problems };
+        },
+        capture: (stage) => capture(page, options.artifactsDir, packet.applicationId, stage),
+        readText: () => readBodyText(page),
+        resolveChoice: (label, offered) => resolveChoiceFor(packet, options, label, offered),
+      },
+    });
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
+/** The offered option that answers one choice question, matched exactly as the generic filler would. */
+function resolveChoiceFor(
+  packet: SubmissionPacket,
+  options: BrowserRunOptions,
+  label: string,
+  offered: readonly string[],
+): string | null {
+  // A real control index: the TN-sponsorship rule only applies to a control on the page.
+  const field: FieldDescriptor = { selectorIndex: 0, label, type: "select", name: "", required: true, options: [...offered] };
+  const packetAnswers = augmentAnswersForBrowser(packet.answers, options.candidateCountry);
+  const plan = buildFillPlan(
+    [field],
+    [
+      ...packetAnswers,
+      ...fallbackAnswersForFields(
+        [field],
+        packetAnswers,
+        options.answerBank ?? [],
+        options.personalResolver,
+        options.narrativeResolver,
+        options.experienceResolver,
+      ),
+    ],
+  );
+  const match = plan.toFill[0];
+  if (!match?.answer || !match.answer.answer.trim()) return null;
+  const index = pickOptionIndex(offered, optionSearchCandidates(field, match.answer, packet.company));
+  return index >= 0 ? (offered[index] ?? null) : null;
+}
+
 export async function runApplicationForm(packet: SubmissionPacket, options: BrowserRunOptions): Promise<BrowserRunResult> {
   assertUrlAllowed(packet.applyUrl, options.policy);
   const playwright = await loadPlaywright();
@@ -680,6 +814,8 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
 
   mkdirSync(options.artifactsDir, { recursive: true });
   const timeout = options.timeoutMs ?? 45_000;
+  const site = careerSiteFor(packet.applyUrl);
+  if (site) return runCareerSite(chromium as unknown as PersistentLauncher, site, packet, options);
   const browser = await chromium.launch({ headless: options.headless ?? false });
 
   try {
@@ -762,6 +898,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           stalls += 1;
           if (stalls >= 3) {
             logger.warn("workday step will not advance", { step: name });
+            // The banner names questions an earlier answer revealed after the
+            // step was collected, which are the ones a person has to answer.
+            const missing = await workdayRequiredErrors(page as never).catch(() => [] as string[]);
+            if (missing.length > 0) logger.info("workday step reports required fields", { missing });
+            priorFailedRequired.push(...missing);
             // Reported, not just logged: a wizard that never reached Review has
             // not filled the application, and without this the run ends
             // "unmatched required: []" and looks ready to submit.
@@ -1649,7 +1790,9 @@ async function fillControl(
       }
       return;
     }
-    if (affirmative) await locator.check();
+    // A lone consent box is styled like the option boxes, so a bare check()
+    // waited out its 30 seconds on Citi's and Cboe's Workday consent boxes.
+    if (affirmative) await checkOption(locator);
     return;
   }
   if (field.type === "file") return;
@@ -1801,7 +1944,7 @@ const LEVER_LOCATION_DEBOUNCE_MS = 600;
  * real input behind its own label, which defeats a plain check(), so fall back
  * to forcing it and then to clicking the surrounding option row.
  */
-async function checkOption(locator: AnyLocator): Promise<void> {
+export async function checkOption(locator: AnyLocator): Promise<void> {
   try {
     await locator.check({ timeout: 4000 });
     return;
@@ -1814,6 +1957,8 @@ async function checkOption(locator: AnyLocator): Promise<void> {
   } catch {
     // Falls through to clicking the visible option row.
   }
+  // Clicking the row toggles it, so a box something else already ticked stays as it is.
+  if (await locator.isChecked?.().catch(() => false)) return;
   await locator.locator("xpath=ancestor::*[self::label or self::div][1]").first().click({ timeout: 4000 });
 }
 

@@ -283,6 +283,39 @@ describe("buildFillPlan", () => {
     expect(plan.unmatchedRequired).toHaveLength(1);
   });
 
+  describe("a select-all-that-apply group answered with a list", () => {
+    // GEICO asks "Please select all days you are able to work:" with one box
+    // per day; one stored answer used to tick Monday alone.
+    const label = "Please select all days you are able to work:";
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const fields = days.map((optionLabel, index) =>
+      field(label, { selectorIndex: index, type: "checkbox", name: `day_${index}`, optionLabel, groupKey: label, required: true }),
+    );
+
+    it("ticks every option a semicolon-separated answer names", () => {
+      const plan = buildFillPlan(fields, [answer(label, "Monday; Tuesday; Wednesday; Thursday; Friday")]);
+
+      expect(plan.toFill.map((match) => match.field.optionLabel)).toEqual(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+      expect(plan.unmatchedRequired).toEqual([]);
+    });
+
+    it("ticks nothing extra when an item names no option", () => {
+      const plan = buildFillPlan(fields, [answer(label, "Monday; Funday")]);
+
+      expect(plan.toFill.map((match) => match.field.optionLabel)).toEqual(["Monday"]);
+    });
+
+    it("leaves radio groups to a single choice", () => {
+      const radios = ["Yes", "No"].map((optionLabel, index) =>
+        field("Are you willing to work weekends?", { selectorIndex: index, type: "radio", name: "weekends", optionLabel }),
+      );
+
+      const plan = buildFillPlan(radios, [answer("Are you willing to work weekends?", "Yes; No")]);
+
+      expect(plan.toFill.length).toBeLessThanOrEqual(1);
+    });
+  });
+
   it("keeps ungrouped checkboxes independent of one another", () => {
     // Two acknowledgement boxes are separate obligations and both must tick.
     const plan = buildFillPlan(
@@ -366,6 +399,12 @@ describe("detectSubmissionConfirmation", () => {
 
   it("does not treat the application form or a button click as confirmation", () => {
     expect(detectSubmissionConfirmation("Apply for this job\nSubmit application")).toBe(false);
+  });
+
+  it("takes 'your application is in' only as a whole sentence", () => {
+    expect(detectSubmissionConfirmation("Good news: your application is in!")).toBe(true);
+    expect(detectSubmissionConfirmation("Your application is incomplete. Please finish it.")).toBe(false);
+    expect(detectSubmissionConfirmation("Your application is in progress.")).toBe(false);
   });
 
   it("accepts an ATS confirmation URL when the employer uses its own wording", () => {
@@ -723,6 +762,15 @@ describe("optionSearchCandidates", () => {
         candidates,
       ),
     ).toBe(1);
+  });
+
+  it("covers a decline offered as Opt-Out", () => {
+    // Trend Micro's Workday veteran prompt offers only Yes, No and Opt-Out.
+    const candidates = optionSearchCandidates(
+      field("Veterans Status", { role: "combobox", required: true }),
+      answer("VeteranStatus", "Decline to self-identify", { category: "demographic" }),
+    );
+    expect(pickOptionIndex(["Select One", "Yes", "No", "Opt-Out"], candidates)).toBe(3);
   });
 
   // Palo Alto Networks' race question is a "choose all that apply" list whose
@@ -1813,6 +1861,14 @@ describe("degree option candidates", () => {
     const candidates = optionSearchCandidates(degreeField, answer("Degree", "Bachelor of Arts (BA)"));
     expect(candidates).toContain("B.A.");
     expect(candidates).not.toContain("B.S.");
+  });
+
+  it("reaches a level spelled as a bare plural", () => {
+    // HP's Workday offers "Bachelors (±16 years of education)": the whole word
+    // "Bachelor" is not in it and neither is "Bachelor's".
+    const options = ["Select One", "Associates (±13 years of education)", "Bachelors (±16 years of education)", "Masters (±18 years of education)"];
+    const candidates = optionSearchCandidates(degreeField, answer("Degree", "Bachelor of Science (BSc)"));
+    expect(options[pickOptionIndex(options, candidates)]).toBe("Bachelors (±16 years of education)");
   });
 
   it("treats an applied-science degree as a science degree", () => {

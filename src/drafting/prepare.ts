@@ -55,14 +55,15 @@ export async function prepareApplicationFor(
   evaluation: Evaluation,
   profile: Profile,
   campaign: Campaign,
+  options: { resumeId?: string } = {},
 ): Promise<PreparedApplication> {
   const existing = getApplicationByJob(db, job.id);
   if (existing && existing.status === "submitted") {
     throw new AppError("already_submitted", `this job was already submitted at ${existing.submittedAt}`);
   }
 
-  const report = buildMatchReport(job, evaluation, profile, campaign);
-  const resume = selectResume(profile, evaluation.trackId);
+  const report = buildMatchReport(job, evaluation, profile, campaign, options.resumeId);
+  const resume = selectResume(profile, evaluation.trackId, options.resumeId);
   const resumeCheck = validateResumeFile(resume.path);
 
   const { questions, source } = await loadQuestions(job.ats, job.board, job.externalId);

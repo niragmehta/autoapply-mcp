@@ -4,6 +4,7 @@ import type { Fact, Profile, ResumeVariant } from "../domain/profile.js";
 import { normalizeForMatch, snippetAround } from "../text/html.js";
 import { checkCompensationFloor } from "../ranking/compensation.js";
 import { detectInjection } from "../text/untrusted.js";
+import { AppError } from "../util/errors.js";
 
 /**
  * Match report.
@@ -78,8 +79,24 @@ export type MatchReport = {
   guidance: string[];
 };
 
-/** Chooses the resume variant written for a track, with sensible fallbacks. */
-export function selectResume(profile: Profile, trackId: string | null): ResumeVariant {
+/**
+ * Chooses the resume variant written for a track, with sensible fallbacks.
+ *
+ * An explicit `resumeId` wins: the track classifier reads titles, and a
+ * security role it files under a general software track is still better
+ * served by the security variant.
+ */
+export function selectResume(profile: Profile, trackId: string | null, resumeId?: string): ResumeVariant {
+  if (resumeId) {
+    const named = profile.resumes.find((resume) => resume.id === resumeId);
+    if (!named) {
+      throw new AppError(
+        "unknown_resume",
+        `no resume variant "${resumeId}" in profile.resumes (have: ${profile.resumes.map((resume) => resume.id).join(", ")})`,
+      );
+    }
+    return named;
+  }
   const byTrack = trackId ? profile.resumes.find((resume) => resume.tracks.includes(trackId)) : undefined;
   const fallback = profile.resumes.find((resume) => resume.isDefault) ?? profile.resumes[0];
   const chosen = byTrack ?? fallback;
@@ -92,6 +109,7 @@ export function buildMatchReport(
   evaluation: Evaluation,
   profile: Profile,
   campaign: Campaign,
+  resumeId?: string,
 ): MatchReport {
   const track = campaign.tracks.find((entry) => entry.id === evaluation.trackId);
   const haystack = normalizeForMatch(`${job.title}\n${job.descriptionText}`);
@@ -121,7 +139,7 @@ export function buildMatchReport(
   ];
 
   const compensationCheck = checkCompensationFloor(job.compensation, job.country, campaign.compensation);
-  const resume = selectResume(profile, evaluation.trackId);
+  const resume = selectResume(profile, evaluation.trackId, resumeId);
   const authorized = profile.workAuthorization.authorizedIn.map((code) => code.toUpperCase()).includes(job.country.toUpperCase());
   const noSponsorship = profile.workAuthorization.noSponsorshipRequiredIn
     .map((code) => code.toUpperCase())

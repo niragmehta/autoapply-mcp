@@ -186,6 +186,7 @@ export function registerSubmissionTools(server: McpServer): void {
         experienceResolver: experienceResolverFor(workspace.profile),
         narrativeResolver: narrativeResolverFor(job, getEvaluation(workspace.db, job.id), workspace.profile, workspace.campaign),
         accountEmail: workspace.profile.identity.email,
+        relocationTargets: workspace.profile.preferences.relocationTargets,
         // Registering on an employer's tenant is a bigger step than filling a
         // public form, so it is only done when a person is watching the window.
         // Workday is the exception: it has no anonymous apply path at all, so
