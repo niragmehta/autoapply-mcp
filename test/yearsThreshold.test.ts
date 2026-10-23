@@ -45,6 +45,16 @@ describe("years-of-experience thresholds", () => {
     // The profile tracks employment dates, not per-technology tenure.
     expect(answer("Do you have 5+ years of experience with Kubernetes?")).toBeNull();
     expect(answer("How many years of experience in Go do you have?")).toBeNull();
+    expect(answer("Do you have 5 or more years of experience building iOS apps in Swift?")).toBeNull();
+  });
+
+  it("reads 'N or more years' of building software as a general threshold", () => {
+    // Humana's Workday asks "Do you have 5 or more years of experience building
+    // and operating production software systems?" as Yes/No. "or more" hid the
+    // number and "experience building" read as a named technology, so the
+    // numeric years answer "5" was tried on a Yes/No select and the run failed.
+    expect(answer("Do you have 5 or more years of experience building and operating production software systems?")).toBe("Yes");
+    expect(answer("Do you have 7 or more years of experience developing software applications?")).toBe("No");
   });
 
   it("ignores a year that is not a length of experience", () => {

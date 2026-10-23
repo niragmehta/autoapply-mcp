@@ -365,7 +365,7 @@ const RESOLVERS: readonly Resolver[] = [
  * board means by professional or full-time years, and counting them decides the
  * answer either way around the six-year mark.
  */
-const YEARS_THRESHOLD = /\b(\d{1,2})\s*\+?\s*years?\b/;
+const YEARS_THRESHOLD = /\b(\d{1,2})\s*(?:\+|or more)?\s*years?\b/;
 const STRICTLY_MORE = /\b(?:over|more than|greater than|beyond)\s*$/;
 
 /**
@@ -376,11 +376,18 @@ const STRICTLY_MORE = /\b(?:over|more than|greater than|beyond)\s*$/;
 const GENERAL_EXPERIENCE =
   /\b(?:professional|software engineering|software development|engineering|industry|full[-\s]?time|work|working|relevant|technical)\b/;
 const NAMES_A_SUBJECT = /\bexperience\s+(?:with|in|using|building|developing|working|programming)\b/;
+/**
+ * "Experience building and operating production software systems" names the
+ * work itself rather than a technology the profile cannot date. Humana's
+ * Workday asked it as Yes/No and the question went unanswered.
+ */
+const GENERAL_SOFTWARE_SUBJECT =
+  /\bexperience\s+(?:building|developing|designing|writing|shipping)(?:\s+(?:and|or)\s+(?:operating|maintaining|shipping|deploying|running|supporting|scaling))?\s+(?:(?:production|large scale|scalable|enterprise|commercial|professional|distributed|backend|cloud)\s+)*(?:software|applications|services|systems)\b/;
 
 function yearsThresholdIn(label: string): number | null {
   const experienceAt = label.indexOf("experience");
   if (experienceAt < 0) return null;
-  if (NAMES_A_SUBJECT.test(label)) return null;
+  if (NAMES_A_SUBJECT.test(label) && !GENERAL_SOFTWARE_SUBJECT.test(label)) return null;
   const match = YEARS_THRESHOLD.exec(label);
   if (!match || match.index > experienceAt) return null;
   const between = label.slice(match.index + match[0].length, experienceAt);
