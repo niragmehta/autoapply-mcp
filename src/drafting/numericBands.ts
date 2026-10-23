@@ -37,6 +37,10 @@ function parseBand(option: string): Band | undefined {
   const open = /^(?:\D*?)(\d+(?:\.\d+)?)\s*\+/.exec(text);
   if (open) return { min: Number(open[1]), max: Number.POSITIVE_INFINITY };
 
+  // "90 or more days" is as open-ended as "90+ days".
+  const orMore = /^(?:\D*?)(\d+(?:\.\d+)?)\s*(?:or more|or above|or greater|and above|and up)\b/.exec(text);
+  if (orMore) return { min: Number(orMore[1]), max: Number.POSITIVE_INFINITY };
+
   const under = /^(?:less than|under|fewer than|below)\s*(\d+(?:\.\d+)?)/.exec(text);
   if (under) return { min: 0, max: Number(under[1]) };
 
@@ -59,6 +63,46 @@ function parseStatedFigure(candidate: string): number | undefined {
 }
 
 /**
+ * Notice periods are stored the way people say them - "Approximately four
+ * weeks" - while S&P Global's Workday lists them in days ("Less than 30 days",
+ * "30 to 59 days"). A duration is read with its unit, number words included,
+ * and converted to the unit the bands are written in, so the band that holds
+ * the same length of time can be found.
+ */
+type Unit = "day" | "week" | "month" | "year";
+const DAYS_PER: Record<Unit, number> = { day: 1, week: 7, month: 30, year: 365 };
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+const DURATION =
+  /\b(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(day|week|month|year)s?\b/;
+
+function statedDuration(candidate: string): { value: number; unit: Unit } | undefined {
+  const match = DURATION.exec(candidate.toLowerCase());
+  if (!match) return undefined;
+  const value = NUMBER_WORDS[match[1]!] ?? Number(match[1]);
+  return Number.isFinite(value) ? { value, unit: match[2] as Unit } : undefined;
+}
+
+/** The unit every figure-bearing option is written in, if they agree on one. */
+function bandUnit(optionTexts: readonly string[]): Unit | undefined {
+  const units = new Set<Unit>();
+  for (const option of optionTexts) {
+    if (!/\d/.test(option)) continue;
+    const unit = /\b(day|week|month|year)s?\b/.exec(option.toLowerCase())?.[1] as Unit | undefined;
+    if (!unit) return undefined;
+    units.add(unit);
+  }
+  return units.size === 1 ? [...units][0] : undefined;
+}
+
+function figureInUnit(candidate: string, unit: Unit | undefined): number | undefined {
+  const duration = unit ? statedDuration(candidate) : undefined;
+  if (duration && unit && duration.unit !== unit) return (duration.value * DAYS_PER[duration.unit]) / DAYS_PER[unit];
+  return parseStatedFigure(candidate) ?? duration?.value;
+}
+
+/**
  * Index of the band containing the stated figure, or -1.
  *
  * Where two bands touch at the boundary ("5 - 10" and "10+" both contain 10)
@@ -77,8 +121,9 @@ export function pickNumericBandIndex(
   if (bands.some((band) => band === undefined)) return -1;
   if (bands.filter((band) => band !== null).length < 2) return -1;
 
+  const unit = bandUnit(optionTexts);
   for (const candidate of candidates) {
-    const figure = parseStatedFigure(candidate);
+    const figure = figureInUnit(candidate, unit);
     if (figure === undefined) continue;
 
     let best = -1;

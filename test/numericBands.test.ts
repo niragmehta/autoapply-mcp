@@ -67,4 +67,18 @@ describe("numeric band matching", () => {
   it("still prefers an exact textual match over a band", () => {
     expect(selectBestOption(["10+ years"], FIGMA_BANDS).value).toBe("10+ years");
   });
+
+  it("converts a notice period into the unit the bands are written in", () => {
+    // S&P Global's Workday lists notice periods in days, while the stored answer
+    // says "Approximately four weeks". No digit, and a different unit, so a
+    // truthful answer matched nothing.
+    const notice = ["Select One", "Less than 30 days", "30 to 59 days", "60 to 89 days", "90 or more days"];
+    expect(pickNumericBandIndex(notice, ["Approximately four weeks from offer acceptance."])).toBe(1);
+    expect(pickNumericBandIndex(notice, ["2 months"])).toBe(3);
+    expect(pickNumericBandIndex(notice, ["Three months"])).toBe(4);
+  });
+
+  it("reads 'N or more' as an open-ended band", () => {
+    expect(pickNumericBandIndex(["0-4 years", "5 or more years"], ["7 years"])).toBe(1);
+  });
 });
