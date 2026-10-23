@@ -16,6 +16,21 @@
 type Band = { min: number; max: number };
 
 /**
+ * Pay bands are written "$20,000 - $40,000" or "$150K - $200K": a currency
+ * symbol before the second figure stopped the range from parsing, so CVS
+ * Health's base pay bands each read as a single figure and nothing matched.
+ * Symbols and grouping are dropped and a "k" amount is spelled out first.
+ */
+function plainFigures(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/,/g, "")
+    .replace(/[$€£]/g, "")
+    .replace(/(\d+(?:\.\d+)?)\s*k\b/g, (_match, figure: string) => String(Number(figure) * 1000))
+    .trim();
+}
+
+/**
  * Every option that states a figure must parse as a band before any band
  * matching is attempted. Options carrying no digit at all are set aside rather
  * than disqualifying the list: almost every dropdown opens with a placeholder
@@ -28,7 +43,7 @@ type Band = { min: number; max: number };
  * list that merely happens to mention a number is not read as a set of ranges.
  */
 function parseBand(option: string): Band | undefined {
-  const text = option.toLowerCase().replace(/,/g, "").trim();
+  const text = plainFigures(option);
   if (!/\d/.test(text)) return undefined;
 
   const range = /^(?:\D*?)(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)/.exec(text);
@@ -55,7 +70,7 @@ function parseBand(option: string): Band | undefined {
 
 /** The figure a stored answer states, e.g. "5+ years" or "5.5" -> 5. */
 function parseStatedFigure(candidate: string): number | undefined {
-  const text = candidate.toLowerCase().replace(/,/g, "").trim();
+  const text = plainFigures(candidate);
   // A candidate that is itself a range is an option label, not a stated figure.
   if (/\d\s*(?:-|–|—|to)\s*\d/.test(text)) return undefined;
   const match = /^(?:\D*?)(\d+(?:\.\d+)?)/.exec(text);

@@ -81,4 +81,14 @@ describe("numeric band matching", () => {
   it("reads 'N or more' as an open-ended band", () => {
     expect(pickNumericBandIndex(["0-4 years", "5 or more years"], ["7 years"])).toBe(1);
   });
+
+  it("reads pay bands written with currency symbols", () => {
+    // CVS Health's Workday asks for a base pay expectation as "$20,000 - $40,000"
+    // bands. The "$" before the second figure stopped the range from parsing, so
+    // every band read as a single figure and the stated pay matched none.
+    const pay = ["Select One", "Under $20,000", "$20,000 - $40,000", "$200,000 - $220,000", "$220,000 - $240,000", "$240,000+"];
+    const stated = "Around USD 222,480 base (the top of the posted range), flexible depending on level and total compensation.";
+    expect(pickNumericBandIndex(pay, [stated])).toBe(4);
+    expect(pickNumericBandIndex(["$100K - $150K", "$150K - $200K", "$200K+"], ["Around USD 180,000 base"])).toBe(1);
+  });
 });
