@@ -168,14 +168,22 @@ function statesOwnLocation(answerLabel: string): boolean {
 }
 
 /**
- * "Based on the job description, do you have the required amount of directly
- * relevant work experience?" uses "based" for reasoning, not for where anyone
- * is. The Home Depot's Yes/No version took the stored current location as its
- * answer, so the select was searched for "Vancouver" and the required field
- * failed. Location tests read the label without that sense of the word.
+ * "Based" says where someone is only in its residence sense - "based in",
+ * "based out of", "are you based", "where are you currently based". Elsewhere
+ * it is reasoning or a compound: The Home Depot's "Based on the job
+ * description, do you have the required amount of directly relevant work
+ * experience?" and Medtronic's "uses AI-based tools in the recruitment process"
+ * both took the stored current location as their answer, so a Yes/No select was
+ * searched for "Vancouver" and the required field failed. Location tests read
+ * the label with every other "based" removed.
  */
 function withoutReasoningBased(label: string): string {
-  return label.replace(/\bbased (?:on|upon)\b/g, " ");
+  return label.replace(/\bbased\b/g, (match, offset: number, whole: string) => {
+    const after = whole.slice(offset + match.length);
+    if (/^\s+(?:in|out of|at|near|from)\b/.test(after)) return match;
+    const before = whole.slice(Math.max(0, offset - 30), offset);
+    return /\b(?:are you|you are|currently|where are you|where you are)\s*$/.test(before) ? match : " ";
+  });
 }
 
 function semanticSimilarity(field: FieldDescriptor, answer: DraftAnswer): number {

@@ -965,6 +965,23 @@ describe("location phrasing", () => {
     );
     expect(matches[0]?.answer).toBeNull();
   });
+
+  it("does not read a compound like 'AI-based' as residence", () => {
+    // Medtronic asks for consent because it "uses AI-based tools in the
+    // recruitment process" (Yes/No); "based" alone paired it with the current
+    // location again and the select was searched for "Vancouver".
+    const question =
+      "Medtronic uses AI-based tools in the recruitment process. These tools provide insights to aid recruiters, but it does not determine hiring decisions. By selecting “Yes,” you consent to the use of AI in the recruitment process.";
+    const matches = matchFields(
+      [field(question, { type: "select", required: true, options: ["Yes", "No"] })],
+      [answer("Current Location", "Vancouver, British Columbia, Canada")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+    for (const label of ["Where are you based?", "Where are you currently based?", "City you are based in"]) {
+      const located = matchFields([field(label)], [answer("Current Location", "Vancouver, Canada")]);
+      expect(located[0]?.answer, label).not.toBeNull();
+    }
+  });
 });
 
 describe("fallbackAnswersForFields", () => {
