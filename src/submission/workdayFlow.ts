@@ -51,6 +51,7 @@ type Locator = {
   waitFor: (options?: unknown) => Promise<void>;
   locator: (selector: string) => Locator;
   allInnerTexts: () => Promise<string[]>;
+  innerText?: () => Promise<string>;
   evaluate?: (fn: unknown, arg?: unknown) => Promise<unknown>;
   elementHandle?: () => Promise<{ dispose: () => Promise<void> } | null>;
 };
@@ -2390,6 +2391,21 @@ export async function readListboxOptions(
  */
 export async function advanceWorkdayStep(page: Page): Promise<boolean> {
   for (const selector of NEXT_BUTTONS) {
+    const button = page.locator(selector).first();
+    const shown = await button.waitFor({ state: "visible", timeout: 8000 }).then(
+      () => true,
+      () => false,
+    );
+    if (!shown) continue;
+    // On Review this same footer button is Submit, and pressing it here sends
+    // the application outside the guarded submit path and past the review
+    // read-back. Nasdaq's Review page once reported no step name, the walk took
+    // it for one more step, and the application went out unchecked.
+    const label = ((button.innerText ? await button.innerText().catch(() => "") : "") || "").replace(/\s+/g, " ").trim();
+    if (/\bsubmit\b/i.test(label)) {
+      logger.warn("workday walk stopped at a submit button", { label });
+      return false;
+    }
     const advanced = await clickIfPresent(page, selector, 8000);
     if (!advanced) continue;
     await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => undefined);

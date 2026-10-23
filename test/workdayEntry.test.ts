@@ -30,6 +30,8 @@ class FakeTenant {
   errorText = "";
   /** Runs on every wait, so a test can make a screen paint late. */
   onWait?: () => void;
+  /** Visible text of a control, by automation id; controls default to no text. */
+  readonly labels: Record<string, string> = {};
   /** The second tab an emailed verification link is opened in, if any. */
   linkTab?: FakeLinkTab;
   private readonly transitions: Record<string, string[] | (() => string[])>;
@@ -56,6 +58,7 @@ class FakeTenant {
       nth: () => locator,
       count: async () => (self.visible.has(id) ? 1 : 0),
       isVisible: async () => self.visible.has(id),
+      innerText: async () => self.labels[id] ?? "",
       allInnerTexts: async () => [self.bodyText],
       waitFor: async () => {
         if (!self.visible.has(id)) throw new Error(`not visible: ${id}`);
@@ -698,6 +701,24 @@ describe("advanceWorkdayStep", () => {
     const tenant = new FakeTenant(["submitButton"], {});
 
     expect(await advanceWorkdayStep(tenant.asPage())).toBe(false);
+  });
+
+  it("never presses the footer button when it reads Submit", async () => {
+    // On Review the same pageFooterNextButton is Submit. Nasdaq's Review page
+    // reported no step name, the walk pressed it, and the application went out
+    // past the review read-back.
+    const tenant = new FakeTenant(["pageFooterNextButton"], { pageFooterNextButton: ["candidateHome"] });
+    tenant.labels.pageFooterNextButton = "Submit";
+
+    expect(await advanceWorkdayStep(tenant.asPage())).toBe(false);
+    expect(tenant.clicks).toEqual([]);
+  });
+
+  it("still presses a Save and Continue footer button", async () => {
+    const tenant = new FakeTenant(["pageFooterNextButton"], { pageFooterNextButton: ["formField-source"] });
+    tenant.labels.pageFooterNextButton = "Save and Continue";
+
+    expect(await advanceWorkdayStep(tenant.asPage())).toBe(true);
   });
 });
 

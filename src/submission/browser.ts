@@ -886,6 +886,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       // same way it does on a single-page board.
       let stalledOn = "";
       let stalls = 0;
+      let stalledCollected = -1;
       for (let step = 0; step < WORKDAY_MAX_STEPS; step += 1) {
         await recoverWorkdayError(page as never);
         const name = await workdayStepName(page);
@@ -912,6 +913,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         } else {
           stalledOn = name;
           stalls = 0;
+          stalledCollected = -1;
         }
         // The resume upload lives on My Experience rather than the first page,
         // so it is offered on every step and lands on whichever one accepts it.
@@ -950,6 +952,12 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
           step -= 1;
           continue;
         }
+        // A step that reveals a question with each save is making progress, not
+        // stalling: Intel shows 11c only once 11 is answered and 11d only once
+        // 11c is, and three attempts ran out just as 11d appeared. Only an
+        // attempt that finds nothing new counts towards giving up.
+        if (name && name === stalledOn && stalledCollected >= 0 && collected > stalledCollected) stalls = Math.max(0, stalls - 1);
+        stalledCollected = Math.max(stalledCollected, collected);
         priorFilled.push(...stepFill.filled);
         // A required question left unmatched on an earlier wizard page is just
         // as blocking as one on the last page, but only the last page's plan
