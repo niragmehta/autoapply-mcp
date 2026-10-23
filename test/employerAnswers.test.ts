@@ -112,4 +112,22 @@ describe("carrying revealed-question answers to the next posting on a board", ()
     ]);
     expect(carryEmployerAnswers([], [earlier])).toEqual([]);
   });
+
+  it("asks again whether this posting's requirements are met", () => {
+    // The Home Depot asks whether the candidate meets "the job description",
+    // which differs between postings: a Yes for a role needing two years says
+    // nothing about one needing five. Answers about the candidate still carry.
+    const earlier = application("app_hd", [
+      revealed("Based on the job description, do you have the required amount of direct experience?", "Yes"),
+      revealed("Do you meet the educational requirement as specified in the job description?", "Yes"),
+      revealed("Do you meet the minimum qualifications listed in this posting?", "Yes"),
+      revealed("Language", "English"),
+      revealed("Are you willing to take a drug test if the position requires?", "Yes"),
+    ]);
+    const carried = carryEmployerAnswers([], [earlier]);
+    expect(carried.map((answer) => answer.label)).toEqual([
+      "Language",
+      "Are you willing to take a drug test if the position requires?",
+    ]);
+  });
 });

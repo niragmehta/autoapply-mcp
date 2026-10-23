@@ -13,12 +13,16 @@ import { isAiDetectionPrompt, isReservedForHuman } from "../submission/formField
  * the next packet for that board and country, citing the application it came
  * from, so the preview shows it and the run starts with it. Only short answers
  * to the employer's own revealed questions travel: free text tends to be
- * written for one role, pay and dates are set per posting, and questions kept
- * for a person - AI policies, arbitration, bot checks - are asked every time.
+ * written for one role, pay, dates and "do you meet the requirements" are set
+ * per posting, and questions kept for a person - AI policies, arbitration, bot
+ * checks - are asked every time.
  */
 export const CARRIED_ANSWER_MAX_LENGTH = 80;
 
 const SET_PER_POSTING = /\b(salary|compensation|pay|wages?|rate|start date|available to start|availability|notice period)\b/i;
+// Whether the candidate meets "the job description" depends on which posting
+// it describes, so a Yes for one role says nothing about the next.
+const POSTING_REQUIREMENTS = /\b(job description|job posting|posting|requirements?|qualifications?|required amount)\b/i;
 const MENTIONS_AI = /\b(?:AI|A\.I\.|LLMs?|GenAI)\b|artificial intelligence|generative|chatgpt|copilot/i;
 
 function normalizeLabel(label: string): string {
@@ -33,6 +37,7 @@ function carriable(answer: DraftAnswer): boolean {
     value.length > 0 &&
     value.length <= CARRIED_ANSWER_MAX_LENGTH &&
     !SET_PER_POSTING.test(answer.label) &&
+    !POSTING_REQUIREMENTS.test(answer.label) &&
     !MENTIONS_AI.test(answer.label) &&
     !isReservedForHuman(answer.label) &&
     !isAiDetectionPrompt(answer.label)
