@@ -993,7 +993,10 @@ export function optionSearchCandidates(pageField: FieldDescriptor, answer: Draft
   if (onsite.length > 0) return onsite;
   const optChoice = optChoiceCandidates(field, value);
   if (optChoice.length > 0) return optChoice;
-  const locality = value.split(",")[0]?.trim() ?? "";
+  // Split at a list comma only: "Around USD 222,480 base" cut at its thousands
+  // separator became "Around USD 222", a figure that landed in CVS Health's
+  // "Under $20,000" pay band.
+  const locality = value.split(/,(?!\d)/)[0]?.trim() ?? "";
   return locality.length > 1 && locality !== value ? [value, locality] : [value];
 }
 

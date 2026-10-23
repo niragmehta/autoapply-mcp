@@ -657,6 +657,28 @@ describe("fillWorkdayPrompt", () => {
     expect(prompt.selected).toEqual(["5 – 10 years"]);
   });
 
+  it("reads a long pay-band menu to its end", async () => {
+    // CVS Health lists base pay in $20,000 bands. Only the first eight menu
+    // rows were read, so $222,480 fell in none of them, and the figure cut at
+    // its thousands comma - "Around USD 222" - landed in "Under $20,000". The
+    // Review read-back caught it before anything was sent.
+    const bands: Tree = { "Select One": null, "Under $20,000": null };
+    for (let low = 20_000; low < 260_000; low += 20_000) {
+      bands[`$${low.toLocaleString("en-US")} - $${(low + 20_000).toLocaleString("en-US")}`] = null;
+    }
+    bands["$260,000+"] = null;
+    const prompt = new FakePrompt(bands, "dropdown");
+    const stated = "Around USD 222,480 base (the top of the posted range), flexible depending on level and total compensation.";
+    const field = { selectorIndex: 0, label: "What is your base pay expectation for this position?", type: "select", name: "", required: true };
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), optionSearchCandidates(field, {
+      questionKey: "pay", label: field.label, answer: stated, source: "human", citation: "", requiresHuman: true, category: "compensation",
+    }));
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["$220,000 - $240,000"]);
+  });
+
   // Adobe's "Field of Study" is a flat taxonomy of thousands of majors, so
   // every entry the category probe opened was a value rather than a category.
   const MAJORS: Tree = {

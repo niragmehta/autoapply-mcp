@@ -219,6 +219,12 @@ const WD_MENU_ITEM = `[role="option"]:visible:not(${WD_PILL})`;
  */
 const WD_POPUP = "[data-popper-placement]:visible";
 const WD_MAX_CATEGORIES = 8;
+/**
+ * Rows of a flat menu read when looking for the band that holds a figure. CVS
+ * Health lists base pay in fourteen $20,000 bands; reading only the first eight
+ * left $222,480 in none of them.
+ */
+const WD_MAX_MENU_ROWS = 60;
 /** Screens of a virtualized menu scrolled through before it is taken as read. */
 const WD_MAX_SCROLL_PAGES = 30;
 /** Time a virtualized menu is given to render the rows a scroll brought into view. */
@@ -1468,7 +1474,7 @@ export async function fillWorkdayPrompt(
     offered = (await page.locator(WD_MENU_ITEM).allInnerTexts().catch(() => [] as string[]))
       .map((text) => text.replace(/\s+/g, " ").trim())
       .filter(Boolean)
-      .slice(0, WD_MAX_CATEGORIES);
+      .slice(0, WD_MAX_MENU_ROWS);
     const band = pickNumericBandIndex(offered, candidates);
     if (band >= 0) {
       onOffer = true;
