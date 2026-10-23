@@ -167,6 +167,17 @@ function statesOwnLocation(answerLabel: string): boolean {
   return /\blocation\b/.test(answerLabel) && !/\b(?:office|offices|hub|hubs|prefer|preferred|preference)\b/.test(answerLabel);
 }
 
+/**
+ * "Based on the job description, do you have the required amount of directly
+ * relevant work experience?" uses "based" for reasoning, not for where anyone
+ * is. The Home Depot's Yes/No version took the stored current location as its
+ * answer, so the select was searched for "Vancouver" and the required field
+ * failed. Location tests read the label without that sense of the word.
+ */
+function withoutReasoningBased(label: string): string {
+  return label.replace(/\bbased (?:on|upon)\b/g, " ");
+}
+
 function semanticSimilarity(field: FieldDescriptor, answer: DraftAnswer): number {
   const fieldLabel = normalizeLabel(field.label);
   const answerLabel = normalizeLabel(answer.label);
@@ -195,8 +206,8 @@ function semanticSimilarity(field: FieldDescriptor, answer: DraftAnswer): number
   }
   if (
     statesOwnLocation(answerLabel) &&
-    /\b(locat(?:ed|ion)|reside|residing|based)\b/.test(fieldLabel) &&
-    /\b(where|current|currently|reside|residing|based)\b/.test(fieldLabel)
+    /\b(locat(?:ed|ion)|reside|residing|based)\b/.test(withoutReasoningBased(fieldLabel)) &&
+    /\b(where|current|currently|reside|residing|based)\b/.test(withoutReasoningBased(fieldLabel))
   ) {
     return 0.7;
   }
@@ -659,7 +670,7 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     return true;
   }
   if (
-    RESIDENCE_QUESTION.test(fieldLabel) &&
+    RESIDENCE_QUESTION.test(withoutReasoningBased(fieldLabel)) &&
     !WORK_AUTHORITY_TEXT.test(fieldLabel) &&
     !RESIDENCE_QUESTION.test(answerLabel) &&
     WORK_AUTHORITY_TEXT.test(answerLabel)

@@ -952,6 +952,19 @@ describe("location phrasing", () => {
     const matches = matchFields([field("Why do you want to work here?")], [answer("Current Location", "Vancouver, Canada")]);
     expect(matches[0]?.answer).toBeNull();
   });
+
+  it("does not read 'based on' as where the candidate is based", () => {
+    // The Home Depot asks "Based on the job description, do you have the
+    // required amount of directly relevant work experience?" as Yes/No. The
+    // word "based" alone paired it with the current location, so the select
+    // was searched for "Vancouver" and the required field failed.
+    const question = "Based on the job description, do you have the required amount of directly relevant work experience?";
+    const matches = matchFields(
+      [field(question, { type: "select", required: true, options: ["Yes", "No"] })],
+      [answer("Current Location", "Vancouver, British Columbia, Canada")],
+    );
+    expect(matches[0]?.answer).toBeNull();
+  });
 });
 
 describe("fallbackAnswersForFields", () => {
