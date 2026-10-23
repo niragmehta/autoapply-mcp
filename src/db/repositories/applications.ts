@@ -86,6 +86,22 @@ export function listApplications(db: Db, status?: string, limit = 200): Applicat
   return rows.map(rowToApplication);
 }
 
+/**
+ * Applications to postings on one board in one country, newest first. A board
+ * is one employer's application form, so a question it revealed during a run
+ * is the same question on that employer's next posting.
+ */
+export function listApplicationsOnBoard(db: Db, ats: string, board: string, country: string): Application[] {
+  const rows = db
+    .prepare(
+      `SELECT a.* FROM applications a JOIN jobs j ON j.id = a.job_id
+       WHERE j.ats = ? AND j.board = ? AND j.country = ?
+       ORDER BY COALESCE(a.submitted_at, a.created_at) DESC`,
+    )
+    .all(ats, board, country) as Row[];
+  return rows.map(rowToApplication);
+}
+
 export function countSubmittedSince(db: Db, isoTimestamp: string): number {
   const row = db
     .prepare("SELECT COUNT(*) AS total FROM applications WHERE submitted_at IS NOT NULL AND submitted_at >= ?")

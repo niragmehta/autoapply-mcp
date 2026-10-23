@@ -17,6 +17,7 @@ import {
   lastSubmissionAt,
   latestApproval,
   listApplications,
+  listApplicationsOnBoard,
   listOutcomes,
   recordApproval,
   recordOutcome,
@@ -339,6 +340,22 @@ describe("applications repository", () => {
 
     expect(getApplicationByJob(db, job.id)?.status).toBe("submitted");
     expect(countSubmittedSince(db, new Date(Date.now() - 3600_000).toISOString())).toBe(1);
+  });
+
+  it("lists the applications on one board and country, newest first", () => {
+    const older = makeJob({ id: "job_old", externalId: "old", board: "etsy/wd5/Etsy_Careers", ats: "workday" });
+    const newer = makeJob({ id: "job_new", externalId: "new", board: "etsy/wd5/Etsy_Careers", ats: "workday" });
+    const abroad = makeJob({ id: "job_ie", externalId: "ie", board: "etsy/wd5/Etsy_Careers", ats: "workday", country: "IE" });
+    const elsewhere = makeJob({ id: "job_other", externalId: "other", board: "snapchat/wd1/snap", ats: "workday" });
+    upsertJobs(db, [older, newer, abroad, elsewhere]);
+    saveApplication(db, application(older.id, { id: "app_old", submittedAt: "2026-10-01T00:00:00.000Z" }));
+    saveApplication(db, application(newer.id, { id: "app_new", submittedAt: "2026-10-20T00:00:00.000Z" }));
+    saveApplication(db, application(abroad.id, { id: "app_ie" }));
+    saveApplication(db, application(elsewhere.id, { id: "app_other" }));
+
+    const listed = listApplicationsOnBoard(db, "workday", "etsy/wd5/Etsy_Careers", "US");
+
+    expect(listed.map((entry) => entry.id)).toEqual(["app_new", "app_old"]);
   });
 });
 

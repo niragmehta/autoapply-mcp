@@ -2,7 +2,7 @@ import type { Campaign } from "../domain/campaign.js";
 import type { Application, Evaluation, Job } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import type { Db } from "../db/database.js";
-import { getApplicationByJob, saveApplication } from "../db/repositories/applications.js";
+import { getApplicationByJob, listApplicationsOnBoard, saveApplication } from "../db/repositories/applications.js";
 import { fetchGreenhouseJobDetail } from "../sources/greenhouse.js";
 import { computePacketHash } from "../submission/packet.js";
 import { validateResumeFile, type ResumeCheck } from "../submission/resume.js";
@@ -10,6 +10,7 @@ import { AppError, toErrorMessage } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
 import { logger } from "../util/logger.js";
 import { draftAnswers, type FormQuestion } from "./answers.js";
+import { carryEmployerAnswers } from "./employerAnswers.js";
 import { buildMatchReport, selectResume, type MatchReport } from "./matchReport.js";
 import { defaultQuestionSet, greenhouseQuestionsToForm } from "./questions.js";
 
@@ -79,6 +80,12 @@ export async function prepareApplicationFor(
       .filter((term) => !report.claimsToAvoid.includes(term)),
   };
   const drafted = draftAnswers(questions, profile, campaign, narrativeContext);
+  // An unknown country cannot show that an earlier posting asked the same
+  // location-bound questions, so nothing is carried for it.
+  const answers =
+    job.country === "unknown"
+      ? drafted.answers
+      : carryEmployerAnswers(drafted.answers, listApplicationsOnBoard(db, job.ats, job.board, job.country));
 
   const application: Application = {
     id: existing?.id ?? newId("app"),
@@ -88,7 +95,7 @@ export async function prepareApplicationFor(
     resumePath: resume.path,
     packetHash: "",
     coverLetter: existing?.coverLetter ?? "",
-    answers: drafted.answers,
+    answers,
     blockedQuestions: drafted.blockedQuestions,
     createdAt: existing?.createdAt ?? nowIso(),
     approvedAt: null,
@@ -117,7 +124,7 @@ export async function prepareApplicationFor(
     report,
     resumeCheck,
     questionSource: source,
-    outstanding: drafted.answers
+    outstanding: answers
       .filter((answer) => answer.requiresHuman)
       .map((answer) => ({
         key: answer.questionKey,
@@ -126,7 +133,7 @@ export async function prepareApplicationFor(
         suggested: answer.answer,
         guidance: answer.guidance,
       })),
-    autoFilled: drafted.answers
+    autoFilled: answers
       .filter((answer) => !answer.requiresHuman)
       .map((answer) => ({
         key: answer.questionKey,
