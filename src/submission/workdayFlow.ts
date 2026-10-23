@@ -1217,8 +1217,12 @@ export async function fillWorkdayPrompt(
   if (await openMenu(page, field)) {
     const offered = await menuItems(page);
     // The closest answer on offer, not the first entry that answers anything:
-    // "Job board" is a weaker restatement than the employer's own site.
-    const hit = bestRanked(offered, candidates)?.option;
+    // "Job board" is a weaker restatement than the employer's own site. Each
+    // answer's synonyms are tried here too, after its own wording: NVIDIA's
+    // phone types are "Home" and "Home Cellular", and leaving "cellular" to the
+    // slow per-candidate pass meant "Mobile" and "cell" spent the whole budget
+    // on keyboard and search probes before it was ever compared.
+    const hit = bestRanked(offered, candidates.flatMap(expand))?.option;
     if (hit) {
       onOffer = true;
       if (!(await clearStale())) {

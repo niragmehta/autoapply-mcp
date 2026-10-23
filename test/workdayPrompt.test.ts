@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { optionSearchCandidates } from "../src/submission/formFields.js";
 import { fillWorkdayPrompt, isWorkdayPrompt } from "../src/submission/workdayFlow.js";
@@ -359,6 +359,25 @@ describe("fillWorkdayPrompt", () => {
 
     expect(result.filled).toBe(true);
     expect(prompt.selected).toEqual(["Home Cellular"]);
+  });
+
+  it("compares an answer's synonyms with the offered list before any slow probe", async () => {
+    // On NVIDIA's live tenant the keyboard and search probes for "Mobile" and
+    // "cell" used the whole budget, and "cellular" was never compared. The
+    // budget here is spent the moment it is set, so only the first, offered-list
+    // pass can select anything.
+    const prompt = new FakePrompt({ Home: null, "Home Cellular": null }, "dropdown");
+    const realNow = Date.now.bind(Date);
+    let calls = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => (calls++ === 0 ? realNow() : realNow() + 3_600_000));
+    try {
+      const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Mobile"]);
+
+      expect(result.filled).toBe(true);
+      expect(prompt.selected).toEqual(["Home Cellular"]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("recognises a refusal the employer spells differently", async () => {
