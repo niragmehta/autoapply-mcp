@@ -2470,7 +2470,7 @@ export async function workdayStepName(page: Page): Promise<string> {
  */
 export async function reviewOmissions(
   page: Page,
-  answered: ReadonlyArray<{ label: string; value: string }>,
+  answered: ReadonlyArray<{ label: string; value: string; alternatives?: readonly string[] }>,
   employer?: string,
 ): Promise<Array<{ label: string; value: string }>> {
   const body = await visibleText(page, "body").catch(() => "");
@@ -2490,9 +2490,33 @@ export async function reviewOmissions(
     if (statesFigure(haystack, value)) continue;
     if (bandStatedAfter(haystack, entry.label, value)) continue;
     if (DECLINE_VALUE.test(value) && declineStatedAfter(haystack, entry.label)) continue;
+    if (alternativeStatedAfter(haystack, entry.label, entry.alternatives ?? [])) continue;
     missing.push({ label: entry.label, value });
   }
   return missing;
+}
+
+/**
+ * Whether the page states, directly after the question, one of the wordings
+ * the fill was approved to choose for this answer. Sony's at-will notice was
+ * answered "I acknowledge" and its Review page prints the option chosen, "Yes,
+ * I understand", which shares no significant word with it. A bare yes or no
+ * proves nothing, a refusal never stands for an approved wording, and only the
+ * text right after this question's label counts, so another question's answer
+ * cannot vouch for it.
+ */
+function alternativeStatedAfter(haystack: string, label: string, alternatives: readonly string[]): boolean {
+  const needle = label.replace(/\s+/g, " ").trim().toLowerCase();
+  if (needle.length < 8 || alternatives.length === 0) return false;
+  const at = haystack.indexOf(needle);
+  if (at === -1) return false;
+  // The answer ends where the next question's sentence does.
+  const answer = plainQuotes(haystack.slice(at + needle.length, at + needle.length + 160).split(/[.?!]/)[0] ?? "");
+  return alternatives.some((alternative) => {
+    const wording = plainQuotes(alternative).replace(/\s+/g, " ").trim().toLowerCase();
+    if (wording.length < 4 || /^(?:yes|no|true|false|n\/a|none)$/.test(wording)) return false;
+    return containsWord(answer, wording) && negated(answer) === negated(wording);
+  });
 }
 
 /** An approved refusal to answer, in any of the wordings the profile uses. */

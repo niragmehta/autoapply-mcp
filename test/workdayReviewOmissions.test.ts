@@ -116,4 +116,31 @@ describe("reviewOmissions", () => {
       { label: "Salary Expectations", value: "Around USD 192,500 base" },
     ]);
   });
+
+  describe("wordings the fill was approved to choose", () => {
+    // Sony's at-will notice was answered "I acknowledge"; the option the fill
+    // chose, and the Review page prints, is "Yes, I understand".
+    const AT_WILL =
+      "NO EMPLOYMENT RELATIONSHIP I recognize that this employment application is not an offer of employment and the employment relationship is at-will.";
+    const value = "I acknowledge";
+    const alternatives = ["I acknowledge", "Acknowledged", "I Acknowledge", "Acknowledge", "I understand", "Understood"];
+
+    it("accepts an approved wording stated right after the question", async () => {
+      const page = reviewPage(`Application Questions ${AT_WILL} Yes, I understand Are you a resident of Maryland? No`);
+
+      expect(await reviewOmissions(page, [{ label: AT_WILL, value, alternatives }], "Sony")).toEqual([]);
+    });
+
+    it("does not let another question's answer vouch for this one", async () => {
+      const page = reviewPage(`Application Questions ${AT_WILL} No Do you understand the travel policy? Yes, I understand`);
+
+      expect(await reviewOmissions(page, [{ label: AT_WILL, value, alternatives }], "Sony")).toEqual([{ label: AT_WILL, value }]);
+    });
+
+    it("does not take a refusal for an approved wording", async () => {
+      const page = reviewPage(`Application Questions ${AT_WILL} Not understood Are you a resident of Maryland? No`);
+
+      expect(await reviewOmissions(page, [{ label: AT_WILL, value, alternatives }], "Sony")).toEqual([{ label: AT_WILL, value }]);
+    });
+  });
 });

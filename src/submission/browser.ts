@@ -596,6 +596,8 @@ async function fillFormPage(
   failedRequired: string[];
   choiceLog: ChoiceSelection[];
   answeredGroups: Set<string>;
+  /** The wordings each filled field's answer was approved to be chosen under, by label. */
+  statedAs: Map<string, readonly string[]>;
 }> {
   const fields = (await page.evaluate(COLLECT_FIELDS)) as FieldDescriptor[];
   const empty = {
@@ -604,6 +606,7 @@ async function fillFormPage(
     failedRequired: [] as string[],
     choiceLog: [] as ChoiceSelection[],
     answeredGroups: new Set<string>(),
+    statedAs: new Map<string, readonly string[]>(),
   };
   if (!knownApplicationPage && !looksLikeApplicationForm(fields)) return { hasForm: false, ...empty };
   // A wizard step with no controls at all really is the end of the walk.
@@ -625,6 +628,7 @@ async function fillFormPage(
   const failedRequired: string[] = [];
   const choiceLog: ChoiceSelection[] = [];
   const answeredGroups = new Set<string>();
+  const statedAs = new Map<string, readonly string[]>();
 
   // Which answer each required control drew, before anything is typed. A run
   // that ends "unmatched required" otherwise gives no way to tell a missing
@@ -655,6 +659,7 @@ async function fillFormPage(
       }
       await fillControl(page, locator, match.field, value, candidates, choiceLog);
       filled.push({ label: match.field.label, source: match.answer!.source });
+      statedAs.set(match.field.label, candidates);
       if (match.field.groupKey) answeredGroups.add(match.field.groupKey);
     } catch (error) {
       if (error instanceof AppError && error.code === "captcha_required") throw error;
@@ -690,7 +695,7 @@ async function fillFormPage(
     logger.info("cleared a stale optional value", { label: field.label });
   }
 
-  return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups };
+  return { hasForm: true, plan, filled, failedRequired, choiceLog, answeredGroups, statedAs };
 }
 
 async function guardedFillFormPage(
@@ -862,6 +867,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // Workday hides the form behind an advert, a modal and a sign-in wall, so it
     // needs a walk-in step before there is anything to fill.
     const priorFilled: Array<{ label: string; source: string }> = [];
+    const priorStatedAs = new Map<string, readonly string[]>();
     const priorFailedRequired: string[] = [];
     let stepFailures: StepFailures = new Map();
     let workdayRetries = 0;
@@ -983,6 +989,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
         if (name && name === stalledOn && stalledCollected >= 0 && collected > stalledCollected) stalls = Math.max(0, stalls - 1);
         stalledCollected = Math.max(stalledCollected, collected);
         priorFilled.push(...stepFill.filled);
+        for (const [label, wordings] of stepFill.statedAs) priorStatedAs.set(label, wordings);
         // A required question left unmatched on an earlier wizard page is just
         // as blocking as one on the last page, but only the last page's plan
         // reaches the report. Without this the run ends "unmatched required: []"
@@ -1111,6 +1118,7 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
     // Pages saved earlier in a multi-step wizard are part of this application,
     // so what they filled has to survive into the final report.
     const filled = [...priorFilled, ...pageFill.filled, ...letterFilled];
+    const statedAs = new Map([...priorStatedAs, ...pageFill.statedAs]);
     const failedRequired = [...stepFailureList(stepFailures), ...priorFailedRequired, ...pageFill.failedRequired];
 
     const screenshotPath = await capture(page, options.artifactsDir, packet.applicationId, "prepared");
@@ -1158,7 +1166,11 @@ export async function runApplicationForm(packet: SubmissionPacket, options: Brow
       ? await reviewOmissions(
           page,
           filled
-            .map((entry) => ({ label: entry.label, value: answerFor.get(entry.label) ?? "" }))
+            .map((entry) => ({
+              label: entry.label,
+              value: answerFor.get(entry.label) ?? "",
+              alternatives: statedAs.get(entry.label) ?? [],
+            }))
             .filter((entry) => entry.value.length > 0),
           packet.company,
         )
