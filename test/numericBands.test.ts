@@ -82,6 +82,23 @@ describe("numeric band matching", () => {
     expect(pickNumericBandIndex(["0-4 years", "5 or more years"], ["7 years"])).toBe(1);
   });
 
+  it("reads bands that name their unit before the upper bound", () => {
+    // Frost Bank's Workday writes "4 years - less than 6 years". The unit after
+    // the first figure stopped the range from parsing, so each band read as a
+    // single year and a stated "5+ years" matched none of them.
+    const frost = [
+      "Select One",
+      "No experience",
+      "Less than 2 years",
+      "2 years - less than 4 years",
+      "4 years - less than 6 years",
+      "6 years - less than 8 years",
+      "8 or more years",
+    ];
+    expect(frost[pickNumericBandIndex(frost, ["5+ years"])]).toBe("4 years - less than 6 years");
+    expect(frost[pickNumericBandIndex(frost, ["6 years"])]).toBe("6 years - less than 8 years");
+  });
+
   it("reads pay bands written with currency symbols", () => {
     // CVS Health's Workday asks for a base pay expectation as "$20,000 - $40,000"
     // bands. The "$" before the second figure stopped the range from parsing, so

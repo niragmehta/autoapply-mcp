@@ -46,8 +46,14 @@ function parseBand(option: string): Band | undefined {
   const text = plainFigures(option);
   if (!/\d/.test(text)) return undefined;
 
-  const range = /^(?:\D*?)(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)/.exec(text);
-  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  // Frost Bank writes "4 years - less than 6 years": the unit may sit between
+  // the figure and the separator, and "less than" makes the upper bound
+  // exclusive, so 6 belongs to the next band up.
+  const range =
+    /^(?:\D*?)(\d+(?:\.\d+)?)\s*(?:years?|yrs?|days?|weeks?|months?)?\s*(?:-|–|—|to)\s*(less than|fewer than|under)?\s*(\d+(?:\.\d+)?)/.exec(
+      text,
+    );
+  if (range) return { min: Number(range[1]), max: range[2] ? Number(range[3]) - 1e-9 : Number(range[3]) };
 
   const open = /^(?:\D*?)(\d+(?:\.\d+)?)\s*\+/.exec(text);
   if (open) return { min: Number(open[1]), max: Number.POSITIVE_INFINITY };
