@@ -22,6 +22,8 @@ export type RawJobInput = {
   isRemote?: boolean;
   employmentType?: string;
   structuredCompensation?: CompensationRange | null;
+  /** The country the ATS publishes for the posting ("US" or "CA"), when it does. */
+  country?: string;
 };
 
 function fallbackCurrency(country: string): string {
@@ -34,7 +36,7 @@ export function normalizeJob(input: RawJobInput, capturedAt: string): Job {
     : htmlToText(input.descriptionHtml ?? "");
 
   const location = refineRemoteScopeFromTitle(
-    analyzeLocation(input.locations, { isRemote: input.isRemote, workplaceType: input.workplaceType }),
+    analyzeLocation(input.locations, { isRemote: input.isRemote, workplaceType: input.workplaceType, country: input.country }),
     input.title,
   );
 

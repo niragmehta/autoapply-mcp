@@ -91,7 +91,21 @@ type WorkdayDetail = {
   externalUrl?: unknown;
   canApply?: unknown;
   posted?: unknown;
+  country?: unknown;
 };
+
+/**
+ * The posting's country as "US" or "CA", read from the `{ descriptor }` object
+ * Workday attaches to each detail. Anywhere else reads as nothing, so the
+ * location text alone decides.
+ */
+function publishedCountry(detail: WorkdayDetail): string | undefined {
+  const value = detail.country;
+  const descriptor = value && typeof value === "object" ? asString((value as { descriptor?: unknown }).descriptor) : "";
+  if (/^united states(?: of america)?$/i.test(descriptor.trim())) return "US";
+  if (/^canada$/i.test(descriptor.trim())) return "CA";
+  return undefined;
+}
 
 /**
  * Converts Workday's relative posting age to an ISO date.
@@ -226,6 +240,7 @@ export const workdayAdapter: SourceAdapter = {
             postedAt: postingDate(detail, now),
             isRemote: isRemote(detail, locationValues),
             employmentType: asString(detail.timeType),
+            country: publishedCountry(detail),
           },
           capturedAt,
         ),

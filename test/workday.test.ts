@@ -278,4 +278,22 @@ describe("workday adapter", () => {
 
     expect(jobs[0]!.workplaceType).toBe("remote");
   });
+
+  it("places a location that names no country in the country the posting publishes", async () => {
+    // Evolent's postings read only "Work at Home"; the detail's country says where.
+    stubBoard([[posting("/job/a/one"), posting("/job/a/two")]], (url) =>
+      jsonResponse(
+        url.endsWith("/one")
+          ? detail({ location: "Work at Home", additionalLocations: [], country: { descriptor: "United States of America", id: "x" } })
+          : detail({ location: "London", additionalLocations: [], country: { descriptor: "United Kingdom", id: "y" } }),
+      ),
+    );
+
+    const jobs = await workdayAdapter.listJobs(company(), capturedAt);
+
+    expect(jobs.map((job) => [job.locationClass, job.country])).toEqual([
+      ["remote-us", "US"],
+      ["other", "unknown"],
+    ]);
+  });
 });

@@ -187,4 +187,29 @@ describe("analyzeLocation", () => {
     expect(result.locationClass).toBe("canada");
     expect(result.workplaceType).toBe("remote");
   });
+
+  // Workday publishes each posting's country beside location text that often
+  // names none: Evolent's "Work at Home", SECU's "Operations - Raleigh -
+  // Creedmoor" and Allied Solutions' "Carmel, IN" (IN is left out of the state
+  // codes because it is India's) were all filed as outside North America.
+  describe("a country the ATS publishes", () => {
+    it("scopes a location that names no country", () => {
+      expect(analyzeLocation(["Work at Home"], { country: "US" })).toMatchObject({ locationClass: "remote-us", country: "US" });
+      expect(analyzeLocation(["Operations - Raleigh - Creedmoor"], { country: "US" })).toMatchObject({
+        locationClass: "us-other",
+        country: "US",
+      });
+      expect(analyzeLocation(["Carmel, IN"], { country: "US" }).locationClass).toBe("us-other");
+      expect(analyzeLocation(["Virtual"], { country: "CA" }).locationClass).toBe("remote-canada");
+    });
+
+    it("never overrides a place the location itself names", () => {
+      expect(analyzeLocation(["Toronto, ON"], { country: "US" }).locationClass).toBe("canada");
+      expect(analyzeLocation(["San Francisco, CA"], { country: "CA" }).locationClass).toBe("bay-area");
+    });
+
+    it("leaves a location alone without one", () => {
+      expect(analyzeLocation(["Operations - Raleigh - Creedmoor"]).locationClass).toBe("other");
+    });
+  });
 });

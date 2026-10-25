@@ -266,7 +266,7 @@ const US_SIGNALS = [
   ...US_STATE_ABBREVIATIONS.map((code) => `\\b${code.toLowerCase()}\\b`),
 ];
 
-const REMOTE_SIGNALS = ["remote", "work from home", "wfh", "distributed", "anywhere", "virtual"];
+const REMOTE_SIGNALS = ["remote", "work from home", "work at home", "wfh", "distributed", "anywhere", "virtual"];
 const HYBRID_SIGNALS = ["hybrid", "flexible onsite", "in-office days"];
 const ONSITE_SIGNALS = ["on-site", "onsite", "in office", "in-office"];
 
@@ -292,6 +292,11 @@ export type LocationAnalysis = {
 export type LocationHints = {
   isRemote?: boolean;
   workplaceType?: WorkplaceType;
+  /**
+   * The country the ATS itself publishes for the posting, as "US" or "CA".
+   * Consulted only when the location text names no place in North America.
+   */
+  country?: string;
 };
 
 function detectWorkplace(text: string, hints: LocationHints): WorkplaceType {
@@ -364,9 +369,26 @@ export function analyzeLocation(rawLocations: readonly string[], hints: Location
     return { locationClass: "unknown", country: "unknown", workplaceType, matched: "" };
   }
   const analyses = candidates.map((value) => classifyOne(value, hints));
-  return analyses.reduce((best, current) =>
+  const best = analyses.reduce((best, current) =>
     CLASS_PRIORITY[current.locationClass] > CLASS_PRIORITY[best.locationClass] ? current : best,
   );
+  return withPublishedCountry(best, hints.country);
+}
+
+/**
+ * Workday publishes each posting's country beside location text that often
+ * names none: Evolent's "Work at Home", SECU's "Operations - Raleigh -
+ * Creedmoor" and Allied Solutions' "Carmel, IN" (IN is not a state code here
+ * because it is India's) all read as outside North America. The published
+ * country decides only those cases; a place the text names always wins.
+ */
+function withPublishedCountry(analysis: LocationAnalysis, country: string | undefined): LocationAnalysis {
+  if (country !== "US" && country !== "CA") return analysis;
+  if (!["other", "remote-global", "unknown"].includes(analysis.locationClass)) return analysis;
+  const remote = analysis.locationClass === "remote-global" || analysis.workplaceType === "remote";
+  const locationClass: LocationClass =
+    country === "US" ? (remote ? "remote-us" : "us-other") : remote ? "remote-canada" : "canada";
+  return { ...analysis, locationClass, country, matched: `published country ${country}` };
 }
 
 const SCOPE_SEPARATOR = "[\\s\\-\\u2013\\u2014:,/()\\[\\]]*";
