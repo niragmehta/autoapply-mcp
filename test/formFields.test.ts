@@ -1879,6 +1879,25 @@ describe("age questions", () => {
 });
 
 describe("degree option candidates", () => {
+  it("answers a yes/no authorization question from an authorization statement", () => {
+    // Flexera's Workday asks "Are you eligible to work for any employer in the
+    // country ...?" with Yes/No, and the approved answer is the sentence "I am
+    // authorized to work for any employer ...", which opens with neither word.
+    const options = ["Select One", "Yes", "No"];
+    const eligible = field("Are you eligible to work for any employer in the country for the job to which you are applying?", { type: "select" });
+    const stated = "I am authorized to work for any employer in the country in which this position is based.";
+    expect(options[pickOptionIndex(options, optionSearchCandidates(eligible, answer("Work authorization", stated)))]).toBe("Yes");
+    const refused = "I am not authorized to work in the country in which this position is based.";
+    expect(options[pickOptionIndex(options, optionSearchCandidates(eligible, answer("Work authorization", refused)))]).toBe("No");
+  });
+
+  it("does not turn an authorization statement into an answer about sponsorship", () => {
+    const sponsor = field("Will you now or in the future require sponsorship to work in the country?", { type: "select" });
+    const stated = "I am authorized to work for any employer in the country in which this position is based.";
+    expect(optionSearchCandidates(sponsor, answer("Work authorization", stated))).not.toContain("Yes");
+    expect(optionSearchCandidates(sponsor, answer("Work authorization", stated))).not.toContain("No");
+  });
+
   const degreeField = field("Degree", { type: "select" });
 
   it("offers the platform's wording for a credential stated as awarded", () => {
@@ -3779,6 +3798,26 @@ describe("stored facts offered to yes/no questions", () => {
     const experience = () => ({ answer: "Yes", citation: "experience[0].company", category: "employment-history", authorized: true });
     const plan = buildFillPlan([employed], fallbackAnswersForFields([employed], [], [], undefined, undefined, experience));
     expect(plan.toFill.map((match) => match.answer?.answer)).toEqual(["Yes"]);
+  });
+
+  it("does not answer a yes/no choice with a fact the answer bank stores under a field name", () => {
+    // Frost Bank's Workday asked the same diploma question; this time a bank
+    // entry labelled "School" matched on its pattern "school", so the select was
+    // searched for "Example State University" and the required field failed.
+    const diploma = field("Do you have a High School Diploma or equivalent?", { role: "combobox", required: true });
+    const bank = [
+      { key: "school", label: "School", patterns: ["school"], answer: "Example State University", allowAutoFill: true },
+      { key: "spoken-languages", label: "Spoken languages", patterns: ["languages"], answer: "English", allowAutoFill: true },
+    ];
+    const languages = field("Do you speak any languages other than English?", { type: "select", required: true, options: ["Yes", "No"] });
+    expect(buildFillPlan([diploma, languages], fallbackAnswersForFields([diploma, languages], [], bank)).toFill).toEqual([]);
+  });
+
+  it("still lets a field-name fact answer a free-text question that opens like a yes/no", () => {
+    const preferred = field("Do you have a preferred name? If so, please share it.", { type: "text", required: false });
+    const bank = [{ key: "preferred-name", label: "Preferred name", patterns: ["preferred name"], answer: "Alex", allowAutoFill: true }];
+    const plan = buildFillPlan([preferred], fallbackAnswersForFields([preferred], [], bank));
+    expect(plan.toFill.map((match) => match.answer?.answer)).toEqual(["Alex"]);
   });
 });
 

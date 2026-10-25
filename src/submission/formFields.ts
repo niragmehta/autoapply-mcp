@@ -281,6 +281,19 @@ function yesNoQuestionTakesContact(label: string, value: string): boolean {
   const question = label.split("?")[0] ?? label;
   return YES_NO_LEAD.test(question) && CONTACT_VALUE.test(value.trim()) && !ASKS_FOR_CONTACT.test(question);
 }
+
+/**
+ * A stored answer filed under a bare field name - at most three words and no
+ * question - whose value is neither a yes/no nor a refusal: "School: Example
+ * State University", "Spoken languages: English". It records a fact, not a
+ * decision about a yes/no question.
+ */
+function namesAFieldNotADecision(answer: DraftAnswer): boolean {
+  const label = answer.label.trim();
+  if (label.includes("?") || normalizeLabel(label).split(" ").filter(Boolean).length > 3) return false;
+  const value = answer.answer.trim();
+  return value.length > 0 && !POLAR_VALUE.test(value) && !BOOLEAN_ANSWER.test(value) && !DECLINE_ANSWER_PATTERN.test(value);
+}
 const BOOLEAN_ANSWER = /^(yes|no|true|false|1|0|on|off|i agree|agree|i consent|consent|i acknowledge|acknowledge|i understand|understand|understood|i confirm|confirm|i accept|accept)\b/i;
 
 /**
@@ -595,6 +608,19 @@ function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boolean {
     YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) &&
     STORED_FACT_ANSWER.test(answer.questionKey) &&
     !POLAR_VALUE.test(answer.answer)
+  ) {
+    return true;
+  }
+  // The answer bank keeps the same kind of fact under a bare field name -
+  // "School", "Spoken languages" - and Frost Bank's "Do you have a High School
+  // Diploma or equivalent?" took the stored university through the bank's
+  // "school" pattern. On a list of choices such a fact can never be the option
+  // picked; a free-text box that opens like a yes/no ("Do you have a preferred
+  // name? If so, please share it.") may still take it.
+  if (
+    offersOptions(field) &&
+    YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) &&
+    namesAFieldNotADecision(answer)
   ) {
     return true;
   }
@@ -993,11 +1019,35 @@ export function optionSearchCandidates(pageField: FieldDescriptor, answer: Draft
   if (onsite.length > 0) return onsite;
   const optChoice = optChoiceCandidates(field, value);
   if (optChoice.length > 0) return optChoice;
+  const authorization = authorizationStatementCandidates(field, value);
+  if (authorization.length > 0) return authorization;
   // Split at a list comma only: "Around USD 222,480 base" cut at its thousands
   // separator became "Around USD 222", a figure that landed in CVS Health's
   // "Under $20,000" pay band.
   const locality = value.split(/,(?!\d)/)[0]?.trim() ?? "";
   return locality.length > 1 && locality !== value ? [value, locality] : [value];
+}
+
+/**
+ * The approved work-authorization answer is a sentence - "I am authorized to
+ * work for any employer in the country in which this position is based." -
+ * written for boards that offer it as an option. Flexera's Workday asks "Are you
+ * eligible to work for any employer in the country ...?" with only Yes and No,
+ * and the sentence opened with neither. Where the question asks about being
+ * authorized or eligible to work, and not about sponsorship, the statement's
+ * own polarity is the answer.
+ */
+const AUTHORIZATION_QUESTION = /\b(?:authori[sz]ed|eligible|eligibility|permitted|entitled|legally able)\b.*\bwork\b|\bwork authori[sz]ation\b/;
+const AUTHORIZED_STATEMENT = /^i am (?:legally )?(?:authori[sz]ed|eligible|permitted|entitled) to work\b/i;
+const NOT_AUTHORIZED_STATEMENT = /^i am not (?:legally )?(?:authori[sz]ed|eligible|permitted|entitled) to work\b/i;
+
+function authorizationStatementCandidates(field: FieldDescriptor, value: string): string[] {
+  const label = normalizeLabel(field.label);
+  if (!AUTHORIZATION_QUESTION.test(label) || /\bsponsor/.test(label)) return [];
+  const stated = value.trim();
+  if (NOT_AUTHORIZED_STATEMENT.test(stated)) return [value, "No"];
+  if (AUTHORIZED_STATEMENT.test(stated)) return [value, "Yes"];
+  return [];
 }
 
 const MONTH_NAMES = [
