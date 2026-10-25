@@ -2032,6 +2032,19 @@ describe("notice acknowledgement option candidates", () => {
     expect(candidates).toContain("I Acknowledge");
   });
 
+  it("offers understanding, the same weak assent, for an employer's notice", () => {
+    // Sony's at-will notice ("I recognize that this employment application is
+    // not an offer of employment ... the Company's policy") offers only "Yes, I
+    // understand" and "No", which none of the acknowledgement words named.
+    const atWill = field(
+      "NO EMPLOYMENT RELATIONSHIP I recognize that this employment application is not an offer of employment and does not conflict with the Company's policy that employment is at-will.",
+      { type: "select" },
+    );
+    const candidates = optionSearchCandidates(atWill, answer(atWill.label, "I acknowledge"));
+    expect(candidates[0]).toBe("I acknowledge");
+    expect(candidates).toContain("I understand");
+  });
+
   it("never widens a negative answer into an acknowledgement", () => {
     const candidates = optionSearchCandidates(notice, answer(notice.label, "No"));
     expect(candidates).toEqual(["No"]);

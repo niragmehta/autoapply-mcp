@@ -477,6 +477,33 @@ describe("fillWorkdayPrompt", () => {
     expect(prompt.selected).toEqual(["Acknowledged"]);
   });
 
+  it("acknowledges a notice offered as understanding", async () => {
+    // Sony's at-will notice offers "Yes, I understand" and "No"; the approved
+    // answer is "I acknowledge".
+    const prompt = new FakePrompt({ "Select One": null, "Yes, I understand": null, No: null }, "dropdown");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), [
+      "I acknowledge",
+      "Acknowledged",
+      "I Acknowledge",
+      "Acknowledge",
+      "I understand",
+      "Understood",
+    ]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["Yes, I understand"]);
+  });
+
+  it("never takes a refusal to understand as understanding", async () => {
+    const prompt = new FakePrompt({ "I do not understand": null, "Not understood": null }, "dropdown");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["I understand", "Understood"]);
+
+    expect(result.filled).toBe(false);
+    expect(prompt.selected).toEqual([]);
+  });
+
   it("answers a consent question written as two sentences", async () => {
     // S&P Global's HiredScore question offers "I consent to ..." and "I DO NOT
     // consent to ...". A bare "No" opened neither, so the required field failed.

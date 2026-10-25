@@ -1104,14 +1104,16 @@ const NOTICE_QUESTION = /\b(notice|policy|privacy|terms|acknowledg\w*|disclosure
  * A notice is acknowledged in the employer's words rather than with "Yes":
  * Unity's Global Data Privacy Notice offers only "Acknowledged" and "Not
  * Acknowledged", so the approved "Yes" led neither option and a required field
- * held the wizard at step 3. Only an affirmative answer is expanded, and only
- * into acknowledgement - the weakest form of assent - never into agreeing or
+ * held the wizard at step 3. Sony's at-will notice offers "Yes, I understand"
+ * and "No", and stating that a notice was understood is the same assent. Only
+ * an affirmative answer is expanded, and only into acknowledgement or
+ * understanding - the weakest forms of assent - never into agreeing or
  * consenting, which say more than the candidate approved.
  */
 function acknowledgementCandidates(field: FieldDescriptor, value: string): string[] {
   if (!NOTICE_QUESTION.test(normalizeLabel(field.label))) return [];
   if (!AFFIRMATIVE_CANDIDATE.test(normalizeOptionText(value))) return [];
-  return [value, "Acknowledged", "I Acknowledge", "Acknowledge"];
+  return [value, "Acknowledged", "I Acknowledge", "Acknowledge", "I understand", "Understood"];
 }
 
 /**
