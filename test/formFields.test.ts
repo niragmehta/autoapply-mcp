@@ -773,6 +773,28 @@ describe("optionSearchCandidates", () => {
     expect(pickOptionIndex(["Select One", "Yes", "No", "Opt-Out"], candidates)).toBe(3);
   });
 
+  it("covers a decline that drops the 'to' from wishing", () => {
+    // Global Payments (TSYS) offers "I do not wish self-identify", which no
+    // "wish to" wording is a substring of.
+    const candidates = optionSearchCandidates(
+      field("Please select your status.", { role: "combobox", required: true }),
+      answer("VeteranStatus", "Decline to self-identify", { category: "demographic" }),
+    );
+    expect(
+      pickOptionIndex(
+        [
+          "Select One",
+          "I identify as one or more of the classifications of protected veterans listed above",
+          "I identify as a veteran, just not a protected veteran",
+          "I am not a veteran",
+          "I do not wish self-identify",
+        ],
+        candidates,
+      ),
+    ).toBe(4);
+    expect(pickOptionIndex(["I wish to self-identify", "I am not a veteran"], candidates)).toBe(-1);
+  });
+
   it("covers a decline worded as Decline to state", () => {
     // Riot Games' required race question; the past tense "declined to state"
     // is not a substring of it.

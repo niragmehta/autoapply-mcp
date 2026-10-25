@@ -40,6 +40,14 @@ describe("reviewOmissions", () => {
     expect(await reviewOmissions(page, [{ label: RACE, value: "Decline to self-identify" }], "Palo Alto Networks")).toEqual([]);
   });
 
+  it("accepts a decline printed without the 'to' of wishing", async () => {
+    // Global Payments (TSYS) prints its veteran decline as "I do not wish self-identify".
+    const label = "Please select your status.";
+    const page = reviewPage(`Voluntary Disclosures ${label} I do not wish self-identify Self Identify Name`);
+
+    expect(await reviewOmissions(page, [{ label, value: "Decline to self-identify" }], "Global Payments")).toEqual([]);
+  });
+
   it("does not take an unanswered question for a decline", async () => {
     const page = reviewPage(`Voluntary Disclosures ${RACE} No Response Please indicate your gender. Wish Not To Answer`);
 

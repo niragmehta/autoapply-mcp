@@ -936,6 +936,9 @@ const DECLINE_OPTION_CANDIDATES = [
   "not to disclose",
   "not wish to disclose",
   "not to self identify",
+  // Global Payments (TSYS) drops the "to": "I do not wish self-identify". Kept
+  // negated so the affirmative "I wish to self-identify" can never match it.
+  "not wish self identify",
   "rather not say",
   // Adobe states the decline as a status rather than a refusal: its gender
   // prompt offers only "Female", "Male" and "Not declared". Nothing there

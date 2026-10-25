@@ -504,6 +504,25 @@ describe("fillWorkdayPrompt", () => {
     expect(prompt.selected).toEqual([]);
   });
 
+  it("declines through a refusal that drops the 'to' from wishing", async () => {
+    // Global Payments (TSYS) offers "I do not wish self-identify" for veteran status.
+    const prompt = new FakePrompt(
+      {
+        "Select One": null,
+        "I identify as one or more of the classifications of protected veterans listed above": null,
+        "I identify as a veteran, just not a protected veteran": null,
+        "I am not a veteran": null,
+        "I do not wish self-identify": null,
+      },
+      "dropdown",
+    );
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["Decline to self-identify"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["I do not wish self-identify"]);
+  });
+
   it("answers a consent question written as two sentences", async () => {
     // S&P Global's HiredScore question offers "I consent to ..." and "I DO NOT
     // consent to ...". A bare "No" opened neither, so the required field failed.

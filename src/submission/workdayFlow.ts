@@ -438,7 +438,7 @@ const WD_SYNONYMS: readonly (readonly string[])[] = [["mobile", "cell", "cellula
  * be turned into a decline.
  */
 const WD_REFUSAL =
-  /(declined? to|prefer not to|do not wish to|don't wish to|do not want to|choose not to|rather not|wish not to|not to disclose|not to self.?identify|no response|not declared|undeclared|not specified|unspecified|did not provide)/;
+  /(declined? to|prefer not to|do not wish to|don't wish to|do not want to|choose not to|rather not|wish not to|not to disclose|not to self.?identify|not wish self.?identify|no response|not declared|undeclared|not specified|unspecified|did not provide)/;
 
 function isRefusal(text: string): boolean {
   return WD_REFUSAL.test(text);
@@ -2528,7 +2528,7 @@ const DECLINE_VALUE =
  * Workday shows it for a question left unanswered, which is not a decline.
  */
 const DECLINE_STATED =
-  /\b(?:wish not to|not wish to|(?:do not|don't|don’t) wish to|declines? to|declined to|prefer not to|rather not|not to disclose|not to self[\s-]?identify|not declared|undeclared|not specified|unspecified|did not provide)\b/;
+  /\b(?:wish not to|not wish to|(?:do not|don't|don’t) wish to|declines? to|declined to|prefer not to|rather not|not to disclose|not to self[\s-]?identify|not wish self[\s-]?identify|not declared|undeclared|not specified|unspecified|did not provide)\b/;
 
 /**
  * Whether the page states, directly after the question, a band holding the
