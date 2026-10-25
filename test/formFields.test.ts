@@ -3864,6 +3864,22 @@ describe("confirmation wording with the adverb before been", () => {
   });
 });
 
+// Mastercorp's Workday tenant replaces the platform confirmation with a welcome
+// modal over its job search: "Our recruiting team will review your application".
+describe("a Workday tenant's own welcome copy", () => {
+  const WELCOME =
+    "Congratulations! BRAVO! Thank you for your interest in a career with Mastercorp! Our recruiting team will review your application and should you be selected to take the next step in the process, be in touch.";
+
+  it("confirms the submission on a Workday page", () => {
+    expect(detectSubmissionConfirmation(WELCOME, "https://mastercorp.wd1.myworkdayjobs.com/MC")).toBe(true);
+  });
+
+  it("does not trust the same sentence in a posting elsewhere", () => {
+    expect(detectSubmissionConfirmation(WELCOME, "https://job-boards.greenhouse.io/example/jobs/123")).toBe(false);
+    expect(detectSubmissionConfirmation(WELCOME)).toBe(false);
+  });
+});
+
 // Thomson Reuters' Voluntary Disclosures offer only Female/Male and the race
 // list, and say to decline by selecting nothing. Driving each widget through
 // every decline wording took 90 seconds apiece and could only fail.

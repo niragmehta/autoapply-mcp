@@ -25,6 +25,7 @@ import {
   writtenForChoiceList,
 } from "../text/questionIntent.js";
 import { isRecruitingSourceLabel, sourceAnswerMismatch } from "./sourceQuestion.js";
+import { isWorkdayHost } from "./verificationLinks.js";
 import { workdayDateLabel, workdayDateParts } from "./workdayDates.js";
 
 /**
@@ -2753,6 +2754,26 @@ export function detectAlreadyApplied(pageText: string): boolean {
 }
 
 /**
+ * A Workday tenant may replace the platform's confirmation with its own welcome
+ * copy. Mastercorp's modal over its job search reads "Thank you for your
+ * interest in a career with Mastercorp! ... Our recruiting team will review your
+ * application", which no marker above matches, so a submitted application was
+ * reported unverified. The same sentence can sit in a posting's description,
+ * which a Greenhouse page still shows after a refused submit, so it only counts
+ * on Workday, whose post-submit pages carry no description.
+ */
+const WORKDAY_WELCOME_CONFIRMATION =
+  /\b(?:our|the) (?:recruiting|hiring|talent(?: acquisition)?) team will (?:now )?review your application\b/;
+
+function onWorkday(url: string): boolean {
+  try {
+    return isWorkdayHost(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Requires positive evidence before a run is recorded as submitted: either the
  * employer's own confirmation copy, or the ATS routing to its confirmation
  * page. Absence of both is still reported honestly as unverified.
@@ -2766,6 +2787,7 @@ export function detectSubmissionConfirmation(pageText: string, finalUrl = ""): b
   if (detectAlreadyApplied(haystack)) return true;
   if (SUBMISSION_CONFIRMATION_MARKERS.some((marker) => haystack.includes(marker))) return true;
   if (SUBMISSION_CONFIRMATION_PATTERNS.some((pattern) => pattern.test(haystack))) return true;
+  if (WORKDAY_WELCOME_CONFIRMATION.test(haystack.replace(/\s+/g, " ")) && onWorkday(finalUrl)) return true;
   return isConfirmationUrl(finalUrl);
 }
 
