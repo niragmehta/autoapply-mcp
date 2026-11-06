@@ -1,3 +1,5 @@
+import { ENTERPRISE_CATALOG } from "./batches/enterprise.js";
+import { SMB_CATALOG } from "./batches/smb.js";
 import type { SourceReadiness } from "./leadTypes.js";
 
 export interface SourceCatalogEntry {
@@ -125,7 +127,7 @@ const SOURCE_CATALOG: readonly SourceCatalogEntry[] = [
 /** Catalog entries are built in; credentials are neither persisted nor returned. */
 export function listSourceCatalog(): readonly SourceCatalogEntry[] {
   const foorillaConfigured = Boolean(process.env.AUTOAPPLY_FOORILLA_API_KEY?.trim());
-  return SOURCE_CATALOG.map((source) => ({
+  return [...SOURCE_CATALOG, ...ENTERPRISE_CATALOG, ...SMB_CATALOG].map((source) => ({
     ...source,
     ...(source.id === "foorilla"
       ? { readiness: foorillaConfigured ? "credentials-configured" as const : "credentials-required" as const }

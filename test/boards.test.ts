@@ -157,7 +157,7 @@ describe("companies file", () => {
     const path = tempFile();
     writeFileSync(path, JSON.stringify({ version: 1, companies: [] }), "utf8");
 
-    expect(() => upsertCompany(path, { name: "Nope", ats: "taleo", board: "nope" })).toThrow();
+    expect(() => upsertCompany(path, { name: "Nope", ats: "not-an-ats", board: "nope" })).toThrow();
     expect(readCompanyFile(path)).toEqual([]);
   });
 

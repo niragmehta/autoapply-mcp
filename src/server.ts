@@ -1,7 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerPrompts } from "./prompts/index.js";
 import { registerBatchTools } from "./tools/batch.js";
+import { registerCareerTools } from "./tools/career.js";
 import { registerDiscoveryTools } from "./tools/discovery.js";
+import { registerDocumentTools } from "./tools/documents.js";
 import { registerDraftingTools } from "./tools/drafting.js";
+import { registerEvaluationTools } from "./tools/evaluation.js";
+import { registerFollowupTools } from "./tools/followup.js";
+import { registerHygieneTools } from "./tools/hygiene.js";
+import { registerOnboardingTools } from "./tools/onboarding.js";
+import { registerRunTools } from "./tools/runs.js";
+import { registerSourcingTools } from "./tools/sourcing.js";
 import { registerSubmissionTools } from "./tools/submission.js";
 import { registerTrackingTools } from "./tools/tracking.js";
 import { registerSourceSearchTools } from "./tools/sourceSearch.js";
@@ -50,15 +59,24 @@ Rules this server enforces and you must respect:
 export function createServer(): McpServer {
   const server = new McpServer(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { instructions: INSTRUCTIONS, capabilities: { tools: {}, logging: {} } },
+    { instructions: INSTRUCTIONS, capabilities: { tools: {}, prompts: {}, logging: {} } },
   );
 
   registerDiscoveryTools(server);
   registerSourceSearchTools(server);
+  registerSourcingTools(server);
+  registerHygieneTools(server);
+  registerEvaluationTools(server);
   registerDraftingTools(server);
+  registerDocumentTools(server);
   registerBatchTools(server);
   registerSubmissionTools(server);
   registerTrackingTools(server);
+  registerFollowupTools(server);
+  registerCareerTools(server);
+  registerOnboardingTools(server);
+  registerRunTools(server);
+  registerPrompts(server);
 
   return server;
 }

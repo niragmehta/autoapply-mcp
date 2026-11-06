@@ -15,6 +15,18 @@ export type WorkspacePaths = {
   companies: string;
   database: string;
   artifacts: string;
+  /** Structured resume content tailored per posting (resume.json). */
+  resumeSource: string;
+  /** Fonts the resume and cover letter templates embed. */
+  fonts: string;
+  /** Generated per-application documents (tailored resumes, cover letters). */
+  documents: string;
+  /** Human-readable evaluation reports, one Markdown file per posting. */
+  reports: string;
+  /** Tracker exports (CSV, Markdown) and calendar files. */
+  exports: string;
+  /** Local secrets (KEY=value lines) for CLIs and the dashboard. Never committed. */
+  secrets: string;
 };
 
 function fromEnv(name: string, fallback: string, home: string): string {
@@ -35,5 +47,11 @@ export function resolvePaths(): WorkspacePaths {
     companies: fromEnv("AUTOAPPLY_COMPANIES", "companies.json", home),
     database: fromEnv("AUTOAPPLY_DB", join("data", "autoapply.sqlite"), home),
     artifacts: fromEnv("AUTOAPPLY_ARTIFACTS", "artifacts", home),
+    resumeSource: fromEnv("AUTOAPPLY_RESUME_SOURCE", "resume.json", home),
+    fonts: fromEnv("AUTOAPPLY_FONTS", join("resumes", "fonts"), home),
+    documents: fromEnv("AUTOAPPLY_DOCUMENTS", "documents", home),
+    reports: fromEnv("AUTOAPPLY_REPORTS", "reports", home),
+    exports: fromEnv("AUTOAPPLY_EXPORTS", "exports", home),
+    secrets: fromEnv("AUTOAPPLY_SECRETS", ".env", home),
   };
 }

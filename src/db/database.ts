@@ -2,6 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { logger } from "../util/logger.js";
+import { applySchemaModules } from "./migrate.js";
+import { FEATURE_SCHEMAS } from "./schema/index.js";
 
 /**
  * SQLite persistence via Node's built-in driver, so the server installs with no
@@ -135,6 +137,7 @@ export function openDatabase(path: string): Db {
   db.exec("PRAGMA busy_timeout = 15000;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
+  applySchemaModules(db, FEATURE_SCHEMAS);
   logger.debug("database ready", { path });
   return db;
 }

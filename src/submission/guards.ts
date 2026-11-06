@@ -1,4 +1,4 @@
-import type { Campaign } from "../domain/campaign.js";
+import { supportsBrowserSubmission, type Campaign } from "../domain/campaign.js";
 import type { Application, Job } from "../domain/job.js";
 import type { ApprovalRecord } from "../db/repositories/applications.js";
 import { checkUrlAllowed } from "./allowlist.js";
@@ -56,7 +56,7 @@ export function checkSubmissionAllowed(input: GuardInput): GuardResult {
       `campaign submission mode is "${policy.mode}"; "${requestedMode}" submission is not permitted`,
     );
   }
-  if (requestedMode !== "manual" && ["smartrecruiters", "workable", "recruitee"].includes(job.ats)) {
+  if (requestedMode !== "manual" && !supportsBrowserSubmission(job.ats)) {
     return deny(
       "ats_browser_not_supported",
       `${job.ats} supports discovery and manual packets only; browser submission has not been implemented`,

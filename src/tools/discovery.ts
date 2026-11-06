@@ -12,6 +12,7 @@ import { AtsKindSchema, CompanySchema, type AtsKind } from "../domain/campaign.j
 import { startOfDayIso } from "../submission/guards.js";
 import { prepareUntrusted, wrapUntrusted } from "../text/untrusted.js";
 import { AppError } from "../util/errors.js";
+import { runDiscovery } from "../services/discovery.js";
 import { handler, ok, okText } from "./helpers.js";
 
 /** Discovery, ranking and campaign reporting tools. */
@@ -30,46 +31,8 @@ export function registerDiscoveryTools(server: McpServer): void {
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     handler(async (args: { companies?: string[]; includeIssues?: boolean }) => {
-      const workspace = getWorkspace();
-      const selected = args.companies?.length
-        ? workspace.companies.filter((company) =>
-            args.companies!.some((name) => name.toLowerCase() === company.name.toLowerCase()),
-          )
-        : workspace.companies;
-
-      if (selected.length === 0) {
-        throw new AppError("no_companies", "no matching companies configured; check companies.json");
-      }
-
-      // Each board is stored and evaluated as soon as it is fetched, so a run
-      // that outlives its client still keeps every board it reached.
-      let inserted = 0;
-      let updated = 0;
-      const summaries: PipelineSummary[] = [];
-      const discovery = await discoverJobs(selected, (found) => {
-        if (found.length === 0) return;
-        const stored = upsertJobs(workspace.db, found);
-        inserted += stored.inserted;
-        updated += stored.updated;
-        summaries.push(evaluateAndStore(workspace.db, found, workspace.campaign, workspace.profile));
-      });
-      const summary = mergeSummaries(summaries);
-
-      appendEvent(workspace.db, "discovery.run", "campaign", {
-        boards: discovery.boardsQueried,
-        found: discovery.jobs.length,
-        accepted: summary.accepted,
-      });
-
-      return ok({
-        boardsQueried: discovery.boardsQueried,
-        postingsFetched: discovery.jobs.length,
-        newPostings: inserted,
-        refreshedPostings: updated,
-        evaluation: summary,
-        totalStoredJobs: countJobs(workspace.db),
-        boardIssues: args.includeIssues === false ? undefined : discovery.issues,
-      });
+      const outcome = await runDiscovery(getWorkspace(), { companies: args.companies });
+      return ok({ ...outcome, boardIssues: args.includeIssues === false ? undefined : outcome.boardIssues });
     }),
   );
 

@@ -20,6 +20,39 @@ export type SourceAdapter = {
    * override this so verification stays a single request.
    */
   verifyBoard?(company: Company): Promise<BoardVerification>;
+  /**
+   * Re-reads one stored posting to learn whether it still takes applications.
+   * Optional: liveness falls back to fetching the posting's own URL, which is
+   * slower and reads closed pages less reliably than the ATS API does.
+   */
+  checkPosting?(job: Job): Promise<PostingCheck>;
+  /**
+   * Recognizes a posting URL on this ATS and names the board and posting it
+   * points at, or returns null. Lets a pasted URL be evaluated without the
+   * employer's board being configured first.
+   */
+  parsePostingUrl?(url: URL): PostingRef | null;
+  /** Fetches and normalizes one posting, or null when the ATS no longer has it. */
+  fetchPosting?(company: Company, externalId: string, capturedAt: string): Promise<Job | null>;
+};
+
+/** Where a posting URL points: enough to build a Company for its board. */
+export type PostingRef = {
+  board: string;
+  externalId: string;
+  region?: "global" | "eu";
+};
+
+export type PostingStatus = "open" | "closed" | "unknown";
+
+/**
+ * Whether one posting is still open. `unknown` is a real answer: a network
+ * error or an unreadable page must never be reported as either open or closed.
+ */
+export type PostingCheck = {
+  status: PostingStatus;
+  detail: string;
+  via: "api" | "page";
 };
 
 /**

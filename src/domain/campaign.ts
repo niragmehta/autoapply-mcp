@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { DocumentsPolicySchema } from "./policies/documents.js";
+import { FollowUpPolicySchema, InboxPolicySchema } from "./policies/followup.js";
+import { HygienePolicySchema } from "./policies/hygiene.js";
+import { RunnerPolicySchema } from "./policies/runner.js";
 
 /**
  * Campaign configuration: what counts as a qualified job, how it is scored,
@@ -151,6 +155,11 @@ export const CampaignSchema = z.object({
     .prefault({}),
   freshnessDays: z.number().int().positive().default(45),
   submission: SubmissionPolicySchema.prefault({}),
+  hygiene: HygienePolicySchema,
+  documents: DocumentsPolicySchema,
+  inbox: InboxPolicySchema,
+  followUps: FollowUpPolicySchema,
+  runner: RunnerPolicySchema,
 });
 
 export type Campaign = z.infer<typeof CampaignSchema>;
@@ -163,7 +172,14 @@ export type SubmissionPolicy = z.infer<typeof SubmissionPolicySchema>;
  * `google`, `meta`, `amazon` and `apple` are the employers' own career sites.
  * They only take applications from a signed-in account, so submitting to them
  * runs in a browser profile the candidate signed in to by hand.
+ *
+ * Every kind after `apple` is discovery-only: postings are fetched, gated and
+ * scored, and applications are prepared as manual packets for a person to send.
+ * `external` marks a posting evaluated from a pasted URL whose host has no
+ * adapter; it can never be discovered or submitted automatically.
  */
+export const BROWSER_SUBMISSION_ATS = ["greenhouse", "lever", "ashby", "workday", "google", "meta", "amazon", "apple"] as const;
+
 export const AtsKindSchema = z.enum([
   "greenhouse",
   "lever",
@@ -176,8 +192,40 @@ export const AtsKindSchema = z.enum([
   "meta",
   "amazon",
   "apple",
+  // Enterprise ATS
+  "icims",
+  "taleo",
+  "successfactors",
+  "oraclecloud",
+  "phenom",
+  "eightfold",
+  "avature",
+  "csod",
+  "ultipro",
+  "adp",
+  "paylocity",
+  "jobvite",
+  // Startup and SMB ATS
+  "bamboohr",
+  "jazzhr",
+  "breezy",
+  "rippling",
+  "gem",
+  "pinpoint",
+  "dover",
+  "teamtailor",
+  "personio",
+  "hibob",
+  "zohorecruit",
+  "clearcompany",
+  "external",
 ]);
 export type AtsKind = z.infer<typeof AtsKindSchema>;
+
+/** Whether the browser submission engine can fill and submit this ATS's forms. */
+export function supportsBrowserSubmission(kind: AtsKind): boolean {
+  return (BROWSER_SUBMISSION_ATS as readonly string[]).includes(kind);
+}
 
 export const CompanySchema = z.object({
   name: nonEmpty,

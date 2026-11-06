@@ -21,6 +21,7 @@
   },
   "files": [
     "dist",
+    "web",
     "presets",
     "examples",
     "docs",
@@ -39,17 +40,23 @@
     "start": "node dist/index.js",
     "doctor": "node dist/cli/doctor.js",
     "init": "node dist/cli/init.js",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "dashboard": "node dist/cli/dashboard.js",
+    "update": "node dist/cli/update.js",
+    "harvest": "node dist/cli/harvest.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "fast-xml-parser": "^5.11.1",
+    "htm": "^3.1.1",
+    "preact": "^11.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@vitest/coverage-v8": "^4.1.10",
     "imapflow": "^1.7.0",
+    "pdfjs-dist": "^6.5.438",
     "playwright": "^1.62.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

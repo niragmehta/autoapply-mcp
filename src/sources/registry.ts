@@ -14,10 +14,12 @@ import { googleCareersAdapter } from "./googleCareers.js";
 import { metaCareersAdapter } from "./metaCareers.js";
 import { amazonJobsAdapter } from "./amazonJobs.js";
 import { appleJobsAdapter } from "./appleJobs.js";
+import { ENTERPRISE_ADAPTERS } from "./batches/enterprise.js";
+import { SMB_ADAPTERS } from "./batches/smb.js";
 import { probeJson } from "./http.js";
 import type { BoardVerification, DiscoveryIssue, SourceAdapter } from "./types.js";
 
-const ADAPTERS: Record<AtsKind, SourceAdapter> = {
+const CORE_ADAPTERS: Partial<Record<AtsKind, SourceAdapter>> = {
   greenhouse: greenhouseAdapter,
   lever: leverAdapter,
   ashby: ashbyAdapter,
@@ -31,14 +33,25 @@ const ADAPTERS: Record<AtsKind, SourceAdapter> = {
   apple: appleJobsAdapter,
 };
 
+const ADAPTERS: Partial<Record<AtsKind, SourceAdapter>> = {
+  ...ENTERPRISE_ADAPTERS,
+  ...SMB_ADAPTERS,
+  ...CORE_ADAPTERS,
+};
+
 export function adapterFor(kind: AtsKind): SourceAdapter {
   const adapter = ADAPTERS[kind];
   if (!adapter) throw new AppError("unknown_ats", `no adapter registered for "${kind}"`);
   return adapter;
 }
 
+/** Whether postings can be discovered from this ATS. `external` postings never can. */
+export function hasAdapter(kind: AtsKind): boolean {
+  return ADAPTERS[kind] !== undefined;
+}
+
 export function allAdapters(): SourceAdapter[] {
-  return Object.values(ADAPTERS);
+  return Object.values(ADAPTERS).filter((adapter): adapter is SourceAdapter => adapter !== undefined);
 }
 
 export type DiscoveryResult = {

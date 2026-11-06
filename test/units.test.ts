@@ -36,7 +36,7 @@ describe("domain schemas", () => {
   it("rejects malformed configuration", () => {
     expect(ProfileSchema.safeParse({ version: 1 }).success).toBe(false);
     expect(CampaignSchema.safeParse({ version: 1, name: "x" }).success).toBe(false);
-    expect(CompanySchema.safeParse({ name: "A", ats: "taleo", board: "a" }).success).toBe(false);
+    expect(CompanySchema.safeParse({ name: "A", ats: "not-an-ats", board: "a" }).success).toBe(false);
   });
 
   it("requires at least one resume variant", () => {
