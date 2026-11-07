@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { selectBestOption } from "../src/drafting/options.js";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
 import { ProfileSchema } from "../src/domain/profile.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 

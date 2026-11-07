@@ -1,5 +1,5 @@
 import type { GreenhouseQuestion } from "../sources/greenhouse.js";
-import type { FormQuestion } from "./answers.js";
+import type { FormQuestion } from "./answers/formQuestion.js";
 
 /** Converts ATS question payloads into the neutral FormQuestion shape. */
 

@@ -16,7 +16,9 @@ function answer(overrides: Partial<DraftAnswer> = {}): DraftAnswer {
     source: "profile",
     citation: "identity.email",
     requiresHuman: false,
+    required: true,
     category: "contact",
+    guidance: "",
     ...overrides,
   };
 }

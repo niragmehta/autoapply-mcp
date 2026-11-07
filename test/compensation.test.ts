@@ -30,6 +30,15 @@ describe("parseCompensationFromText", () => {
     expect(range?.currency).toBe("CAD");
   });
 
+  it.each([
+    ["The salary range for this role is USD $165,000 - USD $245,000 per year.", "USD", 165000, 245000],
+    ["Base pay: CAD $140,000 to CAD $180,000 annually", "CAD", 140000, 180000],
+    ["Compensation USD$150,000 - USD$210,000 per year", "USD", 150000, 210000],
+  ])("parses a currency code written before the dollar sign: %s", (text, currency, min, max) => {
+    const range = parseCompensationFromText(text);
+    expect(range).toMatchObject({ currency, min, max, period: "year" });
+  });
+
   it("parses K-suffixed ranges", () => {    const range = parseCompensationFromText("Compensation: $180K to $240K annually");
     expect(range?.min).toBe(180000);
     expect(range?.max).toBe(240000);

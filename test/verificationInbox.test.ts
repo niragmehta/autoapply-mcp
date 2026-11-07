@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { canAwaitVerificationCode, workdayVerificationLinkReader } from "../src/submission/browser.js";
+import { canAwaitVerificationCode, workdayVerificationLinkReader } from "../src/submission/browser/verification.js";
 import {
   decodeMessageText,
   extractVerificationCode,

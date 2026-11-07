@@ -12,6 +12,10 @@ export const DocumentsPolicySchema = z
     tailorResume: z.boolean().default(false),
     /** Render the cover letter as a PDF for forms that take a file upload. */
     coverLetterPdf: z.boolean().default(false),
+    /**
+     * Fewest bullets a role keeps when tailoring drops the least relevant ones
+     * to fit the page. Bullets are only ever dropped when the page overflows.
+     */
+    minBulletsPerRole: z.number().int().min(0).max(20).default(2),
   })
   .prefault({});
-export type DocumentsPolicy = z.infer<typeof DocumentsPolicySchema>;

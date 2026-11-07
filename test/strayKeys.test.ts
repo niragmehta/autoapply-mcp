@@ -12,7 +12,7 @@ function readExample(path: string): unknown {
 describe("findStrayKeys", () => {
   const schema = z.object({
     name: z.string(),
-    submission: z.object({ mode: z.string(), maxBatchSize: z.number().default(3) }).default({ mode: "manual" }),
+    submission: z.object({ mode: z.string(), maxBatchSize: z.number().default(3) }).prefault({ mode: "manual" }),
     tracks: z.array(z.object({ id: z.string() })).default([]),
   });
 

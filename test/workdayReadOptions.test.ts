@@ -1,6 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Page } from "playwright";
-import { readListboxOptions } from "../src/submission/workdayFlow.js";
+import type { Page as WorkdayPage } from "../src/submission/workday/types.js";
+import { readListboxOptions } from "../src/submission/workday/wizard.js";
+
+/**
+ * The engine types pages structurally, with loose `options?: unknown`
+ * parameters that Playwright's stricter signatures do not satisfy; production
+ * reaches the live page through an untyped dynamic import instead.
+ */
+function asWorkdayPage(page: Page): WorkdayPage {
+  return page as unknown as WorkdayPage;
+}
 
 /**
  * Reading an unmatched field's choices is a diagnostic: it must leave the form
@@ -70,7 +80,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("names a checkbox grid's choices without ticking any of them", async () => {
     const page = await openForm(browser);
     try {
-      const options = await readListboxOptions(page, 7, "Have you ever worked at Adobe in the following capacity:");
+      const options = await readListboxOptions(asWorkdayPage(page), 7, "Have you ever worked at Adobe in the following capacity:");
 
       expect(options).toEqual(["Employee", "Intern"]);
       expect(await page.isChecked("#employee")).toBe(false);
@@ -83,7 +93,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("never ticks a lone terms checkbox", async () => {
     const page = await openForm(browser);
     try {
-      const options = await readListboxOptions(page, 9, "Check this box to confirm the statement above.");
+      const options = await readListboxOptions(asWorkdayPage(page), 9, "Check this box to confirm the statement above.");
 
       expect(options).toEqual([]);
       expect(await page.isChecked("#terms")).toBe(false);
@@ -95,7 +105,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("never toggles an ARIA checkbox", async () => {
     const page = await openForm(browser);
     try {
-      await readListboxOptions(page, 11, "I agree");
+      await readListboxOptions(asWorkdayPage(page), 11, "I agree");
 
       expect(await page.getAttribute("#ariaBox", "aria-checked")).toBe("false");
     } finally {
@@ -106,7 +116,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("names a radio group's choices without selecting one", async () => {
     const page = await openForm(browser);
     try {
-      const options = await readListboxOptions(page, 13, "Are you currently under contract?");
+      const options = await readListboxOptions(asWorkdayPage(page), 13, "Are you currently under contract?");
 
       expect(options).toEqual(["Yes", "No"]);
       expect(await page.isChecked("#yes")).toBe(false);
@@ -119,7 +129,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("still opens a genuine dropdown to read its options", async () => {
     const page = await openForm(browser);
     try {
-      expect(await readListboxOptions(page, 3, "Will you require sponsorship?")).toEqual(["Yes", "No"]);
+      expect(await readListboxOptions(asWorkdayPage(page), 3, "Will you require sponsorship?")).toEqual(["Yes", "No"]);
     } finally {
       await page.close();
     }
@@ -128,7 +138,7 @@ describe("readListboxOptions leaves the form as it found it", () => {
   it("still opens a prompt's search box to read its options", async () => {
     const page = await openForm(browser);
     try {
-      expect(await readListboxOptions(page, 5, "Country Phone Code")).toEqual(["Canada (+1)", "India (+91)"]);
+      expect(await readListboxOptions(asWorkdayPage(page), 5, "Country Phone Code")).toEqual(["Canada (+1)", "India (+91)"]);
     } finally {
       await page.close();
     }

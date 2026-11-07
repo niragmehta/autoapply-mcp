@@ -92,7 +92,7 @@ describe("Lever native current-location selection", () => {
 describe("Lever canonical location notation", () => {
   const leverCanada = "Vancouver, BC, CAN";
   const leverUsa = "Vancouver, WA, USA";
-  function notationDriver(options) {
+  function notationDriver(options: string[]) {
     return {
       search: vi.fn().mockResolvedValue(undefined),
       options: vi.fn().mockResolvedValue(options),

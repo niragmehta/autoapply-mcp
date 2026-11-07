@@ -1,7 +1,7 @@
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 
-import { buildOverlayClickScript } from "../src/submission/workdayFlow.js";
+import { buildOverlayClickScript } from "../src/submission/workday/clicks.js";
 
 /**
  * Workday's real markup, reduced to what the click path depends on: a button

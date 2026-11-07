@@ -52,13 +52,11 @@ class FakeSurface implements AssessmentSurface {
   elements: FakeElement[];
   body = "";
   address: string;
-  constructor(
-    elements: FakeElement[],
-    address: string,
-    readonly clicks: string[],
-  ) {
+  readonly clicks: string[];
+  constructor(elements: FakeElement[], address: string, clicks: string[]) {
     this.elements = elements;
     this.address = address;
+    this.clicks = clicks;
   }
   url(): string {
     return this.address;

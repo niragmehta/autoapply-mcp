@@ -1,6 +1,8 @@
 import type { Campaign } from "../domain/campaign.js";
 import type { GateResult, Job } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
+import { matchBlacklist } from "../hygiene/blacklist.js";
+import { assessExperience } from "../hygiene/experienceYears.js";
 import { snippetAround } from "../text/html.js";
 import { daysBetween, parseDateSafe } from "../util/hash.js";
 import { checkCompensationFloor } from "./compensation.js";
@@ -116,6 +118,13 @@ export function evaluateGates(job: Job, context: GateContext): GateResult {
   const excludedCompany = matchesAnyPattern(job.companyName, campaign.exclusions.companies);
   if (excludedCompany) return fail("company-excluded", `company on exclusion list: ${excludedCompany}`);
 
+  // The candidate's own do-not-apply decisions (hygiene.blacklist).
+  const blacklisted = matchBlacklist(job, campaign.hygiene.blacklist);
+  if (blacklisted) {
+    const reason = blacklisted.entry.reason ? `: ${blacklisted.entry.reason}` : "";
+    return fail("blacklisted", `${blacklisted.entry.scope} "${blacklisted.entry.value}" is on the do-not-apply list${reason}`, blacklisted.matched);
+  }
+
   const excludedTitle = matchesAnyPattern(job.title, campaign.exclusions.titlePatterns);
   if (excludedTitle) return fail("title-excluded", `title matches exclusion "${excludedTitle}"`, job.title);
 
@@ -159,6 +168,18 @@ export function evaluateGates(job: Job, context: GateContext): GateResult {
   }
   if (compensationCheck.status === "unknown" && !campaign.compensation.allowUnknown) {
     return fail("compensation-unknown", "no published compensation and unknown values are not allowed");
+  }
+
+  // Only when the campaign opts in; otherwise the bar is a queue flag (pipeline.ts).
+  if (campaign.hygiene.experience.enforce) {
+    const experience = assessExperience(job, campaign, profile, now);
+    if (experience.rejects) {
+      return fail(
+        "experience-years",
+        `posting requires ${experience.required.minYears}+ years; candidate has ${experience.candidate.years} (tolerance ${experience.toleranceYears})`,
+        experience.required.sentence ?? "",
+      );
+    }
   }
 
   const posted = parseDateSafe(job.postedAt);

@@ -53,4 +53,3 @@ export const HygienePolicySchema = z
     blacklist: z.array(BlacklistEntrySchema).default([]),
   })
   .prefault({});
-export type HygienePolicy = z.infer<typeof HygienePolicySchema>;

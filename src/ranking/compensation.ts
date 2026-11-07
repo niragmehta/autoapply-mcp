@@ -18,11 +18,14 @@ const SALARY_CONTEXT = /(salary|compensation|pay range|base pay|base salary|annu
 
 /**
  * Matches a pay range with the currency written either before the amount
- * ("$220,000 - $280,000") or after it ("224,000 USD - 356,500 USD"). The
- * suffix form is what large US pay-transparency filers publish, and without it
- * the separator never lines up, so such a range parses as no range at all.
+ * ("$220,000 - $280,000", "USD $165,000 - USD $245,000") or after it
+ * ("224,000 USD - 356,500 USD"). The suffix form is what large US
+ * pay-transparency filers publish, and without it the separator never lines
+ * up, so such a range parses as no range at all. A code before the dollar sign
+ * is tried first so "USD $" is read as one marker rather than leaving the "$"
+ * stranded in front of the amount.
  */
-const CURRENCY_PREFIX = String.raw`(?:us\$|c\$|cad|usd|cdn|pln|\$)`;
+const CURRENCY_PREFIX = String.raw`(?:(?:usd|cad|cdn|pln)\s?\$|us\$|c\$|cad|usd|cdn|pln|\$)`;
 const CURRENCY_SUFFIX = String.raw`(?:usd|cad|cdn|pln|us\$|c\$)`;
 const GROUPED_AMOUNT = String.raw`\d{1,3}(?:(?:,\d{3})+|(?:[ \u00a0\u202f]\d{3})+)(?:\.\d+)?`;
 const AMOUNT = String.raw`${GROUPED_AMOUNT}|\d+(?:\.\d+)?\s*k\b|\d{2,7}(?:\.\d+)?`;

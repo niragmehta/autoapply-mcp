@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import { fallbackAnswersForFields, type FieldDescriptor } from "../src/submission/formFields.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
+import { fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import type { Profile } from "../src/domain/profile.js";
-import { makeCampaign, makeProfile } from "./factories.js";
+import { makeBankEntry, makeCampaign, makeProfile } from "./factories.js";
 
-const genericPermission = {
+const genericPermission = makeBankEntry({
   key: "us-work-authorization-now",
   label: "Currently authorized to work in the United States",
   patterns: ["authorized to work"],
   answer: "Yes",
   allowAutoFill: true,
-};
+});
 
 const qualifiedQuestions = [
   "Are you authorized to work in the United States for any employer?",
@@ -67,13 +69,13 @@ describe("work authorization scope", () => {
   });
 
   it("does not fall back to generic sponsorship after rejecting qualified authorization", () => {
-    const sponsorship = {
+    const sponsorship = makeBankEntry({
       key: "visa-sponsorship",
       label: "Do you require visa sponsorship?",
       patterns: ["require sponsorship"],
       answer: "No",
       allowAutoFill: true,
-    };
+    });
     const label = "Are you authorized to work for any employer without requiring sponsorship?";
 
     const answers = fallbackAnswersForFields([field(label)], [], [genericPermission, sponsorship]);

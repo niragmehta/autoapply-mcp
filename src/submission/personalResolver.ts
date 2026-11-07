@@ -1,6 +1,6 @@
 import type { Profile } from "../domain/profile.js";
 import { resolvePersonal } from "../drafting/personal.js";
-import type { PersonalResolver } from "./formFields.js";
+import type { PersonalResolver } from "./form/answerBank.js";
 
 /**
  * Exposes the profile's stored personal and demographic answers to the browser

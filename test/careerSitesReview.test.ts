@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contradictedEligibilityAnswers } from "../src/submission/careerSites.js";
+import { contradictedEligibilityAnswers } from "../src/submission/sites/amazon.js";
 
 const SPONSORSHIP =
   "Your response is mandatory when applying for a U.S.-based position. Do you need, or will you need in the future, any immigration related support or sponsorship from Amazon? This includes visa sponsorship for employment (H-1B, H-1B1, E-3, O-1, or TN)";

@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { AppError } from "../util/errors.js";
 
-export const SEARCH_SOURCE_IDS = ["himalayas", "foorilla"] as const;
+export const SEARCH_SOURCE_IDS = [
+  "himalayas", "foorilla", "builtin", "remoteok", "remotive", "weworkremotely", "jobicy", "themuse",
+  "jobbankca", "getro", "consider", "workingnomads",
+] as const;
 export type SearchSourceId = (typeof SEARCH_SOURCE_IDS)[number];
-export type SourceReadiness = "ready" | "credentials-required" | "credentials-configured" | "manual-only";
+export type SourceReadiness = "ready" | "credentials-required" | "credentials-configured" | "manual-only" | "opt-in-required" | "opted-in";
 export const SOURCE_SEARCH_MAX_LIMIT = 100;
 export const SOURCE_MIN_INTERVAL_MS = 700;
 
@@ -12,6 +15,10 @@ export const SourceSearchInputSchema = z.object({
   country: z.string().trim().min(1).max(100).optional(),
   location: z.string().trim().min(1).max(200).optional(),
   company: z.string().trim().min(1).max(200).optional(),
+  /** Source-specific category slug (Built In, Remotive, Jobicy, We Work Remotely, Working Nomads). */
+  category: z.string().trim().min(1).max(100).optional(),
+  /** Which board a multi-board source reads: a Built In market host, or a Getro/Consider network. */
+  site: z.string().trim().min(1).max(200).optional(),
   limit: z.number().int().min(1).max(SOURCE_SEARCH_MAX_LIMIT),
   page: z.number().int().min(1).optional(),
 });

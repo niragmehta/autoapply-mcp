@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pickOptionIndex } from "../src/submission/formFields.js";
+import { pickOptionIndex } from "../src/submission/form/optionMatching.js";
 
 /**
  * A required select offering exactly one option carries no decision: the option

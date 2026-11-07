@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pickOptionIndex } from "../src/submission/formFields.js";
+import { pickOptionIndex } from "../src/submission/form/optionMatching.js";
 
 /**
  * Faire asks for a state of residence and offers "Not in the US" for everyone

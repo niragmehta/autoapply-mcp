@@ -1,6 +1,7 @@
 import type { Campaign } from "./domain/campaign.js";
 import type { Evaluation, Job } from "./domain/job.js";
 import type { Profile } from "./domain/profile.js";
+import { assessExperience, experienceFlags } from "./hygiene/experienceYears.js";
 import { evaluateGates } from "./ranking/gates.js";
 import { scoreJob } from "./ranking/score.js";
 import { detectInjection } from "./text/untrusted.js";
@@ -16,6 +17,9 @@ import { findDuplicates, saveEvaluation } from "./db/repositories/jobs.js";
 export function evaluateJob(job: Job, campaign: Campaign, profile: Profile, now = new Date()): Evaluation {
   const gate = evaluateGates(job, { campaign, profile, now });
   const injectionFlags = detectInjection(job.descriptionText).map((flag) => `injection:${flag.pattern}`);
+  // The stated years bar travels with every evaluation, so the queue shows it
+  // whether or not the campaign gates on it.
+  const yearsFlags = experienceFlags(assessExperience(job, campaign, profile, now));
 
   if (!gate.passed) {
     return {
@@ -26,7 +30,7 @@ export function evaluateJob(job: Job, campaign: Campaign, profile: Profile, now 
       score: 0,
       tier: "none",
       components: [],
-      flags: injectionFlags,
+      flags: [...yearsFlags, ...injectionFlags],
       evaluatedAt: nowIso(),
     };
   }
@@ -40,7 +44,7 @@ export function evaluateJob(job: Job, campaign: Campaign, profile: Profile, now 
     score: scored.score,
     tier: scored.tier,
     components: scored.components,
-    flags: [...scored.flags, ...injectionFlags],
+    flags: [...scored.flags, ...yearsFlags, ...injectionFlags],
     evaluatedAt: nowIso(),
   };
 }

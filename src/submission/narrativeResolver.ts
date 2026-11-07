@@ -3,7 +3,7 @@ import type { Evaluation, Job } from "../domain/job.js";
 import type { Profile } from "../domain/profile.js";
 import { buildMatchReport } from "../drafting/matchReport.js";
 import { resolveNarrative } from "../drafting/narrative.js";
-import type { NarrativeResolver } from "./formFields.js";
+import type { NarrativeResolver } from "./form/answerBank.js";
 
 /**
  * Only Greenhouse publishes a question schema, so open-ended questions on Ashby

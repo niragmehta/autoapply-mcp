@@ -1,8 +1,8 @@
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { z } from "zod";
-import type { Company } from "../domain/campaign.js";
+import { CompanySchema, type Company } from "../domain/campaign.js";
 import type { Job, WorkplaceType } from "../domain/job.js";
-import { AppError } from "../util/errors.js";
+import { AppError, toErrorMessage } from "../util/errors.js";
 import { fetchText } from "./http.js";
 import {
   boardToken, boardVerification, locationLabel, nonEmptyText, normalizePublicJob,
@@ -125,4 +125,41 @@ export const recruiteeAdapter: SourceAdapter = {
     return boardVerification((await readOffers(company)).filter((offer) => isPublished(offer, now)).map((offer) => offer.title));
   },
   probeUrls: () => [],
+
+  /** The public feed is board-level: a posting it no longer carries, or carries closed, has ended. */
+  async checkPosting(job) {
+    try {
+      const company = CompanySchema.parse({ name: job.companyName, ats: "recruitee", board: job.board });
+      const offers = await readOffers(company);
+      const slug = slugFromUrl(job.url);
+      const offer = offers.find((entry) => entry.id === job.externalId || (slug !== null && entry.slug === slug));
+      if (!offer) return { status: "closed", via: "api", detail: "Recruitee's public feed no longer carries the posting" };
+      return isPublished(offer, new Date().toISOString())
+        ? { status: "open", via: "api", detail: "Recruitee's public feed still carries the posting" }
+        : { status: "closed", via: "api", detail: "Recruitee's feed marks the posting closed or past its close date" };
+    } catch (error) {
+      return { status: "unknown", via: "api", detail: `Recruitee check failed: ${toErrorMessage(error)}` };
+    }
+  },
+
+  /** {company}.recruitee.com/o/{slug}, with or without the /c/new application path. */
+  parsePostingUrl(url) {
+    const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.recruitee\.com$/.exec(url.hostname.toLowerCase());
+    const slug = slugFromUrl(url.toString());
+    return match?.[1] && slug ? { board: match[1], externalId: slug } : null;
+  },
+
+  async fetchPosting(company, externalId, capturedAt) {
+    const offer = (await readOffers(company)).find((entry) => entry.id === externalId || entry.slug === externalId);
+    return offer && isPublished(offer, capturedAt) ? normalizeOffer(offer, company, capturedAt) : null;
+  },
 };
+
+function slugFromUrl(value: string): string | null {
+  try {
+    const [marker, slug] = new URL(value).pathname.split("/").filter((segment) => segment.length > 0);
+    return marker === "o" && slug && postingIdentifier.safeParse(slug).success ? slug : null;
+  } catch {
+    return null;
+  }
+}

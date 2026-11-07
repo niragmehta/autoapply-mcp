@@ -1,0 +1,149 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createServer } from "../src/server.js";
+import { TOOLSET_NAMES, toolsetDescription, type ToolsetName } from "../src/toolsets.js";
+
+/**
+ * docs/TOOLS.md is generated from the live tool schemas so it cannot drift
+ * from the code. Regenerate after changing a tool:
+ *   PowerShell: $env:UPDATE_TOOL_DOCS="1"; npx vitest run test/toolDocs.test.ts; Remove-Item Env:UPDATE_TOOL_DOCS
+ *   bash:       UPDATE_TOOL_DOCS=1 npx vitest run test/toolDocs.test.ts
+ */
+
+const DOC_PATH = new URL("../docs/TOOLS.md", import.meta.url);
+
+type JsonSchema = {
+  type?: string | string[];
+  enum?: unknown[];
+  const?: unknown;
+  anyOf?: JsonSchema[];
+  items?: JsonSchema;
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+};
+
+type ListedTool = {
+  name: string;
+  title?: string;
+  description?: string;
+  inputSchema: JsonSchema;
+  annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+};
+
+type ListedPrompt = { name: string; title?: string; description?: string; arguments?: Array<{ name: string; required?: boolean }> };
+
+async function listed(toolsets: readonly ToolsetName[]): Promise<{ tools: ListedTool[]; prompts: ListedPrompt[] }> {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "tool-docs", version: "1.0.0" });
+  await Promise.all([client.connect(clientTransport), createServer({ toolsets }).connect(serverTransport)]);
+  const tools = (await client.listTools()).tools as ListedTool[];
+  const prompts = (await client.listPrompts()).prompts as ListedPrompt[];
+  await client.close();
+  return { tools, prompts };
+}
+
+const cell = (text: string): string => text.replace(/\s+/g, " ").replace(/\|/g, "\\|").trim();
+
+function typeOf(schema: JsonSchema): string {
+  if (schema.enum) return schema.enum.map((value) => `\`${JSON.stringify(value)}\``).join(" \\| ");
+  if (schema.const !== undefined) return `\`${JSON.stringify(schema.const)}\``;
+  if (schema.anyOf) return schema.anyOf.map(typeOf).join(" \\| ");
+  if (schema.type === "array") return `${typeOf(schema.items ?? {})}[]`;
+  if (Array.isArray(schema.type)) return schema.type.join(" \\| ");
+  return schema.type ?? "any";
+}
+
+function notes(schema: JsonSchema): string {
+  const parts = [schema.description ?? ""];
+  if (schema.default !== undefined) parts.push(`Default \`${JSON.stringify(schema.default)}\`.`);
+  if (schema.minimum !== undefined && schema.maximum !== undefined) parts.push(`${schema.minimum} to ${schema.maximum}.`);
+  return cell(parts.filter(Boolean).join(" "));
+}
+
+function traits(tool: ListedTool): string {
+  const hints = tool.annotations ?? {};
+  const words = [
+    hints.readOnlyHint ? "read-only" : "writes local data",
+    hints.destructiveHint ? "destructive" : null,
+    hints.idempotentHint ? "idempotent" : null,
+    hints.openWorldHint ? "reaches the internet" : null,
+  ].filter((word): word is string => word !== null);
+  return `_${words.join(" · ")}_`;
+}
+
+function renderTool(tool: ListedTool): string[] {
+  const lines = [`### \`${tool.name}\``, "", `**${cell(tool.title ?? tool.name)}.** ${(tool.description ?? "").trim()}`, ""];
+  const properties = Object.entries(tool.inputSchema.properties ?? {});
+  if (properties.length === 0) {
+    lines.push("No input.", "");
+  } else {
+    const required = new Set(tool.inputSchema.required ?? []);
+    lines.push("| Input | Type | Required | Notes |", "|---|---|---|---|");
+    for (const [name, schema] of properties) {
+      lines.push(`| \`${name}\` | ${typeOf(schema)} | ${required.has(name) ? "yes" : "no"} | ${notes(schema)} |`);
+    }
+    lines.push("");
+  }
+  lines.push(traits(tool), "");
+  return lines;
+}
+
+async function renderReference(): Promise<string> {
+  const core = await listed(["core"]);
+  const coreTools = new Set(core.tools.map((tool) => tool.name));
+  const corePrompts = new Set(core.prompts.map((prompt) => prompt.name));
+  const sections: Array<{ name: ToolsetName; tools: ListedTool[]; prompts: ListedPrompt[] }> = [
+    { name: "core", tools: core.tools, prompts: core.prompts },
+  ];
+  for (const name of TOOLSET_NAMES.filter((toolset) => toolset !== "core")) {
+    const both = await listed(["core", name]);
+    sections.push({
+      name,
+      tools: both.tools.filter((tool) => !coreTools.has(tool.name)),
+      prompts: both.prompts.filter((prompt) => !corePrompts.has(prompt.name)),
+    });
+  }
+
+  const total = sections.reduce((sum, section) => sum + section.tools.length, 0);
+  const lines = [
+    "# Tool reference",
+    "",
+    "<!-- Generated by test/toolDocs.test.ts from the live tool schemas. Do not edit by hand. -->",
+    "",
+    `The server registers ${total} tools in ${sections.length} toolsets. Every tool returns JSON text; a failure returns a message that begins with a stable error code in brackets, for example \`[not_approved] no recorded human approval for this application\`.`,
+    "",
+    "Choose toolsets with `AUTOAPPLY_TOOLSETS` (comma-separated; `core` is always on, unset or `all` loads everything). Clients that cap tools per request, such as VS Code at 128 across all servers, work best with only the toolsets in use, for example `AUTOAPPLY_TOOLSETS=core,screening,followup`.",
+    "",
+    "| Toolset | Tools | Prompts |",
+    "|---|---|---|",
+    ...sections.map((section) => `| [\`${section.name}\`](#${section.name}) | ${section.tools.length} | ${section.prompts.length} |`),
+    "",
+  ];
+  for (const section of sections) {
+    lines.push(`## ${section.name}`, "", toolsetDescription(section.name).replace(/^[^:]*:\s*/, "").replace(/\n\s+/g, " "), "");
+    if (section.prompts.length > 0) {
+      lines.push("Prompts:", "");
+      for (const prompt of section.prompts) {
+        const args = (prompt.arguments ?? []).map((arg) => `${arg.name}${arg.required ? "" : "?"}`).join(", ");
+        lines.push(`- \`${prompt.name}\`${args ? ` (${args})` : ""}: ${cell(prompt.description ?? prompt.title ?? "")}`);
+      }
+      lines.push("");
+    }
+    for (const tool of [...section.tools].sort((a, b) => a.name.localeCompare(b.name))) lines.push(...renderTool(tool));
+  }
+  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
+}
+
+describe("docs/TOOLS.md", () => {
+  it("documents every registered tool exactly as the server describes it", async () => {
+    const markdown = await renderReference();
+    if (process.env.UPDATE_TOOL_DOCS) writeFileSync(DOC_PATH, markdown);
+    expect(readFileSync(DOC_PATH, "utf8").replace(/\r\n/g, "\n")).toBe(markdown);
+  });
+});

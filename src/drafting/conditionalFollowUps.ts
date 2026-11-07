@@ -1,5 +1,5 @@
 import type { DraftAnswer } from "../domain/job.js";
-import type { FormQuestion } from "./answers.js";
+import type { FormQuestion } from "./answers/formQuestion.js";
 
 /**
  * Employers routinely pair a yes/no question with a free-text follow-up that

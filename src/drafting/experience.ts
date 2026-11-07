@@ -1,5 +1,5 @@
 import type { Profile } from "../domain/profile.js";
-import { normalizeLabel } from "../submission/formFields.js";
+import { normalizeLabel } from "../submission/form/fieldModel.js";
 import { SKILLS_CITATION, profileSkillsAnswer } from "./skillsAnswer.js";
 
 type Experience = Profile["experience"][number];

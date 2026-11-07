@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import { fallbackAnswersForFields, type FieldDescriptor } from "../src/submission/formFields.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
+import { fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import { makeCampaign, makeProfile } from "./factories.js";
 
 const companyRating = {

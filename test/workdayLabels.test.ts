@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser } from "playwright";
-import { COLLECT_FIELDS } from "../src/submission/browser.js";
-import type { FieldDescriptor } from "../src/submission/formFields.js";
+import { COLLECT_FIELDS } from "../src/submission/browser/collectFields.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 
 // Snap's sponsorship question runs past 200 characters, and the definition that
 // decides it - whether TN counts as sponsorship - comes after the question.

@@ -142,11 +142,6 @@ export function openDatabase(path: string): Db {
   return db;
 }
 
-/** SQLite has no boolean type; store flags as integers. */
-export function toSqlBool(value: boolean): number {
-  return value ? 1 : 0;
-}
-
 export function jsonOrDefault<T>(raw: unknown, fallback: T): T {
   if (typeof raw !== "string" || raw.length === 0) return fallback;
   try {

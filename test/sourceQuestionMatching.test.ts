@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { buildFillPlan, matchFields, optionSearchCandidates, type FieldDescriptor } from "../src/submission/formFields.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
+import { matchFields } from "../src/submission/form/matching.js";
+import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
 import type { DraftAnswer } from "../src/domain/job.js";
 
 const sourceLabel = "How did you hear about this job opportunity?";
 const website: DraftAnswer = {
   questionKey: "website", label: "Website", answer: "https://www.linkedin.com/in/example/",
   source: "profile", citation: "profile.answers.website", requiresHuman: false,
-  required: false, category: "contact",
+  required: false, category: "contact", guidance: "",
 };
 
 function sourceField(type: FieldDescriptor["type"] = "select"): FieldDescriptor {
@@ -65,7 +68,7 @@ describe("source fallback never asserts an unclaimed referral", () => {
   const careersPage: DraftAnswer = {
     questionKey: "discovered_source", label: "How did you hear about us?", answer: "Careers page",
     source: "human", citation: "provided via set_application_content", requiresHuman: true,
-    required: true, category: "employer-specific",
+    required: true, category: "employer-specific", guidance: "",
   };
 
   it("offers no friend or referral option for an impersonal approved answer", () => {

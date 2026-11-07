@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkOption } from "../src/submission/browser.js";
+import { checkOption } from "../src/submission/browser/controls.js";
 
 type Fake = Parameters<typeof checkOption>[0];
 

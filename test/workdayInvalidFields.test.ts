@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearInvalidOptionalFields, parseWorkdayInvalidFieldErrors } from "../src/submission/workdayFlow.js";
+import { clearInvalidOptionalFields, parseWorkdayInvalidFieldErrors } from "../src/submission/workday/wizard.js";
 
 const KLA_BANNER =
   "My Experience * Indicates a required field Errors Found 1. Error - Please provide your Facebook profile: Invalid Facebook URL Work Experience";

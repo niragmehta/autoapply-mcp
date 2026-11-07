@@ -27,4 +27,3 @@ export const RunnerPolicySchema = z
     codeWaitSeconds: z.number().int().min(0).max(1800).default(300),
   })
   .prefault({});
-export type RunnerPolicy = z.infer<typeof RunnerPolicySchema>;

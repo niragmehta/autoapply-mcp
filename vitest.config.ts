@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    setupFiles: ["test/setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
@@ -13,6 +14,7 @@ export default defineConfig({
         "src/cli/**",
         // Requires a live Playwright browser; exercised manually, not in CI.
         "src/submission/browser.ts",
+        "src/submission/browser/**",
       ],
       thresholds: {
         statements: 80,

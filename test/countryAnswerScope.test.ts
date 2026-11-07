@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DraftAnswer } from "../src/domain/job.js";
-import { augmentAnswersForBrowser, buildFillPlan, type FieldDescriptor } from "../src/submission/formFields.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import { augmentAnswersForBrowser } from "../src/submission/form/browserAnswers.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 
 const answer = (label: string, value: string): DraftAnswer => ({
   questionKey: label, label, answer: value, source: "profile", citation: "verified test fact",

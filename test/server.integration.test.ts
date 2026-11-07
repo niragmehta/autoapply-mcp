@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -174,35 +174,44 @@ describe("MCP server", () => {
   it("registers the full toolset", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((tool) => tool.name).sort();
-    expect(names).toEqual(
-      [
-        "add_company_board",
-        "approve_application",
-        "approve_batch",
-        "audit_log",
-        "campaign_status",
-        "discover_jobs",
-        "explain_job",
-        "list_applications",
-        "list_batches",
-        "list_queue",
-        "list_sources",
-        "prepare_application",
-        "prepare_batch",
-        "preview_application",
-        "preview_batch",
-        "record_outcome",
-        "record_submission",
-        "reload_config",
-        "resolve_company_board",
-        "scan_hiring_thread",
-        "scan_source_page",
-        "search_job_sources",
-        "set_application_content",
-        "submit_application",
-        "submit_batch",
-      ].sort(),
-    );
+    const toolsets = {
+      core: [
+        "add_company_board", "approve_application", "approve_batch", "audit_log", "campaign_status", "discover_jobs",
+        "explain_job", "list_applications", "list_batches", "list_queue", "prepare_application", "prepare_batch",
+        "preview_application", "preview_batch", "record_outcome", "record_submission", "reload_config",
+        "resolve_company_board", "scan_hiring_thread", "set_application_content", "submit_application", "submit_batch",
+      ],
+      sources: [
+        "list_sources", "scan_source_page", "search_job_sources", "import_job_alert", "scan_alert_inbox",
+        "fetch_funded_companies", "list_leads", "set_lead_status", "propose_companies", "accept_company_proposals", "harvest_status",
+      ],
+      screening: [
+        "check_liveness", "find_reposts", "posting_legitimacy", "blacklist_company", "list_blacklist", "dismiss_job",
+        "restore_job", "list_dismissed_jobs", "evaluate_job", "evaluate_posting", "save_evaluation_report",
+        "get_evaluation_report", "list_evaluation_reports",
+      ],
+      documents: ["tailor_resume", "cover_letter_scaffold", "save_cover_letter", "render_resume_variant", "document_status"],
+      followup: [
+        "scan_inbox", "review_replies", "confirm_reply", "dismiss_reply", "classify_reply", "followups_due", "mark_followup",
+        "close_stale_applications", "interview_calendar_file", "campaign_analytics", "export_tracker",
+      ],
+      career: [
+        "story_bank_scaffold", "save_story", "list_stories", "delete_story", "match_stories_to_job", "interview_context",
+        "schedule_interview", "update_interview", "save_interview_session", "list_interviews", "save_company_note",
+        "company_notes", "save_contact", "list_contacts", "outreach_scaffold", "save_outreach_draft",
+        "list_outreach_drafts", "mark_outreach", "record_offer", "update_offer", "list_offers", "compare_offers",
+        "negotiation_plan", "contract_checklist",
+      ],
+      onboarding: ["profile_status", "update_profile", "update_campaign", "import_resume_text"],
+      runs: ["start_run", "run_status", "list_runs", "cancel_run", "run_logs"],
+    };
+    expect(names).toEqual(Object.values(toolsets).flat().sort());
+    expect(names).toHaveLength(95);
+  });
+
+  it("keeps the advertised server version in step with package.json", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(client.getServerVersion()?.version).toBe(pkg.version);
   });
 
   it("runs the full pipeline from discovery to a guarded submission", async () => {

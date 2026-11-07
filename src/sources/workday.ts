@@ -1,11 +1,12 @@
 import type { Company } from "../domain/campaign.js";
 import type { Job } from "../domain/job.js";
-import { AppError } from "../util/errors.js";
+import { AppError, toErrorMessage } from "../util/errors.js";
 import { logger } from "../util/logger.js";
-import { fetchJson } from "./http.js";
+import { fetchJson, userAgent } from "./http.js";
 import { asString, asStringArray, normalizeJob } from "./normalize.js";
+import { fetchSourceResponse } from "./sourceRedirects.js";
 import { publishedDate } from "./sourceValidation.js";
-import type { BoardVerification, SourceAdapter } from "./types.js";
+import type { BoardVerification, PostingCheck, PostingRef, SourceAdapter } from "./types.js";
 
 /**
  * Workday "CXS" public career-site API.
@@ -205,7 +206,6 @@ export const workdayAdapter: SourceAdapter = {
     const board = parseBoard(company.board);
     const base = apiBase(board);
     const paths = await listPaths(company, board);
-    const now = new Date(capturedAt);
     const jobs: Job[] = [];
 
     for (const path of paths) {
@@ -223,28 +223,7 @@ export const workdayAdapter: SourceAdapter = {
       }
 
       if (detail.posted === false || detail.canApply === false) continue;
-
-      const locationValues = locations(detail);
-      const applyUrl = tenantHostUrl(asString(detail.externalUrl), board, path);
-
-      jobs.push(
-        normalizeJob(
-          {
-            company,
-            externalId: asString(detail.id) || asString(detail.jobReqId),
-            title: asString(detail.title),
-            locations: locationValues,
-            url: applyUrl,
-            applyUrl,
-            descriptionHtml: asString(detail.jobDescription),
-            postedAt: postingDate(detail, now),
-            isRemote: isRemote(detail, locationValues),
-            employmentType: asString(detail.timeType),
-            country: publishedCountry(detail),
-          },
-          capturedAt,
-        ),
-      );
+      jobs.push(toJob(company, board, path, detail, capturedAt));
     }
 
     return jobs;
@@ -294,4 +273,142 @@ export const workdayAdapter: SourceAdapter = {
   probeUrls(): string[] {
     return [];
   },
+
+  /**
+   * Re-reads the posting's CXS detail. Workday answers 404 for a removed
+   * posting and a structured 403 (errorCode S22) for a withdrawn one; a
+   * detail with `posted` or `canApply` false no longer takes applications.
+   */
+  async checkPosting(job: Job): Promise<PostingCheck> {
+    const result = (status: PostingCheck["status"], detail: string): PostingCheck => ({ status, via: "api", detail });
+    try {
+      const board = parseBoard(job.board);
+      const path = jobPathOf(job.url) ?? jobPathOf(job.applyUrl);
+      if (!path) return result("unknown", "the stored posting URL has no Workday /job/ path");
+      const { status, payload } = await readDetail(board, path);
+      if (status === 404) return result("closed", "Workday no longer has the posting (404)");
+      if (status === 403 && errorCodeOf(payload) === "S22") return result("closed", "Workday reports the posting withdrawn (403 S22)");
+      if (status !== 200) return result("unknown", `Workday answered HTTP ${status}`);
+      const detail = (payload as { jobPostingInfo?: WorkdayDetail } | null)?.jobPostingInfo;
+      if (!detail) return result("unknown", "Workday answered without posting details");
+      if (detail.posted === false) return result("closed", "Workday marks the posting unpublished");
+      if (detail.canApply === false) return result("closed", "Workday no longer accepts applications for the posting");
+      return result("open", "Workday still publishes the posting and accepts applications");
+    } catch (error) {
+      return result("unknown", `Workday check failed: ${toErrorMessage(error)}`);
+    }
+  },
+
+  /**
+   * `{tenant}.{wdN}.myworkdayjobs.com[/{locale}]/{site}/job/...` and
+   * `{wdN}.myworkdaysite.com[/{locale}]/recruiting/{tenant}/{site}/job/...`.
+   * Workday addresses a posting by its `/job/...` path, so that path is the
+   * reference's externalId.
+   */
+  parsePostingUrl(url: URL): PostingRef | null {
+    const host = url.hostname.toLowerCase();
+    const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
+    const parts = LOCALE_SEGMENT.test(segments[0] ?? "") ? segments.slice(1) : segments;
+    let tenant: string | undefined;
+    let datacenter: string | undefined;
+    let rest: string[];
+    const tenantHost = /^([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com$/.exec(host);
+    const siteHost = /^(wd\d+)\.myworkdaysite\.com$/.exec(host);
+    if (tenantHost) {
+      [, tenant, datacenter] = tenantHost;
+      rest = parts;
+    } else if (siteHost && parts[0] === "recruiting") {
+      datacenter = siteHost[1];
+      tenant = parts[1];
+      rest = parts.slice(2);
+    } else {
+      return null;
+    }
+    const [site, marker, ...jobPath] = rest;
+    if (!tenant || !datacenter || !site || marker !== "job" || jobPath.length === 0) return null;
+    if (!WORKDAY_TOKEN.test(tenant) || !WORKDAY_TOKEN.test(site) || jobPath.some((part) => part === "..")) return null;
+    return { board: `${tenant}/${datacenter}/${site}`, externalId: `/job/${jobPath.join("/")}` };
+  },
+
+  async fetchPosting(company: Company, externalId: string, capturedAt: string): Promise<Job | null> {
+    if (!externalId.startsWith("/job/") || externalId.split("/").includes("..")) {
+      throw new AppError("invalid_posting_id", "Workday postings are addressed by their /job/ path");
+    }
+    const board = parseBoard(company.board);
+    try {
+      const payload = await fetchJson<{ jobPostingInfo?: WorkdayDetail }>(`${apiBase(board)}${externalId}`);
+      const detail = payload.jobPostingInfo;
+      if (!detail || detail.posted === false || detail.canApply === false) return null;
+      return toJob(company, board, externalId, detail, capturedAt);
+    } catch (error) {
+      if (error instanceof AppError && error.code === "not_found") return null;
+      throw error;
+    }
+  },
 };
+
+const LOCALE_SEGMENT = /^[a-z]{2}-[A-Z]{2}$/;
+const WORKDAY_TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
+
+function toJob(company: Company, board: WorkdayBoard, path: string, detail: WorkdayDetail, capturedAt: string): Job {
+  const locationValues = locations(detail);
+  const applyUrl = tenantHostUrl(asString(detail.externalUrl), board, path);
+  return normalizeJob(
+    {
+      company,
+      externalId: asString(detail.id) || asString(detail.jobReqId),
+      title: asString(detail.title),
+      locations: locationValues,
+      url: applyUrl,
+      applyUrl,
+      descriptionHtml: asString(detail.jobDescription),
+      postedAt: postingDate(detail, new Date(capturedAt)),
+      isRemote: isRemote(detail, locationValues),
+      employmentType: asString(detail.timeType),
+      country: publishedCountry(detail),
+    },
+    capturedAt,
+  );
+}
+
+/** The `/job/...` part of a stored posting URL, locale prefix and all ignored. */
+function jobPathOf(value: string): string | null {
+  let pathname: string;
+  try {
+    pathname = new URL(value).pathname;
+  } catch {
+    return null;
+  }
+  const index = pathname.indexOf("/job/");
+  if (index < 0) return null;
+  const path = pathname.slice(index);
+  return path.split("/").includes("..") ? null : path;
+}
+
+function errorCodeOf(payload: unknown): string {
+  return payload !== null && typeof payload === "object" ? asString((payload as { errorCode?: unknown }).errorCode) : "";
+}
+
+/**
+ * One detail read that keeps the status and body of a refusal. The shared
+ * client drops the body of a 403, and a withdrawn posting is told apart from
+ * an access block only by the body's error code.
+ */
+async function readDetail(board: WorkdayBoard, path: string): Promise<{ status: number; payload: unknown }> {
+  const host = `${board.tenant}.${board.datacenter}.myworkdayjobs.com`;
+  const response = await fetchSourceResponse(
+    `${apiBase(board)}${path}`,
+    {
+      method: "GET",
+      headers: { accept: "application/json", "user-agent": userAgent(), "accept-language": "en-US,en;q=0.9" },
+      signal: AbortSignal.timeout(12_000),
+    },
+    [host],
+  );
+  const text = await response.text();
+  try {
+    return { status: response.status, payload: JSON.parse(text) as unknown };
+  } catch {
+    return { status: response.status, payload: null };
+  }
+}

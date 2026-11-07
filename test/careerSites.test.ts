@@ -1,17 +1,11 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DraftAnswerSchema, type DraftAnswer } from "../src/domain/job.js";
-import {
-  AMAZON_CONFIRMATION,
-  careerBrowserChannel,
-  careerProfileDir,
-  careerSiteFor,
-  googleConfirmed,
-  googleStage,
-  metaConfirmed,
-  preferredLocationIndex,
-  resumeUploadName,
-} from "../src/submission/careerSites.js";
+import { careerBrowserChannel, careerProfileDir, careerSiteFor } from "../src/submission/careerSites.js";
+import { AMAZON_CONFIRMATION } from "../src/submission/sites/amazon.js";
+import { googleConfirmed, googleStage } from "../src/submission/sites/google.js";
+import { preferredLocationIndex, resumeUploadName } from "../src/submission/sites/helpers.js";
+import { metaConfirmed } from "../src/submission/sites/meta.js";
 
 const GOOGLE_APPLY = "https://www.google.com/about/careers/applications/apply/abc123";
 const GOOGLE_AFTER_APPLY = "https://www.google.com/about/careers/applications/";

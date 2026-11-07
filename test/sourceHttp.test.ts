@@ -34,7 +34,7 @@ describe("bounded source HTTP", () => {
     "https://user:password@api.smartrecruiters.com/jobs",
     "https://api.smartrecruiters.com:8443/jobs",
   ])("refuses unsafe redirect %s without forwarding credentials", async (location) => {
-    const fetch = vi.fn(async () => new Response(null, { status: 302, headers: { location } }));
+    const fetch = vi.fn(async (_url: string | URL, _init?: RequestInit) => new Response(null, { status: 302, headers: { location } }));
     vi.stubGlobal("fetch", fetch);
     await expect(fetchJson("https://api.smartrecruiters.com/jobs", {
       allowedHosts: ["api.smartrecruiters.com"],

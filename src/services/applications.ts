@@ -11,9 +11,12 @@ import {
 import { appendEvent } from "../db/repositories/events.js";
 import { applicationCountsByCompany, getEvaluation, getJob } from "../db/repositories/jobs.js";
 import type { Application, DraftAnswer, Job } from "../domain/job.js";
-import { unresolvedRequired, type FormQuestion } from "../drafting/answers.js";
+import { unresolvedRequired } from "../drafting/answers.js";
+import type { FormQuestion } from "../drafting/answers/formQuestion.js";
 import { prepareApplicationFor } from "../drafting/prepare.js";
-import { runApplicationForm, type BrowserRunResult } from "../submission/browser.js";
+import { checkLiveness, livenessPreflight } from "../hygiene/liveness.js";
+import { runApplicationForm } from "../submission/browser.js";
+import type { BrowserRunResult } from "../submission/browser/types.js";
 import { mergeDiscoveredQuestions } from "../submission/discoveredQuestions.js";
 import { experienceResolverFor } from "../submission/experienceResolver.js";
 import { checkSubmissionAllowed, startOfDayIso } from "../submission/guards.js";
@@ -71,6 +74,19 @@ export async function prepareApplication(workspace: Workspace, input: PrepareInp
   const job = getJob(workspace.db, input.jobId);
   if (!job) throw new AppError("job_not_found", `no job stored with id ${input.jobId}`);
 
+  // A closed posting is not worth a packet. Only a confirmed closure stops
+  // here; an unknown verdict never blocks.
+  if (workspace.campaign.hygiene.liveness.beforePrepare && job.ats !== "external") {
+    const liveness = await checkLiveness(workspace, job);
+    if (liveness.status === "closed") {
+      throw new AppError(
+        "posting_closed",
+        `${job.companyName} is no longer taking applications for "${job.title}" (${liveness.detail}, checked ${liveness.checkedAt}). If that is wrong, re-check with check_liveness force=true.`,
+        { jobId: job.id, via: liveness.via, checkedAt: liveness.checkedAt },
+      );
+    }
+  }
+
   const evaluation = getEvaluation(workspace.db, input.jobId);
   if (!evaluation) throw new AppError("not_evaluated", "run discover_jobs before preparing an application");
   if (evaluation.decision !== "accept" && input.force !== true) {
@@ -97,7 +113,11 @@ export async function prepareApplication(workspace: Workspace, input: PrepareInp
   const { application, report, resumeCheck } = prepared;
   appendEvent(workspace.db, "application.prepared", application.id, { jobId: job.id, status: application.status });
 
-  return {
+  // Tailoring runs last and only replaces the variant PDF when it succeeds; it
+  // reports rather than throws. Loaded lazily because the documents service
+  // imports this module.
+  const { attachTailoredResume } = await import("../documents/prepareHook.js");
+  return attachTailoredResume(workspace, {
     applicationId: application.id,
     status: application.status,
     packetHash: application.packetHash,
@@ -119,7 +139,7 @@ export async function prepareApplication(workspace: Workspace, input: PrepareInp
       : prepared.outstanding.length > 0
         ? "Answer the flagged questions with set_application_content, then approve_application."
         : "Review with preview_application, then approve_application.",
-  };
+  });
 }
 
 export type ContentInput = {
@@ -314,6 +334,17 @@ export async function submitApplication(workspace: Workspace, input: SubmitInput
   if (!guard.allowed) {
     appendEvent(workspace.db, "submission.blocked", application.id, { code: guard.code, mode });
     throw new AppError(guard.code, guard.reason, { applicationId: application.id, mode, waitSeconds: guard.waitSeconds });
+  }
+
+  // Only a confirmed closure stops a submission; an unconfirmed check proceeds.
+  const liveness = await livenessPreflight(workspace, application.id);
+  if (!liveness.ok) {
+    appendEvent(workspace.db, "submission.blocked", application.id, { code: "posting_closed", mode });
+    throw new AppError(
+      "posting_closed",
+      `${job.companyName} is no longer taking applications for "${job.title}" (${liveness.reason ?? "closed"}). If that is wrong, re-check with check_liveness force=true.`,
+      { applicationId: application.id, mode },
+    );
   }
 
   if (mode === "manual") {

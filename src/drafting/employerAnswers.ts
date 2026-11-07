@@ -1,6 +1,6 @@
 import type { Application, DraftAnswer } from "../domain/job.js";
 import { isDiscoveredQuestionKey } from "../submission/discoveredQuestions.js";
-import { isAiDetectionPrompt, isReservedForHuman } from "../submission/formFields.js";
+import { isAiDetectionPrompt, isReservedForHuman } from "../submission/form/answerBank.js";
 
 /**
  * Boards that publish no question schema - every Workday tenant - reveal their

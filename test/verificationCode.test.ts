@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  detectVerificationCodeGate,
-  fillSegmentedCode,
-  submitVerificationCode,
-  waitForSubmissionOutcome,
-} from "../src/submission/browser.js";
+import { detectVerificationCodeGate, waitForSubmissionOutcome } from "../src/submission/browser/submit.js";
+import { fillSegmentedCode, submitVerificationCode } from "../src/submission/browser/verification.js";
 
 /**
  * Greenhouse renders the code as one box per character, so a single fill()

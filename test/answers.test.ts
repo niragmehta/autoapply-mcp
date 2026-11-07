@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, unresolvedRequired, type FormQuestion } from "../src/drafting/answers.js";
+import { draftAnswers, unresolvedRequired } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
 import { classifyQuestion, questionCore } from "../src/drafting/blockedQuestions.js";
 import { greenhouseQuestionsToForm } from "../src/drafting/questions.js";
+import type { NarrativeContext } from "../src/drafting/narrative.js";
 import { ProfileSchema } from "../src/domain/profile.js";
-import { makeCampaign, makeProfile } from "./factories.js";
+import { makeBankEntry, makeCampaign, makeProfile } from "./factories.js";
 
 const profile = makeProfile();
 const campaign = makeCampaign();
@@ -471,11 +473,11 @@ describe("authorized narratives on essay questions", () => {
       },
     ],
   });
-  const context = {
+  const context: NarrativeContext = {
     company: "Discord",
-    title: "Staff Software Engineer",
+    role: "Staff Software Engineer",
+    location: "San Francisco, CA",
     topics: ["platform"],
-    trackId: "software-platform",
   };
 
   it("answers an essay question from the candidate's authorized narrative", () => {
@@ -572,14 +574,14 @@ describe("sole consent option", () => {
       ...profile,
       answers: [
         ...profile.answers,
-        {
+        makeBankEntry({
           key: "acknowledgement",
           label: "I acknowledge and agree",
           patterns: ["privacy notice", "i acknowledge"],
           answer: "Yes",
           alternatives: [],
           allowAutoFill: true,
-        },
+        }),
       ],
     };
     const q = question("Please review and acknowledge Roblox's Job Applicant Privacy Notice", {

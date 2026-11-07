@@ -1,8 +1,9 @@
 import type { Company } from "../domain/campaign.js";
 import type { CompensationRange, Job } from "../domain/job.js";
+import { AppError, toErrorMessage } from "../util/errors.js";
 import { fetchJson } from "./http.js";
 import { asString, normalizeJob } from "./normalize.js";
-import type { SourceAdapter } from "./types.js";
+import type { PostingCheck, PostingRef, SourceAdapter } from "./types.js";
 
 /**
  * Greenhouse Job Board API (public, unauthenticated for reads).
@@ -13,6 +14,10 @@ import type { SourceAdapter } from "./types.js";
  */
 
 const BASE = "https://boards-api.greenhouse.io/v1/boards";
+const BOARD_TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
+const JOB_ID = /^\d{1,20}$/;
+/** Liveness must answer quickly; unknown is an acceptable result, a long stall is not. */
+const LIVENESS_REQUEST = { retries: 1, timeoutMs: 12_000 } as const;
 
 type GreenhouseOffice = { name?: unknown; location?: unknown };
 type GreenhousePayRange = { min_cents?: unknown; max_cents?: unknown; currency_type?: unknown; title?: unknown };
@@ -89,28 +94,81 @@ export const greenhouseAdapter: SourceAdapter = {
   async listJobs(company: Company, capturedAt: string): Promise<Job[]> {
     const payload = await fetchJson<{ jobs?: GreenhouseJob[] }>(this.listUrl(company));
     const jobs = payload.jobs ?? [];
-    return jobs.map((job) =>
-      normalizeJob(
-        {
-          company,
-          externalId: String(job.id ?? ""),
-          title: asString(job.title),
-          locations: collectLocations(job),
-          url: asString(job.absolute_url),
-          applyUrl: hostedApplyUrl(company.board, String(job.id ?? ""), asString(job.absolute_url)),
-          descriptionHtml: asString(job.content),
-          postedAt: asString(job.first_published) || asString(job.updated_at) || null,
-          structuredCompensation: structuredPay(job),
-        },
-        capturedAt,
-      ),
-    );
+    return jobs.map((job) => toJob(company, job, capturedAt));
   },
 
   probeUrls(slug: string): string[] {
     return [`${BASE}/${encodeURIComponent(slug)}/jobs`];
   },
+
+  /** The job endpoint answers 404 "Job not found" once a posting is taken down. */
+  async checkPosting(job: Job): Promise<PostingCheck> {
+    try {
+      const payload = await fetchJson<GreenhouseJob>(jobUrl(job.board, job.externalId), LIVENESS_REQUEST);
+      return String(payload.id ?? "") === job.externalId
+        ? { status: "open", via: "api", detail: "Greenhouse still publishes the posting" }
+        : { status: "unknown", via: "api", detail: "Greenhouse answered without this posting's id" };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "not_found") {
+        return { status: "closed", via: "api", detail: "Greenhouse no longer publishes the posting (404 Job not found)" };
+      }
+      return { status: "unknown", via: "api", detail: `Greenhouse check failed: ${toErrorMessage(error)}` };
+    }
+  },
+
+  /**
+   * boards.greenhouse.io/{board}/jobs/{id}, the job-boards host, and the embed
+   * form `/embed/job_app?for={board}&token={id}`. A careers page carrying only
+   * `?gh_jid=` names no board, so it is left to the generic page reader.
+   */
+  parsePostingUrl(url: URL): PostingRef | null {
+    const host = url.hostname.toLowerCase();
+    if (host !== "boards.greenhouse.io" && host !== "job-boards.greenhouse.io") return null;
+    const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
+    if (segments[0] === "embed" && segments[1] === "job_app") {
+      const board = url.searchParams.get("for") ?? "";
+      const token = url.searchParams.get("token") ?? "";
+      return BOARD_TOKEN.test(board) && JOB_ID.test(token) ? { board, externalId: token } : null;
+    }
+    const [board, kind, id] = segments;
+    if (board && kind === "jobs" && id && BOARD_TOKEN.test(board) && JOB_ID.test(id)) return { board, externalId: id };
+    const ghJid = url.searchParams.get("gh_jid") ?? "";
+    if (board && segments.length === 1 && BOARD_TOKEN.test(board) && JOB_ID.test(ghJid)) return { board, externalId: ghJid };
+    return null;
+  },
+
+  async fetchPosting(company: Company, externalId: string, capturedAt: string): Promise<Job | null> {
+    if (!JOB_ID.test(externalId)) throw new AppError("invalid_posting_id", `Greenhouse job ids are numeric, got: ${externalId}`);
+    try {
+      const payload = await fetchJson<GreenhouseJob>(`${jobUrl(company.board, externalId)}?pay_transparency=true`);
+      return toJob(company, payload, capturedAt);
+    } catch (error) {
+      if (error instanceof AppError && error.code === "not_found") return null;
+      throw error;
+    }
+  },
 };
+
+function jobUrl(board: string, externalId: string): string {
+  return `${BASE}/${encodeURIComponent(board)}/jobs/${encodeURIComponent(externalId)}`;
+}
+
+function toJob(company: Company, job: GreenhouseJob, capturedAt: string): Job {
+  return normalizeJob(
+    {
+      company,
+      externalId: String(job.id ?? ""),
+      title: asString(job.title),
+      locations: collectLocations(job),
+      url: asString(job.absolute_url),
+      applyUrl: hostedApplyUrl(company.board, String(job.id ?? ""), asString(job.absolute_url)),
+      descriptionHtml: asString(job.content),
+      postedAt: asString(job.first_published) || asString(job.updated_at) || null,
+      structuredCompensation: structuredPay(job),
+    },
+    capturedAt,
+  );
+}
 
 export type GreenhouseQuestionField = { name?: unknown; type?: unknown; values?: unknown };
 export type GreenhouseQuestion = { label?: unknown; required?: unknown; fields?: GreenhouseQuestionField[] };

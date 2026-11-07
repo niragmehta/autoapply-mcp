@@ -254,6 +254,5 @@ export const ProfileSchema = z.object({
 
 export type Profile = z.infer<typeof ProfileSchema>;
 export type ResumeVariant = z.infer<typeof ResumeVariantSchema>;
-export type ApprovedAnswer = z.infer<typeof ApprovedAnswerSchema>;
 export type Skill = z.infer<typeof SkillSchema>;
 export type Fact = z.infer<typeof FactSchema>;

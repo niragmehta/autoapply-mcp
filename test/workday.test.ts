@@ -104,7 +104,7 @@ describe("workday board parsing", () => {
   });
 
   it("does not probe, because the datacenter and site cannot be guessed", () => {
-    expect(workdayAdapter.probeUrls()).toEqual([]);
+    expect(workdayAdapter.probeUrls("nvidia")).toEqual([]);
   });
 });
 

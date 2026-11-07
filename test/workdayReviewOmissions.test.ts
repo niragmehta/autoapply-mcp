@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reviewOmissions } from "../src/submission/workdayFlow.js";
+import { reviewOmissions } from "../src/submission/workday/wizard.js";
 
 function reviewPage(body: string): Parameters<typeof reviewOmissions>[0] {
   const present = { count: async () => 1 };

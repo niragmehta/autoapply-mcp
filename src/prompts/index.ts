@@ -1,10 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerCareerPrompts } from "./career.js";
-import { registerDocumentPrompts } from "./documents.js";
-import { registerEvaluationPrompts } from "./evaluation.js";
-import { registerFollowupPrompts } from "./followup.js";
 import { PROMPT_GROUND_RULES, userPrompt } from "./helpers.js";
-import { registerOnboardingPrompts } from "./onboarding.js";
+import { registerToolsetPrompts, type ToolsetName } from "../toolsets.js";
 
 const GUIDE = [
   "You are operating autoapply-mcp, a governed job-application pipeline. Walk the candidate through whichever stage they need:",
@@ -21,16 +17,12 @@ const GUIDE = [
   PROMPT_GROUND_RULES,
 ].join("\n");
 
-/** Registers every guided workflow the server offers as an MCP prompt. */
-export function registerPrompts(server: McpServer): void {
+/** Registers the pipeline guide plus the guided workflows of each enabled toolset as MCP prompts. */
+export function registerPrompts(server: McpServer, toolsets: readonly ToolsetName[]): void {
   server.registerPrompt(
     "autoapply_guide",
     { title: "Guide: the whole pipeline", description: "Orients the agent on every stage of the pipeline and where to start." },
     () => userPrompt(GUIDE),
   );
-  registerOnboardingPrompts(server);
-  registerEvaluationPrompts(server);
-  registerDocumentPrompts(server);
-  registerFollowupPrompts(server);
-  registerCareerPrompts(server);
+  registerToolsetPrompts(server, toolsets);
 }

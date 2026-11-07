@@ -1,0 +1,12 @@
+/*
+ * autoapply dashboard: station timetable.
+ * Navy line-map rail, paper ground, ruled white timetables, signal-yellow
+ * notices for what is held for you, one information blue for actions and
+ * selection. See docs/design/DASHBOARD_DESIGN.md. Order matters: tokens first.
+ */
+@import url("/styles/base.css");
+@import url("/styles/controls.css");
+@import url("/styles/data.css");
+@import url("/styles/panels.css");
+@import url("/styles/features.css");
+@import url("/styles/shell.css");

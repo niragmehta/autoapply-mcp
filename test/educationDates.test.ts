@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { resolvePersonal } from "../src/drafting/personal.js";
-import { educationDateLabels } from "../src/submission/formFields.js";
+import { educationDateLabels } from "../src/submission/form/fallbackAnswers.js";
 
 const field = (selectorIndex: number, domId: string) => ({
   selectorIndex,

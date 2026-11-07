@@ -1,47 +1,37 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getWorkspace, reloadWorkspace } from "../config/load.js";
-import { getApplication, listApplications, listOutcomes, recordOutcome } from "../db/repositories/applications.js";
-import { appendEvent, listEvents } from "../db/repositories/events.js";
+import { listApplications, listOutcomes } from "../db/repositories/applications.js";
+import { listEvents } from "../db/repositories/events.js";
 import { getJob } from "../db/repositories/jobs.js";
-import { AppError } from "../util/errors.js";
+import { OutcomeKindSchema, type OutcomeKind } from "../domain/policies/followup.js";
+import { recordApplicationOutcome } from "../followup/outcomes.js";
 import { handler, ok } from "./helpers.js";
 
 /** Outcome tracking, auditing and configuration reload. */
-
-const OUTCOME_STATUSES = [
-  "acknowledged",
-  "recruiter_screen",
-  "interview",
-  "offer",
-  "rejected",
-  "ghosted",
-  "withdrawn",
-] as const;
 
 export function registerTrackingTools(server: McpServer): void {
   server.registerTool(
     "record_outcome",
     {
       title: "Record an application outcome",
-      description: "Appends an outcome to an application's history so conversion rates can be measured per track, tier and company.",
+      description:
+        "Appends an outcome to an application's history so conversion rates can be measured per track, tier and company. 'assessment' covers online tests and take-home exercises.",
       inputSchema: {
         applicationId: z.string().min(1),
-        status: z.enum(OUTCOME_STATUSES),
+        status: OutcomeKindSchema,
         detail: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
     },
-    handler(async (args: { applicationId: string; status: string; detail?: string }) => {
+    handler(async (args: { applicationId: string; status: OutcomeKind; detail?: string }) => {
       const workspace = getWorkspace();
-      const application = getApplication(workspace.db, args.applicationId);
-      if (!application) throw new AppError("application_not_found", `no application ${args.applicationId}`);
-      recordOutcome(workspace.db, application.id, args.status, args.detail ?? "");
-      appendEvent(workspace.db, "outcome.recorded", application.id, { status: args.status });
-      return ok({
-        applicationId: application.id,
-        history: listOutcomes(workspace.db, application.id),
+      const recorded = recordApplicationOutcome(workspace.db, {
+        applicationId: args.applicationId,
+        kind: args.status,
+        detail: args.detail ?? "",
       });
+      return ok({ applicationId: recorded.applicationId, history: recorded.history });
     }),
   );
 

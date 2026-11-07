@@ -2,8 +2,9 @@ import { mkdtempSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { COLLECT_FIELDS, runApplicationForm } from "../src/submission/browser.js";
-import type { FieldDescriptor } from "../src/submission/formFields.js";
+import { runApplicationForm } from "../src/submission/browser.js";
+import { COLLECT_FIELDS } from "../src/submission/browser/collectFields.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import type { SubmissionPacket } from "../src/submission/packet.js";
 import { makeCampaign } from "./factories.js";
 

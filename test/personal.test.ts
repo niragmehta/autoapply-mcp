@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
 import { classifyQuestion } from "../src/drafting/blockedQuestions.js";
 import { autoFillableFields, resolvePersonal } from "../src/drafting/personal.js";
 import { computeManifestHash } from "../src/db/repositories/batches.js";

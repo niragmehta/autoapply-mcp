@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Company } from "../src/domain/campaign.js";
+import { CompanySchema } from "../src/domain/campaign.js";
 import { leverAdapter } from "../src/sources/lever.js";
 
-const company: Company = {
+const company = CompanySchema.parse({
   name: "Lever Example", ats: "lever", board: "lever-example", tier: "B", active: true, tags: [],
-};
+});
 const createdAt = Date.UTC(2026, 7, 17, 12);
 const capturedAt = "2026-09-14T03:00:00.000Z";
 async function readPosting(content: Record<string, unknown>) {

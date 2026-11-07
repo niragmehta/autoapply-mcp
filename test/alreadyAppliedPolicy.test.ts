@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  detectAlreadyApplied,
-  detectSubmissionConfirmation,
-} from "../src/submission/formFields.js";
+import { detectAlreadyApplied, detectSubmissionConfirmation } from "../src/submission/form/pageSignals.js";
 
 const PLAID_BANNER =
   "This job has application limits. We're excited that you're interested in opportunities with us! " +

@@ -37,7 +37,7 @@ const SENSITIVE_CATEGORIES = new Set([
   "clearance",
 ]);
 
-export function isSensitiveCategory(category: string): boolean {
+function isSensitiveCategory(category: string): boolean {
   return SENSITIVE_CATEGORIES.has(category);
 }
 

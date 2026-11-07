@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DraftAnswer } from "../domain/job.js";
-import { bankAnswerFor, type ApprovedAnswerEntry } from "./formFields.js";
+import { bankAnswerFor, type ApprovedAnswerEntry } from "./form/answerBank.js";
 
 /**
  * Only Greenhouse publishes a question schema ahead of time. On Lever, Ashby

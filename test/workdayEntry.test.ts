@@ -1,11 +1,14 @@
 ﻿import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  advanceWorkdayStep,
-  enterWorkdayApplication,
-  recoverWorkdayError,
-  workdayTenant,
-} from "../src/submission/workdayFlow.js";
+import { enterWorkdayApplication, workdayTenant } from "../src/submission/workdayFlow.js";
+import type { Locator, Page } from "../src/submission/workday/types.js";
+import { advanceWorkdayStep, recoverWorkdayError } from "../src/submission/workday/wizard.js";
+
+/** A control the entry walk reads, waits for and clicks; it never queries inside one. */
+type Control = Omit<Locator, "first" | "nth" | "locator"> & {
+  first: () => Control;
+  nth: (index: number) => Control;
+};
 
 /**
  * A Workday tenant reduced to the part the entry walk depends on: which
@@ -50,10 +53,10 @@ class FakeTenant {
     return selector.replace(/^\[data-automation-id="/, "").replace(/"\]$/, "");
   }
 
-  locator(selector: string) {
+  locator(selector: string): Control {
     const id = this.id(selector);
     const self = this;
-    const locator = {
+    const locator: Control = {
       first: () => locator,
       nth: () => locator,
       count: async () => (self.visible.has(id) ? 1 : 0),
@@ -78,8 +81,12 @@ class FakeTenant {
     return locator;
   }
 
-  asPage() {
-    return {
+  /**
+   * The page the walk is handed. Deliberately partial: the entry walk never
+   * touches the keyboard, so the fake has none.
+   */
+  asPage(): Page {
+    const page: Omit<Page, "keyboard" | "locator"> & { locator: (selector: string) => Control } = {
       goto: async () => undefined,
       reload: async () => undefined,
       locator: (selector: string) => this.locator(selector),
@@ -99,6 +106,7 @@ class FakeTenant {
         },
       }),
     };
+    return page as Page;
   }
 }
 
@@ -109,12 +117,15 @@ class FakeTenant {
 class FakeLinkTab {
   readonly opened: string[] = [];
   closed = false;
+  private readonly onOpen: () => void;
+  private readonly text: string;
+  private readonly fails: boolean;
 
-  constructor(
-    private readonly onOpen: () => void,
-    private readonly text = "Your account has been verified. You can now sign in.",
-    private readonly fails = false,
-  ) {}
+  constructor(onOpen: () => void, text = "Your account has been verified. You can now sign in.", fails = false) {
+    this.onOpen = onOpen;
+    this.text = text;
+    this.fails = fails;
+  }
 
   asTab() {
     return {
@@ -729,7 +740,20 @@ describe("recoverWorkdayError", () => {
   function pageShowing(sequence: readonly string[]) {
     let index = 0;
     let reloads = 0;
-    const page = {
+    const showing = (): Locator => ({
+      first: showing,
+      nth: showing,
+      count: async () => 1,
+      click: async () => undefined,
+      fill: async () => undefined,
+      isVisible: async () => true,
+      waitFor: async () => undefined,
+      locator: showing,
+      allInnerTexts: async () => [sequence[index]!],
+      innerText: async () => sequence[index]!,
+    });
+    // Deliberately partial: recovery never types into the page.
+    const page: Omit<Page, "keyboard"> & { keyboard: Pick<Page["keyboard"], "press"> } = {
       goto: async () => undefined,
       url: () => "https://nvidia.wd5.myworkdayjobs.com/x",
       waitForTimeout: async () => undefined,
@@ -741,20 +765,9 @@ describe("recoverWorkdayError", () => {
         if (index < sequence.length - 1) index += 1;
         return undefined;
       },
-      locator: () => ({
-        first: () => page.locator(),
-        nth: () => page.locator(),
-        count: async () => 1,
-        click: async () => undefined,
-        fill: async () => undefined,
-        isVisible: async () => true,
-        waitFor: async () => undefined,
-        locator: () => page.locator(),
-        allInnerTexts: async () => [sequence[index]!],
-        innerText: async () => sequence[index]!,
-      }),
-    } as never;
-    return { page, reloads: () => reloads };
+      locator: showing,
+    };
+    return { page: page as Page, reloads: () => reloads };
   }
 
   it("refreshes until the step comes back", async () => {

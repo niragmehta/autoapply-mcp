@@ -1,6 +1,8 @@
 import { ENTERPRISE_CATALOG } from "./batches/enterprise.js";
 import { SMB_CATALOG } from "./batches/smb.js";
+import { LEAD_SOURCE_CATALOG } from "./leads/catalogEntries.js";
 import type { SourceReadiness } from "./leadTypes.js";
+import { isRestrictedSource, isSourceEnabled } from "./leads/restricted.js";
 
 export interface SourceCatalogEntry {
   readonly id: string;
@@ -98,6 +100,7 @@ const SOURCE_CATALOG: readonly SourceCatalogEntry[] = [
       "Rate limits are 5 requests/second and 600/minute; this connector retains at least 700ms per-host throttling.",
     ],
   },
+  ...LEAD_SOURCE_CATALOG,
   {
     id: "a16z", label: "a16z portfolio jobs", url: "https://jobs.a16z.com/jobs",
     docs: "https://jobs.a16z.com/jobs",
@@ -131,6 +134,9 @@ export function listSourceCatalog(): readonly SourceCatalogEntry[] {
     ...source,
     ...(source.id === "foorilla"
       ? { readiness: foorillaConfigured ? "credentials-configured" as const : "credentials-required" as const }
+      : {}),
+    ...(isRestrictedSource(source.id)
+      ? { readiness: isSourceEnabled(source.id) ? "opted-in" as const : "opt-in-required" as const }
       : {}),
     limitations: [...source.limitations],
   }));

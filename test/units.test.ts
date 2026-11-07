@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplicationSchema, EvaluationSchema, JobSchema } from "../src/domain/job.js";
 import { CampaignSchema, CompanySchema, SubmissionPolicySchema } from "../src/domain/campaign.js";
 import { ProfileSchema } from "../src/domain/profile.js";
-import { adapterFor, allAdapters, discoverJobs, resolveBoards } from "../src/sources/registry.js";
+import { ENTERPRISE_ADAPTERS } from "../src/sources/batches/enterprise.js";
+import { SMB_ADAPTERS } from "../src/sources/batches/smb.js";
+import { CORE_ADAPTERS, adapterFor, allAdapters, discoverJobs, resolveBoards } from "../src/sources/registry.js";
 import { isSameAllowedSite } from "../src/submission/allowlist.js";
 import { AppError, isAppError, toErrorMessage } from "../src/util/errors.js";
 import { daysBetween, newId, parseDateSafe, shortHash } from "../src/util/hash.js";
@@ -83,11 +85,15 @@ describe("source registry", () => {
     expect(adapterFor("meta").kind).toBe("meta");
     expect(adapterFor("amazon").kind).toBe("amazon");
     expect(adapterFor("apple").kind).toBe("apple");
-    expect(allAdapters()).toHaveLength(11);
+    expect(Object.keys(CORE_ADAPTERS)).toHaveLength(11);
+    expect(Object.keys(ENTERPRISE_ADAPTERS)).toHaveLength(12);
+    expect(Object.keys(SMB_ADAPTERS)).toHaveLength(12);
+    expect(allAdapters()).toHaveLength(11 + 12 + 12);
+    for (const adapter of allAdapters()) expect(adapterFor(adapter.kind)).toBe(adapter);
   });
 
-  it("throws for an unknown ATS", () => {
-    expect(() => adapterFor("taleo" as never)).toThrow(/no adapter registered/);
+  it("throws for an ATS with no adapter", () => {
+    expect(() => adapterFor("external")).toThrow(/no adapter registered/);
   });
 
   it("builds board and list urls", () => {

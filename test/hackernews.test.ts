@@ -18,13 +18,13 @@ describe("hacker news lead extraction", () => {
   it("reads a board link through HN's escaped slashes", () => {
     const leads = extractLeads({ children: [comment(ENCODED_GREENHOUSE)] });
     expect(leads).toHaveLength(1);
-    expect(leads[0].ats).toBe("greenhouse");
-    expect(leads[0].board).toBe("baton");
+    expect(leads[0]?.ats).toBe("greenhouse");
+    expect(leads[0]?.board).toBe("baton");
   });
 
   it("takes the company name from the post's leading field", () => {
     const leads = extractLeads({ children: [comment(ENCODED_GREENHOUSE)] });
-    expect(leads[0].companyName).toBe("Baton");
+    expect(leads[0]?.companyName).toBe("Baton");
   });
 
   it("falls back to the board slug when the post opens with prose", () => {
@@ -35,14 +35,14 @@ describe("hacker news lead extraction", () => {
         ),
       ],
     });
-    expect(leads[0].companyName).toBe("Turquoise Health");
+    expect(leads[0]?.companyName).toBe("Turquoise Health");
   });
 
   it("falls back to the board slug when the post opens with a location", () => {
     const leads = extractLeads({
       children: [comment('NYC | ONSITE<p><a href="https:&#x2F;&#x2F;jobs.ashbyhq.com&#x2F;norm-ai">apply</a>')],
     });
-    expect(leads[0].companyName).toBe("Norm Ai");
+    expect(leads[0]?.companyName).toBe("Norm Ai");
   });
 
   it("recognises each supported ATS", () => {
@@ -114,6 +114,6 @@ describe("hacker news lead extraction", () => {
     const leads = extractLeads({
       children: [comment("Acme | apply at https:&#x2F;&#x2F;jobs.lever.co&#x2F;acme.")],
     });
-    expect(leads[0].board).toBe("acme");
+    expect(leads[0]?.board).toBe("acme");
   });
 });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Company } from "../domain/campaign.js";
 import type { Job, WorkplaceType } from "../domain/job.js";
-import { AppError } from "../util/errors.js";
+import { AppError, toErrorMessage } from "../util/errors.js";
 import { fetchJson } from "./http.js";
 import {
   boardToken, boardVerification, locationLabel, nonEmptyText, normalizePublicJob,
@@ -119,4 +119,41 @@ export const workableAdapter: SourceAdapter = {
     return boardVerification((await readBoard(company)).map(({ posting }) => posting.title));
   },
   probeUrls: () => [],
+
+  /**
+   * The per-job endpoint answers 404 "Job not found" for a removed posting and
+   * `state: "published"` for a live one; any other state is left unknown.
+   */
+  async checkPosting(job) {
+    try {
+      const shortcode = postingIdentifier.parse(job.externalId);
+      const payload = await fetchJson<{ state?: unknown }>(
+        `https://apply.workable.com/api/v2/accounts/${boardToken(job.board)}/jobs/${shortcode}`,
+        { allowedHosts: ALLOWED_HOSTS, retries: 1, timeoutMs: 12_000 },
+      );
+      const state = typeof payload.state === "string" ? payload.state : "";
+      if (state === "published") return { status: "open", via: "api", detail: "Workable reports the posting published" };
+      if (/^(?:closed|archived)$/i.test(state)) return { status: "closed", via: "api", detail: `Workable reports the posting ${state}` };
+      return { status: "unknown", via: "api", detail: `Workable reports state "${state || "none"}"` };
+    } catch (error) {
+      if (error instanceof AppError && error.code === "not_found") {
+        return { status: "closed", via: "api", detail: "Workable no longer has the posting (404 Job not found)" };
+      }
+      return { status: "unknown", via: "api", detail: `Workable check failed: ${toErrorMessage(error)}` };
+    }
+  },
+
+  /** apply.workable.com/{account}/j/{shortcode}; the bare /j/{shortcode} share link names no account. */
+  parsePostingUrl(url) {
+    if (url.hostname.toLowerCase() !== "apply.workable.com") return null;
+    const [account, marker, shortcode, rest] = url.pathname.split("/").filter((segment) => segment.length > 0);
+    if (!account || marker !== "j" || !shortcode || (rest !== undefined && rest !== "apply")) return null;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(account) || !postingIdentifier.safeParse(shortcode).success) return null;
+    return { board: account, externalId: shortcode };
+  },
+
+  async fetchPosting(company, externalId, capturedAt) {
+    const match = (await readBoard(company)).find(({ posting }) => posting.shortcode === externalId);
+    return match ? normalizePosting(match.posting, company, capturedAt, match.locations) : null;
+  },
 };

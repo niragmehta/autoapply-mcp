@@ -1,6 +1,6 @@
 import type { Profile } from "../domain/profile.js";
 import { asksCurrentRoleEnd, resolveExperience } from "../drafting/experience.js";
-import type { PersonalResolver } from "./formFields.js";
+import type { PersonalResolver } from "./form/answerBank.js";
 
 /**
  * Exposes the candidate's employment history to the browser fill.

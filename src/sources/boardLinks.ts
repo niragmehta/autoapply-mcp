@@ -1,9 +1,45 @@
 import type { AtsKind, Company } from "../domain/campaign.js";
 import { htmlToText } from "../text/html.js";
+import { ENTERPRISE_ADAPTERS } from "./batches/enterprise.js";
+import { SMB_ADAPTERS } from "./batches/smb.js";
+import type { PostingRef, SourceAdapter } from "./types.js";
 
 export type BoardLink = { ats: AtsKind; board: string; region: Company["region"]; sourceUrl: string };
 const TOKEN = /^[a-z0-9][a-z0-9_.-]*$/i;
+const ADAPTER_BOARD = /^[a-z0-9][a-z0-9_./-]{0,199}$/i;
 const RESERVED = new Set(["j", "o", "jobs", "job", "embed", "api", "www"]);
+
+/**
+ * Phenom and SuccessFactors serve postings from employers' own domains under
+ * common path shapes, so a link on an unrelated site could pass for theirs.
+ * Every other newer adapter recognises only its vendor's domains or a
+ * vendor-specific path.
+ */
+const GENERIC_PATH_KINDS: ReadonlySet<AtsKind> = new Set(["phenom", "successfactors"]);
+
+const URL_ADAPTERS: readonly SourceAdapter[] = [...Object.values(SMB_ADAPTERS), ...Object.values(ENTERPRISE_ADAPTERS)].filter(
+  (adapter): adapter is SourceAdapter =>
+    adapter !== undefined && adapter.parsePostingUrl !== undefined && !GENERIC_PATH_KINDS.has(adapter.kind),
+);
+
+function postingRef(adapter: SourceAdapter, url: URL): PostingRef | null {
+  try {
+    return adapter.parsePostingUrl?.(url) ?? null;
+  } catch {
+    // An adapter that cannot read a link simply does not recognise it.
+    return null;
+  }
+}
+
+function identifyByAdapter(url: URL): { ats: AtsKind; board: string; region?: Company["region"] } | null {
+  for (const adapter of URL_ADAPTERS) {
+    const ref = postingRef(adapter, url);
+    if (ref && ADAPTER_BOARD.test(ref.board) && !ref.board.split("/").includes("..")) {
+      return { ats: adapter.kind, board: ref.board, region: ref.region };
+    }
+  }
+  return null;
+}
 
 function identifyBoard(url: URL): { ats: AtsKind; board: string } | null {
   const parts = url.pathname.split("/").filter(Boolean);
@@ -39,9 +75,14 @@ export function boardFromUrl(raw: string): BoardLink | null {
   }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
   const board = identifyBoard(url);
-  if (!board || RESERVED.has(board.board.toLowerCase())) return null;
-  if (board.ats !== "workday" && !TOKEN.test(board.board)) return null;
-  return { ...board, region: url.hostname.includes(".eu.") ? "eu" : "global", sourceUrl: url.toString() };
+  if (board) {
+    if (RESERVED.has(board.board.toLowerCase())) return null;
+    if (board.ats !== "workday" && !TOKEN.test(board.board)) return null;
+    return { ...board, region: url.hostname.includes(".eu.") ? "eu" : "global", sourceUrl: url.toString() };
+  }
+  const recognised = identifyByAdapter(url);
+  if (!recognised || RESERVED.has(recognised.board.toLowerCase())) return null;
+  return { ats: recognised.ats, board: recognised.board, region: recognised.region ?? "global", sourceUrl: url.toString() };
 }
 
 export function extractBoardLinks(html: string): BoardLink[] {

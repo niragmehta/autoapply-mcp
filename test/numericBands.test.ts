@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { pickNumericBandIndex } from "../src/drafting/numericBands.js";
 import { selectBestOption } from "../src/drafting/options.js";
-import { pickOptionIndex } from "../src/submission/formFields.js";
+import { pickOptionIndex } from "../src/submission/form/optionMatching.js";
 
 /** The real option set from Figma's "Software Engineer, Traffic" posting. */
 const FIGMA_BANDS = ["0 - 2 years", "3 - 4 years", "5 - 10 years", "10+ years"];

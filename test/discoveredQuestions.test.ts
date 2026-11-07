@@ -26,7 +26,7 @@ describe("questions discovered on the live form", () => {
     const merged = mergeDiscoveredQuestions([], ["How many years of Go experience do you have?"]);
 
     expect(merged).toHaveLength(1);
-    const [question] = merged;
+    const question = merged[0]!;
     expect(question.label).toBe("How many years of Go experience do you have?");
     expect(question.requiresHuman).toBe(true);
     expect(question.required).toBe(true);
@@ -39,7 +39,8 @@ describe("questions discovered on the live form", () => {
     const first = mergeDiscoveredQuestions([], ["What would you build first?"]);
     const second = mergeDiscoveredQuestions([], ["What would you build first?"]);
 
-    expect(first[0].questionKey).toBe(second[0].questionKey);
+    expect(first[0]).toBeDefined();
+    expect(first[0]?.questionKey).toBe(second[0]?.questionKey);
   });
 
   it("treats whitespace and casing differences as the same question", () => {
@@ -55,8 +56,8 @@ describe("questions discovered on the live form", () => {
     const merged = mergeDiscoveredQuestions(existing, [label]);
 
     expect(merged).toHaveLength(1);
-    expect(merged[0].answer).toBe("A metrics layer");
-    expect(merged[0].source).toBe("human");
+    expect(merged[0]?.answer).toBe("A metrics layer");
+    expect(merged[0]?.source).toBe("human");
   });
 
   it("does not duplicate a label the packet already carries under another key", () => {
@@ -65,7 +66,7 @@ describe("questions discovered on the live form", () => {
     const merged = mergeDiscoveredQuestions(existing, ["LinkedIn Profile"]);
 
     expect(merged).toHaveLength(1);
-    expect(merged[0].questionKey).toBe("question_9002");
+    expect(merged[0]?.questionKey).toBe("question_9002");
   });
 
   it("keeps every distinct question from one aborted run and ignores blank labels", () => {

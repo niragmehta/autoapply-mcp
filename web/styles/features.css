@@ -1,0 +1,608 @@
+/* Patterns added with the after-applying pages: run picker, rates, replies, drafts, info rows, bulk bar, Markdown, analytics. */
+
+/* ---------- Text tones (always alongside words, never alone) ---------- */
+
+.text-ok {
+  color: var(--ok-ink);
+}
+
+.text-warn {
+  color: var(--warn-ink);
+}
+
+.text-bad {
+  color: var(--bad-ink);
+}
+
+.prose {
+  max-width: 75ch;
+  font-size: var(--fs-base);
+  line-height: 1.55;
+}
+
+.plain-list {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+/* ---------- Rates: the share with the count behind it ---------- */
+
+.rate {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s2);
+  white-space: nowrap;
+}
+
+.rate__value {
+  min-width: 2.75rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.rate__n {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+/* A small sample keeps its number but loses its weight, so it cannot be skimmed as a finding. */
+.rate--small .rate__value {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.rate--small .rate__n::after {
+  content: " · small sample";
+}
+
+/* ---------- Tabs ---------- */
+
+.tabs__count {
+  margin-left: var(--s2);
+  padding: 0 0.35rem;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  line-height: 1.35rem;
+}
+
+.tabpanel:focus-visible {
+  border-radius: var(--radius-panel);
+}
+
+/* ---------- Run picker ---------- */
+
+.runner {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+}
+
+.runner__types {
+  padding: var(--s4) 0 var(--s4);
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.runner__title {
+  padding: 0 var(--s4) var(--s3);
+}
+
+.runner__form {
+  min-width: 0;
+  padding: var(--s4) var(--s5) var(--s5);
+}
+
+.runner__form-title {
+  margin-bottom: var(--s2);
+  font-size: var(--fs-lg);
+}
+
+.runtypes {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Narrow screens pick the run type from a select so the form stays in view. */
+.runtype-select {
+  display: none;
+}
+
+.runtypes__label {
+  padding: 0 var(--s4) var(--s1);
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.runtype {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding: 0.375rem var(--s4);
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background-color 150ms var(--ease-out);
+}
+
+.runtype input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.runtype:hover {
+  background: var(--surface-hover);
+}
+
+.runtype.is-current {
+  background: var(--accent-soft);
+}
+
+.runtype:has(input:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.runtype__name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.runtype.is-current .runtype__name {
+  color: var(--info-ink);
+}
+
+.runtype__blurb {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+}
+
+/* ---------- Info rows (the Overview's after-applying timetable) ---------- */
+
+.info-row {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  color: inherit;
+  text-decoration: none;
+}
+
+.info-row:hover {
+  background: var(--surface-hover);
+  color: inherit;
+}
+
+.info-row__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Held work keeps the yellow mark the route line uses for held stations. */
+.info-row__held {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid var(--board);
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.info-row .icon {
+  color: var(--ink-3);
+}
+
+/* ---------- Bulk selection ---------- */
+
+.pick {
+  width: 1rem;
+  height: 1rem;
+  margin: 0.15rem 0 0;
+  accent-color: var(--accent);
+}
+
+.bulkbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  margin-bottom: var(--s3);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-panel);
+  background: var(--accent-soft);
+}
+
+.bulkbar__count {
+  color: var(--info-ink);
+}
+
+.bulkbar__reason {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+}
+
+/* Dismissal, stated before the click. In the list it takes the bulk bar's place, so it stays in view. */
+
+.dismiss-confirm {
+  gap: var(--s2);
+}
+
+.dismiss-confirm .plain-list {
+  max-width: 75ch;
+}
+
+.dismiss-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s1);
+}
+
+.bulkbar-confirm {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: var(--s3);
+}
+
+/* ---------- Legitimacy signals ---------- */
+
+.signals {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signals li {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s3);
+}
+
+.signals li > .plate {
+  justify-self: start;
+}
+
+.signals__what {
+  display: block;
+}
+
+/* ---------- Replies ---------- */
+
+.reply,
+.followup,
+.story,
+.note,
+.proposal {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s4) var(--s5);
+}
+
+.reply__head,
+.followup__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s4);
+}
+
+.reply__subject {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.reply__meta {
+  color: var(--ink-3);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.reply__snippet {
+  max-width: 75ch;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.reply__facts {
+  margin-top: var(--s1);
+}
+
+.reply__decide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s3);
+  margin-top: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+
+.reply__decide .field {
+  flex: 0 1 16rem;
+}
+
+.reply__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* ---------- Drafts to copy ---------- */
+
+.draft {
+  display: grid;
+  gap: var(--s2);
+}
+
+.draft__text {
+  max-width: 75ch;
+  max-height: 16rem;
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  overflow: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.draft__tools,
+.followup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* ---------- Stories, notes and proposals ---------- */
+
+.story summary {
+  color: var(--ink);
+  font-size: var(--fs-base);
+}
+
+.coverage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+}
+
+.note__text {
+  max-width: 75ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.proposal__boards {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposal__board {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+
+.session + .session {
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+
+/* ---------- Markdown (reports and prep notes) ---------- */
+
+.md {
+  display: grid;
+  gap: var(--s3);
+  max-width: 75ch;
+  margin-top: var(--s2);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+}
+
+.md h3,
+.md h4,
+.md h5 {
+  margin: var(--s3) 0 0;
+}
+
+.md h3 {
+  font-size: var(--fs-lg);
+}
+
+.md h4 {
+  font-size: var(--fs-base);
+}
+
+.md h5 {
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+}
+
+.md ul,
+.md ol {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.md hr {
+  width: 100%;
+  margin: var(--s2) 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.md__table {
+  max-width: 100%;
+}
+
+.md__table .table {
+  font-size: var(--fs-md);
+}
+
+/* ---------- Analytics ---------- */
+
+.analytics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--s5);
+}
+
+.analytics > .section:first-child,
+.analytics > .section:nth-child(2) {
+  margin-top: 0;
+}
+
+.analytics__wide {
+  grid-column: 1 / -1;
+}
+
+.bar-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  white-space: nowrap;
+}
+
+.bar {
+  position: relative;
+  width: 6rem;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--surface-2);
+}
+
+.bar span {
+  position: absolute;
+  inset: 0;
+  background: var(--board);
+  transform-origin: left center;
+  transform: scaleX(var(--p, 0));
+}
+
+/* ---------- Shortcuts dialog and run log additions ---------- */
+
+.keys-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s4) var(--s5);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.keys__group {
+  margin-bottom: var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.dialog:has(.keys-groups) {
+  width: min(40rem, calc(100vw - 2 * var(--s4)));
+}
+
+.log__tag {
+  padding: 0 0.3rem;
+  border-radius: var(--radius);
+  background: #5f0d17;
+  color: #ffd7dc;
+  font-size: var(--fs-xs);
+}
+
+@media (max-width: 1023px) {
+  .runner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The top bar is sticky here too; selection bars stop below it instead of sliding under it. */
+  .bulkbar,
+  .bulkbar-confirm {
+    top: var(--topbar-height);
+  }
+
+  .runner__types {
+    padding-bottom: var(--s3);
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .runtypes {
+    display: none;
+  }
+
+  .runtype-select {
+    display: grid;
+    padding: 0 var(--s4);
+  }
+
+  .analytics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .info-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .info-row__value {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  .info-row .icon {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .keys-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reply,
+  .followup,
+  .story,
+  .note,
+  .proposal {
+    padding: var(--s3) var(--s4);
+  }
+
+  .signals li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

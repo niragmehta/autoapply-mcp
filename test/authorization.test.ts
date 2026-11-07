@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
 import { joinTopics, renderTemplate, resolveNarrative } from "../src/drafting/narrative.js";
 import { evaluateWorkAuthorizationGate, evaluateGates } from "../src/ranking/gates.js";
 import { scoreJob } from "../src/ranking/score.js";

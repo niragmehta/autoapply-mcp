@@ -224,7 +224,7 @@ describe("queue", () => {
     for (const job of [...jobs, elsewhere]) saveEvaluation(db, evaluation(job.id));
 
     const capped = listQueue(db, { maxPerCompany: 3 });
-    expect(capped.filter((item) => item.job.companyName === jobs[0].companyName)).toHaveLength(3);
+    expect(capped.filter((item) => item.job.companyName === jobs[0]!.companyName)).toHaveLength(3);
     // The cap is per company, so an unrelated employer is unaffected.
     expect(capped.map((item) => item.job.id)).toContain("job_other");
     expect(listQueue(db, {})).toHaveLength(5);
@@ -236,7 +236,7 @@ describe("queue", () => {
     );
     upsertJobs(db, jobs);
     for (const job of jobs) saveEvaluation(db, evaluation(job.id));
-    saveApplication(db, application(jobs[0].id, { id: "app_held", status: "submitted" }));
+    saveApplication(db, application(jobs[0]!.id, { id: "app_held", status: "submitted" }));
 
     // One slot is spent, and that role is already excluded as applied to, so
     // only one of the two remaining roles may be taken.
@@ -251,7 +251,7 @@ describe("queue", () => {
     for (const job of jobs) saveEvaluation(db, evaluation(job.id));
     // A draft never reached the employer, so it must not consume a slot; the
     // role itself is still excluded as already applied to.
-    saveApplication(db, application(jobs[0].id, { id: "app_draft", status: "drafted" }));
+    saveApplication(db, application(jobs[0]!.id, { id: "app_draft", status: "drafted" }));
 
     expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(2);
   });
@@ -262,7 +262,7 @@ describe("queue", () => {
     );
     upsertJobs(db, jobs);
     for (const job of jobs) saveEvaluation(db, evaluation(job.id));
-    saveApplication(db, application(jobs[0].id, { id: "app_gone", status: "skipped" }));
+    saveApplication(db, application(jobs[0]!.id, { id: "app_gone", status: "skipped" }));
 
     expect(listQueue(db, { maxPerCompany: 2 })).toHaveLength(2);
   });

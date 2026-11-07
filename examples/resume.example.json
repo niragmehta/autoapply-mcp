@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "header": {
+    "name": "Alex Candidate",
+    "headline": "Software Engineer",
+    "contact": [
+      { "text": "Toronto, Canada" },
+      { "text": "555-0100" },
+      { "text": "alex@example.com", "href": "mailto:alex@example.com" },
+      { "text": "www.example.com", "href": "https://www.example.com" },
+      { "text": "linkedin.com/in/alex-candidate", "href": "https://www.linkedin.com/in/alex-candidate" }
+    ]
+  },
+  "theme": {
+    "accent": "#FF6A3D",
+    "linkColor": "#3A95D7",
+    "pageSize": "A4",
+    "align": "left"
+  },
+  "sectionTitles": {
+    "experience": "Experience",
+    "additional": "Previous Internships",
+    "education": "Education",
+    "skills": "Technical Skills"
+  },
+  "maxPages": 1,
+  "experience": [
+    {
+      "organization": "Northwind Logistics",
+      "location": "Toronto, Canada",
+      "roles": [
+        {
+          "title": "Senior Software Engineer \u2013 Platform",
+          "dates": "Mar 2021 \u2013 Present",
+          "groups": [
+            {
+              "id": "reliability",
+              "label": "Reliability and scale",
+              "bullets": [
+                {
+                  "id": "payments-cache",
+                  "text": "Scaled a payments API from [[2k]] to [[40k]] requests per second by redesigning its caching layer and moving hot reads to Redis.",
+                  "factIds": ["scaling"],
+                  "tags": ["performance", "distributed systems"]
+                },
+                {
+                  "id": "payments-latency",
+                  "text": "Cut p99 latency of the payments API by [[60%]] by replacing synchronous fan-out with a Kafka-backed event pipeline.",
+                  "factIds": ["scaling"],
+                  "tags": ["event-driven architecture"]
+                },
+                {
+                  "id": "incident-paging",
+                  "text": "Built incident tooling that pages the owning team within [[2]] minutes and links every alert to its runbook.",
+                  "tags": ["incident response", "observability"]
+                },
+                {
+                  "id": "canary-releases",
+                  "text": "Introduced canary releases with automatic rollback on error-budget burn, cutting failed deploys by [[45%]].",
+                  "tags": ["deployment", "reliability"]
+                }
+              ]
+            },
+            {
+              "id": "platform",
+              "label": "Developer platform",
+              "bullets": [
+                {
+                  "id": "k8s-migration",
+                  "text": "Led the migration of [[120+]] services from virtual machines to Kubernetes, with zero-downtime cut-overs and per-service rollback.",
+                  "tags": ["migration"]
+                },
+                {
+                  "id": "ci-rebuild",
+                  "text": "Rebuilt the CI/CD pipeline on GitHub Actions, reducing median build time from [[18]] to [[7]] minutes.",
+                  "tags": ["build systems"]
+                },
+                {
+                  "id": "service-template",
+                  "text": "Created a service template with tracing, health checks and on-call wiring built in, adopted by [[30+]] teams.",
+                  "tags": ["observability", "developer experience"]
+                }
+              ]
+            },
+            {
+              "id": "data",
+              "label": "Data and storage",
+              "bullets": [
+                {
+                  "id": "shipments-sharding",
+                  "text": "Designed a sharding scheme for the shipments database that holds [[1.2B]] rows and keeps single-shard queries under [[20 ms]].",
+                  "tags": ["postgresql", "databases"]
+                },
+                {
+                  "id": "backfill-framework",
+                  "text": "Wrote a resumable backfill framework used for [[15]] schema migrations without downtime.",
+                  "tags": ["databases", "migration"]
+                },
+                {
+                  "id": "reporting-airflow",
+                  "text": "Moved nightly reporting from cron scripts to Airflow DAGs with lineage checks, retiring [[40+]] ad-hoc jobs.",
+                  "tags": ["data pipelines"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "organization": "Northwind Logistics",
+      "location": "Toronto, Canada",
+      "roles": [
+        {
+          "title": "Software Engineer Intern",
+          "dates": "May 2020 \u2013 Aug 2020",
+          "groups": [
+            {
+              "id": "internship",
+              "bullets": [
+                {
+                  "id": "load-testing",
+                  "text": "Built a load-testing harness for internal APIs, deployed services on Kubernetes and shipped React/Node.js features."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "additional": [
+    { "organization": "Bluefin Analytics", "location": "Boston, USA", "title": "Software Engineer Intern", "dates": "Jun 2019 \u2013 Aug 2019" },
+    { "organization": "Harbor Labs Inc.", "location": "Toronto, Canada", "title": "Software Engineer Intern", "dates": "May 2018 \u2013 Aug 2018" }
+  ],
+  "education": [
+    {
+      "institution": "University of Example",
+      "location": "Toronto, Canada",
+      "credential": "Bachelor of Applied Science (BASc), Software Engineering",
+      "dates": "Sep 2015 \u2013 Apr 2020"
+    }
+  ],
+  "skills": {
+    "categories": [
+      { "id": "languages", "terms": ["Go", "Python", "TypeScript", "Java", "SQL"] },
+      { "id": "infrastructure", "terms": ["Kubernetes", "Docker", "Terraform", "AWS", "GCP"] },
+      { "id": "data", "terms": ["PostgreSQL", "Redis", "Kafka", "BigQuery"] },
+      { "id": "practices", "terms": ["Distributed Systems", "Observability", "CI/CD", "Incident Response"] },
+      { "id": "tools", "terms": ["Git", "GitHub Actions", "Grafana", "Prometheus"] }
+    ]
+  },
+  "variants": {
+    "backend": {
+      "headline": "Backend Software Engineer",
+      "groupOrder": ["reliability", "data", "platform"],
+      "skillOrder": ["languages", "data", "infrastructure", "practices", "tools"]
+    },
+    "platform": {
+      "headline": "Platform Engineer",
+      "groupOrder": ["platform", "reliability", "data"],
+      "skillOrder": ["infrastructure", "tools", "practices", "languages", "data"]
+    },
+    "data": {
+      "groupOrder": ["data", "reliability", "platform"],
+      "skillOrder": ["data", "languages", "infrastructure", "practices", "tools"],
+      "excludeBullets": ["service-template"]
+    }
+  }
+}

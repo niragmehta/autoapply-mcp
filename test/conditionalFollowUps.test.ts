@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DraftAnswer } from "../src/domain/job.js";
-import type { FormQuestion } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
 import { draftAnswers, unresolvedRequired } from "../src/drafting/answers.js";
 import {
   isConditionalFollowUp,
@@ -24,6 +24,8 @@ function answer(questionKey: string, label: string, value: string, requiresHuman
     citation: "",
     requiresHuman,
     required: true,
+    category: "general",
+    guidance: "",
   };
 }
 

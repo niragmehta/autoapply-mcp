@@ -59,7 +59,7 @@ vi.mock("imapflow", async () => {
   return { ImapFlow: FakeImapFlow };
 });
 
-import { awaitVerificationCode } from "../src/submission/browser.js";
+import { awaitVerificationCode } from "../src/submission/browser/verification.js";
 import { fetchVerificationCode, type VerificationInboxConfig } from "../src/submission/verificationInbox.js";
 
 const config: VerificationInboxConfig = {

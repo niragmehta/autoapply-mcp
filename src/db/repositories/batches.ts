@@ -131,6 +131,14 @@ export function setBatchItemState(db: Db, batchId: string, applicationId: string
   );
 }
 
+/** Takes an application out of every batch still waiting on it, returning how many items changed. */
+export function skipPendingBatchItems(db: Db, applicationId: string, detail: string): number {
+  const result = db
+    .prepare("UPDATE batch_items SET state = 'skipped', detail = ? WHERE application_id = ? AND state IN ('ready', 'needs_human')")
+    .run(detail, applicationId);
+  return Number(result.changes);
+}
+
 export function batchSummary(db: Db, batchId: string): Record<string, number> {
   const rows = db
     .prepare("SELECT state, COUNT(*) AS n FROM batch_items WHERE batch_id = ? GROUP BY state")

@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FillPlan } from "../src/submission/formFields.js";
-import type { WorkdayPromptResult } from "../src/submission/workdayFlow.js";
+import type { WorkdayPromptResult } from "../src/submission/workday/types.js";
 
 const prompt = vi.hoisted(() => ({ result: { filled: false, detail: "" } as WorkdayPromptResult }));
 
-vi.mock("../src/submission/workdayFlow.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/submission/workdayFlow.js")>()),
+vi.mock("../src/submission/workday/prompt.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/submission/workday/prompt.js")>()),
   isWorkdayPrompt: async () => true,
   fillWorkdayPrompt: async () => prompt.result,
 }));
 
-const { StrayValueError, repairReportedFields } = await import("../src/submission/browser.js");
+const { StrayValueError, repairReportedFields } = await import("../src/submission/browser/controls.js");
 
 type RepairPage = Parameters<typeof repairReportedFields>[0];
 

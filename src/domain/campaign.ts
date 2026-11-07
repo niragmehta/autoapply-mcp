@@ -164,7 +164,6 @@ export const CampaignSchema = z.object({
 
 export type Campaign = z.infer<typeof CampaignSchema>;
 export type Track = z.infer<typeof TrackSchema>;
-export type ScoringWeights = z.infer<typeof ScoringWeightsSchema>;
 export type CompensationPolicy = z.infer<typeof CompensationPolicySchema>;
 export type SubmissionPolicy = z.infer<typeof SubmissionPolicySchema>;
 

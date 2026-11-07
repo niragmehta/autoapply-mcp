@@ -82,10 +82,32 @@ export function getWorkspace(): Workspace {
   return workspace;
 }
 
-/** Drops the cache so configuration edits take effect without a restart. */
+/**
+ * Re-reads the configuration files so edits take effect without a restart.
+ *
+ * The database connection is kept when its path is unchanged. Closing it would
+ * strand any operation still holding the old handle: a browser submission
+ * running for minutes in the same process would then fail to record its own
+ * result, and an application that really was sent would look unsent and could
+ * be sent again. Config is validated before anything is swapped, so a broken
+ * edit leaves the current workspace in place.
+ */
 export function reloadWorkspace(): Workspace {
-  closeWorkspace();
-  return getWorkspace();
+  if (!cached) return getWorkspace();
+  const paths = resolvePaths();
+  const profile = loadProfile(paths.profile);
+  const campaign = loadCampaign(paths.campaign);
+  const companies = loadCompanies(paths.companies);
+  const db = paths.database === cached.paths.database ? cached.db : openDatabase(paths.database);
+  if (db !== cached.db) {
+    try {
+      cached.db.close();
+    } catch {
+      // An already-closed handle is not an error worth surfacing.
+    }
+  }
+  cached = { paths, profile, campaign, companies, db };
+  return cached;
 }
 
 /** Closes the database handle and clears the cache. */

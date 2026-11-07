@@ -109,11 +109,6 @@ export function getJob(db: Db, id: string): Job | null {
   return row ? rowToJob(row) : null;
 }
 
-export function listJobs(db: Db, limit = 500): Job[] {
-  const rows = db.prepare("SELECT * FROM jobs ORDER BY last_seen_at DESC LIMIT ?").all(limit) as JobRow[];
-  return rows.map(rowToJob);
-}
-
 /** Returns other stored jobs that share a role fingerprint. */
 export function findDuplicates(db: Db, fingerprint: string, excludeJobId: string): Job[] {
   const rows = db
@@ -261,6 +256,7 @@ export function listQueue(db: Db, filter: QueueFilter = {}): QueueItem[] {
       JOIN jobs j ON j.id = e.job_id
       WHERE e.decision = 'accept' AND e.score >= ?
       ${dedupeClause}
+      AND NOT EXISTS (SELECT 1 FROM job_dismissals d WHERE d.fingerprint = j.fingerprint)
       ORDER BY e.score DESC, j.posted_at DESC, j.id
       LIMIT ? OFFSET ?
     `);

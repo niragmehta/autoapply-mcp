@@ -5,6 +5,7 @@ import { z } from "zod";
 export const OutcomeKindSchema = z.enum([
   "acknowledged",
   "recruiter_screen",
+  "assessment",
   "interview",
   "offer",
   "rejected",
@@ -12,6 +13,31 @@ export const OutcomeKindSchema = z.enum([
   "withdrawn",
 ]);
 export type OutcomeKind = z.infer<typeof OutcomeKindSchema>;
+
+/** Outcomes that move an application forward, in the order they happen. */
+export const PROGRESS_OUTCOMES = ["acknowledged", "recruiter_screen", "assessment", "interview", "offer"] as const;
+export type ProgressOutcome = (typeof PROGRESS_OUTCOMES)[number];
+
+/** Outcomes that end an application. */
+export const TERMINAL_OUTCOMES = ["rejected", "ghosted", "withdrawn"] as const;
+export type TerminalOutcome = (typeof TERMINAL_OUTCOMES)[number];
+
+/**
+ * How far along an outcome puts an application. Terminal outcomes have no
+ * rank: a rejection after an interview still means the interview happened.
+ */
+export function progressRank(kind: string): number {
+  const index = (PROGRESS_OUTCOMES as readonly string[]).indexOf(kind);
+  return index < 0 ? 0 : index + 1;
+}
+
+export function isProgressOutcome(kind: string): kind is ProgressOutcome {
+  return (PROGRESS_OUTCOMES as readonly string[]).includes(kind);
+}
+
+export function isTerminalOutcome(kind: string): kind is TerminalOutcome {
+  return (TERMINAL_OUTCOMES as readonly string[]).includes(kind);
+}
 
 export const InboxPolicySchema = z
   .object({
@@ -26,7 +52,6 @@ export const InboxPolicySchema = z
     autoRecord: z.array(OutcomeKindSchema).default(["acknowledged", "rejected"]),
   })
   .prefault({});
-export type InboxPolicy = z.infer<typeof InboxPolicySchema>;
 
 export const FollowUpPolicySchema = z
   .object({
@@ -35,7 +60,7 @@ export const FollowUpPolicySchema = z
     firstAfterDays: z.number().int().positive().default(7),
     /** Days after submission before the second and last follow-up is due. */
     secondAfterDays: z.number().int().positive().default(14),
-    /** Days of silence after which an application is recorded as ghosted. */
+    /** Days after submission, and at least a week after the last follow-up sent, before a silent application is closed as ghosted. */
     ghostAfterDays: z.number().int().positive().default(45),
   })
   .prefault({});

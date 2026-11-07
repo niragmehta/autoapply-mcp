@@ -1,26 +1,19 @@
 ﻿import { describe, expect, it } from "vitest";
+import { buildFillPlan, orderFieldsForBrowser, stalePlaceholderFields } from "../src/submission/formFields.js";
+import { bankAnswerFor, isAiDetectionPrompt } from "../src/submission/form/answerBank.js";
+import { declinesByLeavingBlank } from "../src/submission/form/answerVocabulary.js";
+import { augmentAnswersForBrowser } from "../src/submission/form/browserAnswers.js";
+import { educationDateLabels, fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import { normalizeLabel, type FieldDescriptor } from "../src/submission/form/fieldModel.js";
+import { answerValueForField, matchFields } from "../src/submission/form/matching.js";
+import { optionTextMatches, pickOptionIndex } from "../src/submission/form/optionMatching.js";
+import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
 import {
-  bankAnswerFor,
-  buildFillPlan,
-  answerValueForField,
-  augmentAnswersForBrowser,
-  declinesByLeavingBlank,
   detectCaptcha,
   detectSubmissionConfirmation,
-  educationDateLabels,
-  fallbackAnswersForFields,
-  isAiDetectionPrompt,
   looksLikeApplicationForm,
-  matchFields,
-  normalizeLabel,
-  optionSearchCandidates,
-  optionTextMatches,
-  orderFieldsForBrowser,
-  pickOptionIndex,
-  stalePlaceholderFields,
   workdayListsSubmitted,
-  type FieldDescriptor,
-} from "../src/submission/formFields.js";
+} from "../src/submission/form/pageSignals.js";
 import type { DraftAnswer } from "../src/domain/job.js";
 
 function field(label: string, overrides: Partial<FieldDescriptor> = {}): FieldDescriptor {
@@ -35,7 +28,9 @@ function answer(label: string, value: string, overrides: Partial<DraftAnswer> = 
     source: "profile",
     citation: "",
     requiresHuman: false,
+    required: true,
     category: "contact",
+    guidance: "",
     ...overrides,
   };
 }
@@ -1683,7 +1678,7 @@ describe("boolean checkbox compatibility", () => {
 
   it("rejects a non-boolean answer for a bare yes/no checkbox", () => {
     const [match] = matchFields([sponsorship], [answer("Country you are applying to", "Canada")]);
-    expect(match.answer).toBeNull();
+    expect(match?.answer).toBeNull();
   });
 
   it("still selects the boolean answer for that checkbox", () => {
@@ -1694,13 +1689,13 @@ describe("boolean checkbox compatibility", () => {
         answer("Will you now or in the future require sponsorship?", "No"),
       ],
     );
-    expect(match.answer?.answer).toBe("No");
+    expect(match?.answer?.answer).toBe("No");
   });
 
   it("leaves checkbox options that carry their own label alone", () => {
     const option = field("Preferred Work Location", { type: "checkbox", optionLabel: "San Francisco" });
     const [match] = matchFields([option], [answer("Preferred Work Location", "San Francisco")]);
-    expect(match.answer?.answer).toBe("San Francisco");
+    expect(match?.answer?.answer).toBe("San Francisco");
   });
 });
 
@@ -1712,7 +1707,7 @@ describe("residence questions versus work authorisation", () => {
       [locatedInUs],
       [answer("Are you legally authorized to work in the United States?", "Yes")],
     );
-    expect(match.answer).toBeNull();
+    expect(match?.answer).toBeNull();
   });
 
   it("rejects a sponsorship answer for a residence question", () => {
@@ -1720,7 +1715,7 @@ describe("residence questions versus work authorisation", () => {
       [locatedInUs],
       [answer("Will you now or in the future require visa sponsorship?", "No")],
     );
-    expect(match.answer).toBeNull();
+    expect(match?.answer).toBeNull();
   });
 
   it("uses the residence answer when one exists", () => {
@@ -1731,7 +1726,7 @@ describe("residence questions versus work authorisation", () => {
         answer("Are you located in the United States?", "No"),
       ],
     );
-    expect(match.answer?.answer).toBe("No");
+    expect(match?.answer?.answer).toBe("No");
   });
 
   it("still answers genuine work authorisation questions", () => {
@@ -1740,7 +1735,7 @@ describe("residence questions versus work authorisation", () => {
       [authField],
       [answer("Are you legally authorized to work in the United States?", "Yes")],
     );
-    expect(match.answer?.answer).toBe("Yes");
+    expect(match?.answer?.answer).toBe("Yes");
   });
 
   it("answers an authorisation question that is phrased in terms of location", () => {
@@ -1755,7 +1750,7 @@ describe("residence questions versus work authorisation", () => {
         answer("Are you located in the United States?", "No"),
       ],
     );
-    expect(match.answer?.answer).toBe("Yes");
+    expect(match?.answer?.answer).toBe("Yes");
   });
 });
 
@@ -1769,7 +1764,7 @@ describe("self-identification questions", () => {
     // "major life activities" overlaps a stored degree major, which put
     // "Computer Science" into a disability field on a live Greenhouse form.
     const [match] = matchFields([disabilityField], [answer("Major/Field of Study", "Computer Science")]);
-    expect(match.answer).toBeNull();
+    expect(match?.answer).toBeNull();
   });
 
   it("uses the demographic answer for a disability question", () => {
@@ -1780,7 +1775,7 @@ describe("self-identification questions", () => {
         answer("Disability Status", "I do not wish to answer", { category: "demographic" }),
       ],
     );
-    expect(match.answer?.answer).toBe("I do not wish to answer");
+    expect(match?.answer?.answer).toBe("I do not wish to answer");
   });
 
   it("does not let a school answer take a gender or veteran question", () => {
@@ -1789,8 +1784,8 @@ describe("self-identification questions", () => {
       required: true,
     });
     const school = [answer("Last University Attended", "University of British Columbia")];
-    expect(matchFields([genderField], school)[0].answer).toBeNull();
-    expect(matchFields([veteranField], school)[0].answer).toBeNull();
+    expect(matchFields([genderField], school)[0]?.answer).toBeNull();
+    expect(matchFields([veteranField], school)[0]?.answer).toBeNull();
   });
 });
 
@@ -1877,7 +1872,7 @@ describe("age questions", () => {
       [ageField],
       [answer("Do you have 6+ years of experience", "No")],
     );
-    expect(match.answer).toBeNull();
+    expect(match?.answer).toBeNull();
   });
 
   it("uses a real age answer when one exists", () => {
@@ -1888,7 +1883,7 @@ describe("age questions", () => {
         answer("Are you 18 years of age or older", "Yes"),
       ],
     );
-    expect(match.answer?.answer).toBe("Yes");
+    expect(match?.answer?.answer).toBe("Yes");
   });
 
   it("still answers a genuine experience-threshold question", () => {
@@ -1896,7 +1891,7 @@ describe("age questions", () => {
       [field("Do you have 6+ years of professional experience?", { required: true })],
       [answer("Do you have 6+ years of experience", "No")],
     );
-    expect(match.answer?.answer).toBe("No");
+    expect(match?.answer?.answer).toBe("No");
   });
 });
 
@@ -2362,13 +2357,14 @@ describe("whole-name questions", () => {
 
   it("fills a combined first-and-last name field with the whole name", () => {
     const [match] = matchFields([field("Legal First and Last Name *", { required: true })], nameAnswers);
-    expect(match.answer?.answer).toBe("Casey Moore");
+    expect(match?.answer?.answer).toBe("Casey Moore");
   });
 
   it("never lets a name fragment answer a combined name field", () => {
     for (const label of ["First and Last Name", "First & Last Name", "First, Middle and Last Name"]) {
       const [match] = matchFields([field(label)], [answer("Last Name", "Moore"), answer("First Name", "Casey")]);
-      expect(match.answer ?? null).toBeNull();
+      expect(match).toBeDefined();
+      expect(match?.answer ?? null).toBeNull();
     }
   });
 
@@ -2995,7 +2991,6 @@ describe("a field that arrives already answered", () => {
     const plan = buildFillPlan(
       [{ ...field("Language", { type: "select", required: true }), value: "English" }],
       [],
-      [],
     );
     expect(plan.unmatchedRequired).toHaveLength(0);
   });
@@ -3004,7 +2999,6 @@ describe("a field that arrives already answered", () => {
     const plan = buildFillPlan(
       [{ ...field("Language", { type: "select", required: true }), value: "Select One" }],
       [],
-      [],
     );
     expect(plan.unmatchedRequired).toHaveLength(1);
   });
@@ -3012,7 +3006,6 @@ describe("a field that arrives already answered", () => {
   it("still reports a segmented date showing its parts as separate lines", () => {
     const plan = buildFillPlan(
       [{ ...field("Date", { type: "date", required: true }), value: "MM\n/\nDD\n/\nYYYY" }],
-      [],
       [],
     );
     expect(plan.unmatchedRequired).toHaveLength(1);

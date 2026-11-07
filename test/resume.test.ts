@@ -113,7 +113,9 @@ describe("submission guard: resume", () => {
       source: "profile",
       citation: "identity.email",
       requiresHuman: false,
+      required: true,
       category: "contact",
+      guidance: "",
     };
   }
 

@@ -69,7 +69,7 @@ export function registerDiscoveryTools(server: McpServer): void {
         "Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.",
       inputSchema: {
         name: z.string().min(1).describe("Company name as it should appear in the queue."),
-        ats: AtsKindSchema,
+        ats: AtsKindSchema.exclude(["external"]).describe("The board's ATS. Each kind's board format is in docs/CONFIGURATION.md and the SOURCES docs."),
         board: z
           .string()
           .min(1)

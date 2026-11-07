@@ -23,6 +23,20 @@ describe("employer board links", () => {
   });
 
   it.each([
+    ["https://acme.bamboohr.com/careers/363", "bamboohr", "acme"],
+    ["https://acme.applytojob.com/apply/gdWcbFq2mr/Platform-Engineer", "jazzhr", "acme"],
+    ["https://hdr.taleo.net/careersection/ex/jobdetail.ftl?job=12345", "taleo", "hdr.taleo.net/ex"],
+    ["https://jobs.jobvite.com/acme/job/oAbC123", "jobvite", "acme"],
+  ])("recognizes a posting on the %s domain of a newer ATS", (url, ats, board) => {
+    expect(boardFromUrl(url)).toMatchObject({ ats, board, region: "global", sourceUrl: url });
+  });
+
+  it("does not guess an ATS from a path shape on an employer's own domain", () => {
+    expect(boardFromUrl("https://careers.example.com/us/en/job/12345/Security-Engineer")).toBeNull();
+    expect(boardFromUrl("https://careers.example.com/job/Security-Engineer/123456/")).toBeNull();
+  });
+
+  it.each([
     "http://jobs.ashbyhq.com/acme/1",
     "https://jobs.ashbyhq.com.evil.example/acme/1",
     "https://eviljobs.ashbyhq.com/acme/1",

@@ -1,9 +1,10 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { z } from "zod";
 import { CampaignSchema, type Campaign } from "../src/domain/campaign.js";
-import { ProfileSchema, type Profile } from "../src/domain/profile.js";
-import type { Job } from "../src/domain/job.js";
+import { ApprovedAnswerSchema, ProfileSchema, type Profile } from "../src/domain/profile.js";
+import { DraftAnswerSchema, type DraftAnswer, type Job } from "../src/domain/job.js";
 
 /** Test fixtures shared across the suite. */
 
@@ -82,6 +83,19 @@ export function makeProfile(overrides: Record<string, unknown> = {}): Profile {
     ],
     ...overrides,
   });
+}
+
+/**
+ * An answer-bank entry parsed the way the profile loader parses it, so a
+ * fixture states only what it is about and picks up every schema default.
+ */
+export function makeBankEntry(entry: z.input<typeof ApprovedAnswerSchema>): Profile["answers"][number] {
+  return ApprovedAnswerSchema.parse(entry);
+}
+
+/** A drafted answer with DraftAnswerSchema's defaults for anything the fixture leaves out. */
+export function makeDraftAnswer(answer: z.input<typeof DraftAnswerSchema>): DraftAnswer {
+  return DraftAnswerSchema.parse(answer);
 }
 
 export function makeCampaign(overrides: Record<string, unknown> = {}): Campaign {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWorkdayRequiredErrors } from "../src/submission/workdayFlow.js";
+import { parseWorkdayRequiredErrors } from "../src/submission/workday/wizard.js";
 
 describe("parseWorkdayRequiredErrors", () => {
   it("names a question revealed by an earlier answer, which only the error banner shows", () => {

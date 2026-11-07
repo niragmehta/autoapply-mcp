@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import {
-  bankAnswerFor,
-  buildFillPlan,
-  fallbackAnswersForFields,
-  pickOptionIndex,
-  type FieldDescriptor,
-} from "../src/submission/formFields.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import { bankAnswerFor } from "../src/submission/form/answerBank.js";
+import { fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
+import { pickOptionIndex } from "../src/submission/form/optionMatching.js";
 import type { DraftAnswer } from "../src/domain/job.js";
 import type { Profile } from "../src/domain/profile.js";
-import { makeCampaign, makeProfile } from "./factories.js";
+import { makeBankEntry, makeCampaign, makeProfile } from "./factories.js";
 
 /**
  * Zip asks "Will you now or in the future require sponsorship to work in the
@@ -20,7 +19,7 @@ import { makeCampaign, makeProfile } from "./factories.js";
  * take opposite answers, so only an answer written about sponsorship may answer
  * a question asking whether sponsorship is required.
  */
-const authorization = {
+const authorization = makeBankEntry({
   key: "auth-country-relative",
   label: "Authorized in the country where the job is located",
   patterns: [
@@ -30,16 +29,16 @@ const authorization = {
   answer: "Yes",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
-const sponsorship = {
+const sponsorship = makeBankEntry({
   key: "visa-sponsorship",
   label: "Require visa sponsorship",
   patterns: ["require sponsorship to work", "require sponsorship"],
   answer: "No",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 const ZIP = "Will you now or in the future require sponsorship to work in the country where this role is located?";
 
@@ -101,14 +100,14 @@ describe("sponsorship intent", () => {
   });
 
   it("does not let an entry written as 'without sponsorship' answer whether sponsorship is required", () => {
-    const withoutSponsorship = {
+    const withoutSponsorship = makeBankEntry({
       key: "authorized-without-sponsorship",
       label: "Authorized to work without the need for employer sponsorship",
       patterns: ["without the need for employer sponsorship"],
       answer: "Yes",
       alternatives: [],
       allowAutoFill: true,
-    };
+    });
     const label =
       "Will you now or in the future require sponsorship to work here? You must be authorized to work without the need for employer sponsorship.";
 
@@ -128,14 +127,14 @@ describe("sponsorship intent", () => {
  * TN definition - and went to a person to repeat a decision already on file.
  */
 describe("sponsorship defined to include TN", () => {
-  const namedTn = {
+  const namedTn = makeBankEntry({
     key: "sponsorship-named-tn",
     label: "Sponsorship where the employer explicitly lists TN",
     patterns: ["h-1b, e-3, tn, o-1", 'commence ("sponsor") an immigration case'],
     answer: "Yes",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
   const COREWEAVE =
     "Do you now or will you in the future require sponsorship to work in the United States? (e.g. H1-B, H1B1, TN, E3, CPT, OPT/STEM OPT, H4, J2, or other visa type)";
 
@@ -212,22 +211,22 @@ describe("sponsorship defined to include TN", () => {
  * "No", the opposite of the candidate's decision for exactly that wording.
  */
 describe("a live form that counts TN as sponsorship", () => {
-  const namedTn = {
+  const namedTn = makeBankEntry({
     key: "sponsorship-named-tn",
     label: "Sponsorship where the employer explicitly lists TN",
     patterns: ["h-1b, e-3, tn, o-1", 'commence ("sponsor") an immigration case'],
     answer: "Yes",
     alternatives: [],
     allowAutoFill: true,
-  };
-  const usAuthorization = {
+  });
+  const usAuthorization = makeBankEntry({
     key: "us-work-authorization-now",
     label: "Currently authorized to work in the United States",
     patterns: ["authorized to work in the united states"],
     answer: "Yes",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
   const PERSONA =
     "Please help us work effectively with our immigration team: Will you now or in the future require sponsorship for employment visa status (e.g., H-1B, STEM OPT, J-1, O-1, TN, etc.)?";
   const HINGE =
@@ -324,14 +323,14 @@ describe("a live form that counts TN as sponsorship", () => {
  * answered a form that counts TN as sponsorship - the opposite of his decision.
  */
 describe("sponsorship with TN named among the choices", () => {
-  const namedTn = {
+  const namedTn = makeBankEntry({
     key: "sponsorship-named-tn",
     label: "Sponsorship where the employer explicitly lists TN",
     patterns: ["h-1b, e-3, tn, o-1"],
     answer: "Yes",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
   const visaSponsorship = { ...sponsorship, patterns: ["require visa sponsorship", "require sponsorship"] };
   const MINTLIFY = "Will you now or in the future require visa sponsorship? If yes, select the type of sponsorship.";
   const MINTLIFY_OPTIONS = ["No", "Yes, H1B Transfer", "Yes, STEM OPT", "Yes, TN", "Yes, H1B Sponsorship", "Yes, other"];

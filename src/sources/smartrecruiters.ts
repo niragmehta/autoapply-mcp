@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Company } from "../domain/campaign.js";
 import type { Job } from "../domain/job.js";
-import { AppError } from "../util/errors.js";
+import { AppError, toErrorMessage } from "../util/errors.js";
 import { fetchJson } from "./http.js";
 import {
   boardToken, boardVerification, locationLabel, nonEmptyText, normalizePublicJob,
@@ -128,4 +128,47 @@ export const smartrecruitersAdapter: SourceAdapter = {
     return boardVerification(page.content.filter(isPublished).map((posting) => posting.name), page.totalFound);
   },
   probeUrls: () => [],
+
+  /**
+   * The detail's `active` flag and visibility decide. SmartRecruiters answers
+   * an id it does not know with 400 or 404, which is not closure evidence.
+   */
+  async checkPosting(job) {
+    try {
+      const id = postingIdentifier.parse(job.externalId);
+      const payload = await fetchJson<unknown>(`https://${HOST}/v1/companies/${boardToken(job.board)}/postings/${id}`, {
+        allowedHosts: ALLOWED_HOSTS, retries: 1, timeoutMs: 12_000,
+      });
+      const identity = summarySchema.safeParse(payload);
+      if (!identity.success || identity.data.id !== job.externalId) {
+        return { status: "unknown", via: "api", detail: "SmartRecruiters answered without this posting's id" };
+      }
+      return isPublished(identity.data)
+        ? { status: "open", via: "api", detail: "SmartRecruiters marks the posting active and public" }
+        : { status: "closed", via: "api", detail: "SmartRecruiters marks the posting inactive or no longer public" };
+    } catch (error) {
+      return { status: "unknown", via: "api", detail: `SmartRecruiters check failed: ${toErrorMessage(error)}` };
+    }
+  },
+
+  /** jobs.smartrecruiters.com/{company}/{id}[-{slug}]. */
+  parsePostingUrl(url) {
+    if (url.hostname.toLowerCase() !== "jobs.smartrecruiters.com") return null;
+    const [board, posting] = url.pathname.split("/").filter((segment) => segment.length > 0);
+    const id = /^(\d{6,20})(?:-[^/]*)?$/.exec(posting ?? "")?.[1];
+    if (!board || !id || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(board)) return null;
+    return { board, externalId: id };
+  },
+
+  async fetchPosting(company, externalId, capturedAt) {
+    if (!postingIdentifier.safeParse(externalId).success) {
+      throw new AppError("invalid_posting_id", `not a SmartRecruiters posting id: ${externalId}`);
+    }
+    try {
+      return await readPosting(company, { id: externalId, name: externalId }, capturedAt);
+    } catch (error) {
+      if (error instanceof AppError && (error.code === "not_found" || error.details.status === 400)) return null;
+      throw error;
+    }
+  },
 };

@@ -19,7 +19,7 @@ import { SMB_ADAPTERS } from "./batches/smb.js";
 import { probeJson } from "./http.js";
 import type { BoardVerification, DiscoveryIssue, SourceAdapter } from "./types.js";
 
-const CORE_ADAPTERS: Partial<Record<AtsKind, SourceAdapter>> = {
+export const CORE_ADAPTERS: Partial<Record<AtsKind, SourceAdapter>> = {
   greenhouse: greenhouseAdapter,
   lever: leverAdapter,
   ashby: ashbyAdapter,

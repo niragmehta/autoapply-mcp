@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel>
+  <title>Fictional Startup News</title>
+  <link>https://techcrunch.com/</link>
+  <item>
+    <title><![CDATA[Acme Robotics raises $40M Series B to build warehouse arms]]></title>
+    <link>https://techcrunch.com/2026/11/04/acme-robotics-raises-40m/</link>
+    <pubDate>Wed, 04 Nov 2026 15:00:00 +0000</pubDate>
+    <dc:creator><![CDATA[Staff Writer]]></dc:creator>
+    <description><![CDATA[<p>The round was led by Example Ventures.</p>]]></description>
+  </item>
+  <item>
+    <title>Paris-based AI startup Globex Analytics lands &#8364;12 million seed round</title>
+    <link>https://techcrunch.com/2026/11/03/globex-analytics-seed/</link>
+    <pubDate>Tue, 03 Nov 2026 09:30:00 +0000</pubDate>
+    <description>Globex Analytics builds forecasting tools.</description>
+  </item>
+  <item>
+    <title>Example Ventures leads $8M round in Initech Security</title>
+    <link>https://techcrunch.com/2026/11/02/initech-security/</link>
+    <pubDate>Mon, 02 Nov 2026 12:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Vandelay Industries acquires Kramerica for $300M</title>
+    <link>https://techcrunch.com/2026/11/02/vandelay-acquires/</link>
+    <pubDate>Mon, 02 Nov 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Example Capital raises $500M fund for climate startups</title>
+    <link>https://techcrunch.com/2026/11/01/example-capital-fund/</link>
+    <pubDate>Sun, 01 Nov 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Hooli raises $25M, then cuts 30% of its workforce</title>
+    <link>https://techcrunch.com/2026/10/30/hooli-cuts/</link>
+    <pubDate>Fri, 30 Oct 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Former Initrode engineers raise $6M for compliance startup Pied Piper</title>
+    <link>https://techcrunch.com/2026/10/29/pied-piper/</link>
+    <pubDate>Thu, 29 Oct 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>How to raise a seed round in a down market</title>
+    <link>https://techcrunch.com/2026/10/28/how-to-raise/</link>
+    <pubDate>Wed, 28 Oct 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Acme Robotics hits $1B valuation</title>
+    <link>https://techcrunch.com/2026/10/20/acme-robotics-unicorn/</link>
+    <pubDate>Tue, 20 Oct 2026 10:00:00 +0000</pubDate>
+  </item>
+  <item>
+    <title>Old Corp raises $10M Series A</title>
+    <link>https://techcrunch.com/2025/01/10/old-corp/</link>
+    <pubDate>Fri, 10 Jan 2025 10:00:00 +0000</pubDate>
+  </item>
+</channel>
+</rss>

@@ -3,7 +3,7 @@ import {
   detectAlreadyApplied,
   detectSubmissionConfirmation,
   detectSubmissionRejection,
-} from "../src/submission/formFields.js";
+} from "../src/submission/form/pageSignals.js";
 
 const ASHBY_SPAM_BANNER =
   "We couldn't submit your application. Your application submission was flagged as possible spam. " +

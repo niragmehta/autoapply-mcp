@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { COLLECT_FIELDS, READ_VALIDATION_ERRORS, fillCombobox, repairReportedFields } from "../src/submission/browser.js";
-import { optionSearchCandidates, type FieldDescriptor, type FillPlan } from "../src/submission/formFields.js";
+import { READ_VALIDATION_ERRORS } from "../src/submission/browser.js";
+import { COLLECT_FIELDS } from "../src/submission/browser/collectFields.js";
+import { repairReportedFields } from "../src/submission/browser/controls.js";
+import { fillCombobox } from "../src/submission/browser/dropdowns.js";
+import type { FillPlan } from "../src/submission/formFields.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
+import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
+import { makeDraftAnswer } from "./factories.js";
 
 describe("COLLECT_FIELDS", () => {
   it("executes immediately and returns field descriptors", () => {
@@ -652,7 +658,7 @@ describe("fillCombobox", () => {
     const fake = fakeCombobox({ "": ["Male", "Female", "Non-binary"] });
     const declines = optionSearchCandidates(
       { selectorIndex: 0, label: "What gender do you identify with?", type: "text", name: "", required: false, role: "combobox" },
-      { questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" },
+      makeDraftAnswer({ questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" }),
     );
 
     await expect(fillCombobox(fake.page, fake.locator, declines)).rejects.toThrow(/no visible option/);
@@ -663,7 +669,7 @@ describe("fillCombobox", () => {
     const fake = fakeCombobox({ "": ["Male", "Female", "I don't wish to answer"] });
     const declines = optionSearchCandidates(
       { selectorIndex: 0, label: "Gender", type: "text", name: "", required: false, role: "combobox" },
-      { questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" },
+      makeDraftAnswer({ questionKey: "gender", label: "Gender", answer: "Decline to self-identify", source: "profile", citation: "", requiresHuman: false, category: "demographic" }),
     );
 
     await fillCombobox(fake.page, fake.locator, declines);

@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { resolveExperience } from "../src/drafting/experience.js";
 import { experienceResolverFor } from "../src/submission/experienceResolver.js";
-import {
-  buildFillPlan,
-  fallbackAnswersForFields,
-  optionSearchCandidates,
-  pickOptionIndex,
-} from "../src/submission/formFields.js";
-import type { FieldDescriptor } from "../src/submission/formFields.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import { fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import { pickOptionIndex } from "../src/submission/form/optionMatching.js";
+import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import type { DraftAnswer } from "../src/domain/job.js";
 import { makeProfile } from "./factories.js";
 
@@ -23,7 +21,9 @@ function answer(label: string, value: string): DraftAnswer {
     source: "profile",
     citation: "",
     requiresHuman: false,
+    required: true,
     category: "contact",
+    guidance: "",
   };
 }
 

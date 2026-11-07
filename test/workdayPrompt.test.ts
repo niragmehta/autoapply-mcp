@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { optionSearchCandidates } from "../src/submission/formFields.js";
-import { fillWorkdayPrompt, isWorkdayPrompt } from "../src/submission/workdayFlow.js";
+import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
+import { fillWorkdayPrompt, isWorkdayPrompt } from "../src/submission/workday/prompt.js";
+import type { Locator, Page } from "../src/submission/workday/types.js";
+import { makeDraftAnswer } from "./factories.js";
 
 /**
  * A Workday prompt widget reduced to the behaviour that broke the wizard.
@@ -12,6 +14,12 @@ import { fillWorkdayPrompt, isWorkdayPrompt } from "../src/submission/workdayFlo
  * answers as if they were selectable choices.
  */
 type Tree = Record<string, string[] | null>;
+
+/** "single-picker" is a single-select Workday renders inside a picker's container. */
+type PromptKind = "picker" | "dropdown" | "single-picker";
+
+/** Deliberately partial: a prompt never reloads the page, and only the searchable fakes below type. */
+type PromptPage = Omit<Page, "reload" | "keyboard"> & { keyboard: Pick<Page["keyboard"], "press"> };
 
 class FakePrompt {
   menu: string[] = [];
@@ -29,16 +37,19 @@ class FakePrompt {
   private shownMenu: string[] = [];
   /** Whether the open list is a category's rather than the top level. */
   private inCategory = false;
+  private readonly tree: Tree;
+  private readonly kind: PromptKind;
+  /** Pills belonging to *other* fields, which must never be treated as choices. */
+  private readonly strayPills: string[];
+  /** False models a delete click that misses, which is how Adobe kept a stray major. */
+  private readonly pillDeletes: boolean;
 
-  constructor(
-    private readonly tree: Tree,
-    /** "single-picker" is a single-select Workday renders inside a picker's container. */
-    private readonly kind: "picker" | "dropdown" | "single-picker" = "picker",
-    /** Pills belonging to *other* fields, which must never be treated as choices. */
-    private readonly strayPills: string[] = [],
-    /** False models a delete click that misses, which is how Adobe kept a stray major. */
-    private readonly pillDeletes: boolean = true,
-  ) {}
+  constructor(tree: Tree, kind: PromptKind = "picker", strayPills: string[] = [], pillDeletes = true) {
+    this.tree = tree;
+    this.kind = kind;
+    this.strayPills = strayPills;
+    this.pillDeletes = pillDeletes;
+  }
 
   private top(): string[] {
     return Object.keys(this.tree);
@@ -62,9 +73,9 @@ class FakePrompt {
     return this.offset !== before;
   }
 
-  private list(selector: string, items: string[]) {
+  private list(selector: string, items: string[]): Locator {
     const self = this;
-    const make = (index: number | null) => ({
+    const make = (index: number | null): Locator => ({
       first: () => make(0),
       nth: (i: number) => make(i),
       count: async () => items.length,
@@ -100,7 +111,7 @@ class FakePrompt {
     return make(null);
   }
 
-  locator(selector: string) {
+  locator(selector: string): Locator {
     if (selector.includes("promptAriaInstruction")) {
       return this.list(selector, this.announces ? [`${this.selected.length} items selected`] : []);
     }
@@ -168,8 +179,8 @@ class FakePrompt {
     return this.list(selector, []);
   }
 
-  asPage() {
-    return {
+  asPage(): Page {
+    const page: PromptPage = {
       goto: async () => undefined,
       locator: (selector: string) => this.locator(selector),
       url: () => "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/x",
@@ -193,6 +204,7 @@ class FakePrompt {
         },
       },
     };
+    return page as Page;
   }
 
   /** The widget wrapper the production code is handed. */
@@ -621,7 +633,7 @@ describe("fillWorkdayPrompt", () => {
     const label = "Do you currently live in or are you able to relocate to the location this job is advertised in?";
     const candidates = optionSearchCandidates(
       { selectorIndex: 0, label, type: "select", name: "", required: true },
-      {
+      makeDraftAnswer({
         questionKey: "relocation-willing",
         label,
         answer: "Yes",
@@ -629,7 +641,7 @@ describe("fillWorkdayPrompt", () => {
         citation: "profile.answers.relocation-willing",
         requiresHuman: false,
         category: "general",
-      },
+      }),
     );
 
     const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), candidates);
@@ -717,9 +729,9 @@ describe("fillWorkdayPrompt", () => {
     const stated = "Around USD 222,480 base (the top of the posted range), flexible depending on level and total compensation.";
     const field = { selectorIndex: 0, label: "What is your base pay expectation for this position?", type: "select", name: "", required: true };
 
-    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), optionSearchCandidates(field, {
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), optionSearchCandidates(field, makeDraftAnswer({
       questionKey: "pay", label: field.label, answer: stated, source: "human", citation: "", requiresHuman: true, category: "compensation",
-    }));
+    })));
 
     expect(result.filled).toBe(true);
     expect(prompt.selected).toEqual(["$220,000 - $240,000"]);
@@ -1087,7 +1099,7 @@ describe("a careers-page answer under a career-site category", () => {
   const label = "How Did You Hear About Us?*";
   const candidates = optionSearchCandidates(
     { selectorIndex: 0, label, type: "select", name: "", required: true },
-    {
+    makeDraftAnswer({
       questionKey: "how-did-you-hear",
       label,
       answer: "Company Careers Page",
@@ -1095,7 +1107,7 @@ describe("a careers-page answer under a career-site category", () => {
       citation: "profile.answers.how-did-you-hear",
       requiresHuman: false,
       category: "general",
-    },
+    }),
     "Salesforce",
   );
 
@@ -1143,7 +1155,7 @@ describe("a category longer than the rows it renders", () => {
   const label = "How Did You Hear About Us?*";
   const candidates = optionSearchCandidates(
     { selectorIndex: 0, label, type: "select", name: "", required: true },
-    {
+    makeDraftAnswer({
       questionKey: "how-did-you-hear",
       label,
       answer: "Company Careers Page",
@@ -1151,7 +1163,7 @@ describe("a category longer than the rows it renders", () => {
       citation: "profile.answers.how-did-you-hear",
       requiresHuman: false,
       category: "general",
-    },
+    }),
     "Salesforce",
   );
   const salesforce = (sources: string[]) => {
@@ -1215,21 +1227,31 @@ class SearchablePrompt extends FakePrompt {
   query = "";
   enterPresses = 0;
   private focused = false;
+  private readonly catalogue: readonly string[];
+  private readonly runsOn: "keystroke" | "enter";
+  private readonly enterSelectsSingle: boolean;
+  private readonly boxOutsidePrompt: boolean;
+  /**
+   * `enterCommitsFirstRow` models a single-select that treats Enter on a
+   * fruitless search as "take the highlighted row" - the way Adobe's
+   * country-code prompt ended on a country nobody chose.
+   */
+  private readonly extra: { kind?: "picker" | "dropdown"; enterCommitsFirstRow?: boolean };
 
   constructor(
     tree: Tree,
-    private readonly catalogue: readonly string[],
-    private readonly runsOn: "keystroke" | "enter",
-    private readonly enterSelectsSingle = false,
-    private readonly boxOutsidePrompt = false,
-    /**
-     * `enterCommitsFirstRow` models a single-select that treats Enter on a
-     * fruitless search as "take the highlighted row" - the way Adobe's
-     * country-code prompt ended on a country nobody chose.
-     */
-    private readonly extra: { kind?: "picker" | "dropdown"; enterCommitsFirstRow?: boolean } = {},
+    catalogue: readonly string[],
+    runsOn: "keystroke" | "enter",
+    enterSelectsSingle = false,
+    boxOutsidePrompt = false,
+    extra: { kind?: "picker" | "dropdown"; enterCommitsFirstRow?: boolean } = {},
   ) {
     super(tree, extra.kind ?? "picker");
+    this.catalogue = catalogue;
+    this.runsOn = runsOn;
+    this.enterSelectsSingle = enterSelectsSingle;
+    this.boxOutsidePrompt = boxOutsidePrompt;
+    this.extra = extra;
   }
 
   private results(): string[] {
@@ -1239,7 +1261,7 @@ class SearchablePrompt extends FakePrompt {
     return this.catalogue.filter((name) => words.every((word) => name.toLowerCase().includes(word)));
   }
 
-  override locator(selector: string) {
+  override locator(selector: string): Locator {
     if (!selector.includes('placeholder="Search"')) return super.locator(selector);
     const pageLevel = selector.includes(":visible");
     if (this.boxOutsidePrompt && !pageLevel) return { count: async () => 0 } as never;
@@ -1263,7 +1285,7 @@ class SearchablePrompt extends FakePrompt {
     return box as never;
   }
 
-  override asPage() {
+  override asPage(): Page {
     return {
       ...super.asPage(),
       locator: (selector: string) => this.locator(selector),
@@ -1301,14 +1323,14 @@ class SearchablePrompt extends FakePrompt {
 
 /** A dropdown whose search commits a row on Enter whether or not its list is open, as Disney's did. */
 class EnterCommitsRowPrompt extends SearchablePrompt {
-  constructor(
-    tree: Tree,
-    private readonly row: string,
-  ) {
+  private readonly row: string;
+
+  constructor(tree: Tree, row: string) {
     super(tree, [], "enter", false, false, { kind: "dropdown" });
+    this.row = row;
   }
 
-  override asPage() {
+  override asPage(): Page {
     const page = super.asPage();
     return {
       ...page,
@@ -1333,15 +1355,16 @@ class EnterCommitsRowPrompt extends SearchablePrompt {
 class NeighbourSearchPrompt extends FakePrompt {
   private query = "";
   private target: "own" | "other" | null = null;
+  private readonly schools: readonly string[];
+  private readonly majors: readonly string[];
 
-  constructor(
-    private readonly schools: readonly string[],
-    private readonly majors: readonly string[],
-  ) {
+  constructor(schools: readonly string[], majors: readonly string[]) {
     super({ "No Items.": null });
+    this.schools = schools;
+    this.majors = majors;
   }
 
-  override locator(selector: string) {
+  override locator(selector: string): Locator {
     if (!selector.includes('placeholder="Search"')) return super.locator(selector);
     // Both boxes are only visible to the page-wide query.
     if (!selector.includes(":visible")) return { count: async () => 0 } as never;
@@ -1370,7 +1393,7 @@ class NeighbourSearchPrompt extends FakePrompt {
     return boxAt(0) as never;
   }
 
-  override asPage() {
+  override asPage(): Page {
     return {
       ...super.asPage(),
       locator: (selector: string) => this.locator(selector),
@@ -1419,7 +1442,7 @@ describe("a Workday consent prompt answered by opting in or out", () => {
   const candidatesFor = (label: string, value: string, questionKey: string) =>
     optionSearchCandidates(
       { selectorIndex: 0, label, type: "select", name: "", required: true },
-      {
+      makeDraftAnswer({
         questionKey,
         label,
         answer: value,
@@ -1427,7 +1450,7 @@ describe("a Workday consent prompt answered by opting in or out", () => {
         citation: `profile.answers.${questionKey}`,
         requiresHuman: false,
         category: "general",
-      },
+      }),
     );
 
   it("opts out of text messages the candidate declined", async () => {

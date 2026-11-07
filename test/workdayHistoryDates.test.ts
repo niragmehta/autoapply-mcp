@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser } from "playwright";
 import type { DraftAnswer } from "../src/domain/job.js";
-import { COLLECT_FIELDS, repairReportedFields } from "../src/submission/browser.js";
-import { buildFillPlan, type FieldDescriptor } from "../src/submission/formFields.js";
+import { COLLECT_FIELDS } from "../src/submission/browser/collectFields.js";
+import { repairReportedFields } from "../src/submission/browser/controls.js";
+import type { AnyPage } from "../src/submission/browser/playwright.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import { resolvePersonal } from "../src/drafting/personal.js";
 import { makeProfile } from "./factories.js";
 
@@ -81,11 +84,12 @@ describe("Workday history dates in a local browser", () => {
       const plan = buildFillPlan(fields, [answer(label, value)]);
       expect(plan.toFill).toHaveLength(1);
 
-      const repaired = await repairReportedFields(page, plan.toFill, [label]);
+      // The engine types pages structurally, with loose option parameters Playwright's stricter signatures do not satisfy.
+      const repaired = await repairReportedFields(page as unknown as AnyPage, plan.toFill, [label]);
 
       expect(repaired).toEqual([label]);
       const values = await page.locator('input[role="spinbutton"]').evaluateAll((inputs) =>
-        inputs.map((input) => (input as HTMLInputElement).value));
+        inputs.map((input) => (input as { value: string }).value));
       expect(values).toEqual(expected);
     } finally {
       await page.close();

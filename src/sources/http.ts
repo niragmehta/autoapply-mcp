@@ -1,5 +1,6 @@
 import { AppError } from "../util/errors.js";
 import { logger } from "../util/logger.js";
+import { SERVER_NAME, SERVER_VERSION } from "../version.js";
 import { fetchSourceResponse } from "./sourceRedirects.js";
 
 /**
@@ -31,11 +32,9 @@ function defaultMinIntervalMs(): number {
 
 const lastRequestByHost = new Map<string, number>();
 
+/** Identifies this client honestly; AUTOAPPLY_USER_AGENT overrides it. */
 export function userAgent(): string {
-  return (
-    process.env.AUTOAPPLY_USER_AGENT ??
-    "autoapply-mcp/0.1 (+https://github.com/autoapply-mcp; personal job-search client)"
-  );
+  return process.env.AUTOAPPLY_USER_AGENT ?? `${SERVER_NAME}/${SERVER_VERSION} (personal job-search client)`;
 }
 
 function sleep(ms: number): Promise<void> {

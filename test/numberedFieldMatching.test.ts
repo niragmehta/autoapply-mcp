@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { matchFields, type DraftAnswer, type FieldDescriptor } from "../src/submission/formFields.js";
+import type { DraftAnswer } from "../src/domain/job.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
+import { matchFields } from "../src/submission/form/matching.js";
 
 /**
  * Workday's address block puts "Address Line 1" and "Address Line 2" side by

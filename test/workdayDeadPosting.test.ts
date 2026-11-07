@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { isAccountGateUrl, isDeadPostingText, isSignInStepLabel } from "../src/submission/workdayFlow.js";
+import { isDeadPostingText } from "../src/submission/workdayFlow.js";
+import { isAccountGateUrl, isSignInStepLabel } from "../src/submission/workday/gates.js";
 
 describe("isAccountGateUrl", () => {
   // Guidewire answered a registration by redirecting to its standalone login

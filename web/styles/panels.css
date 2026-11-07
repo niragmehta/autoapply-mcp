@@ -1,0 +1,424 @@
+/* Drawer, states, questions, run forms, toasts and dialogs. */
+
+/* ---------- Loading, empty and error states ---------- */
+
+.skeleton {
+  display: block;
+  height: 0.8rem;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--surface-2) 0%, #f2f4f0 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  padding: var(--s5);
+  color: var(--ink-2);
+}
+
+.empty__title {
+  color: var(--ink);
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.empty__body {
+  max-width: 60ch;
+}
+
+.notice {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-panel);
+  background: var(--info-bg);
+  color: var(--info-ink);
+  overflow-wrap: anywhere;
+}
+
+.notice--bad {
+  background: var(--bad-bg);
+  color: var(--bad-ink);
+}
+
+.notice--ok {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.notice--held {
+  background: #fff4c2;
+  color: var(--signal-ink);
+}
+
+.notice__title {
+  font-weight: 600;
+}
+
+/* ---------- Drawer (detail panel) ---------- */
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  width: min(36rem, 100vw);
+  border-left: 1px solid var(--rule-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-drawer);
+  animation: drawer-in 220ms var(--ease-out);
+}
+
+.drawer--wide {
+  width: min(48rem, 100vw);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.drawer__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--rule);
+}
+
+.drawer__title {
+  flex: 1;
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.drawer__title h2 {
+  overflow-wrap: anywhere;
+}
+
+/* Focus moves to the heading so screen readers announce the panel; it is not a control, so no ring. */
+.drawer__title h2:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.drawer__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s4) var(--s5) var(--s6);
+  overscroll-behavior: contain;
+}
+
+.drawer__section + .drawer__section {
+  margin-top: var(--s5);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--rule);
+}
+
+.drawer__section > h3 {
+  margin-bottom: var(--s3);
+}
+
+/* ---------- Needs-human questions ---------- */
+
+.question {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+}
+
+.question + .question {
+  border-top: 1px solid var(--rule);
+}
+
+.question__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2) var(--s3);
+}
+
+.question__label {
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.question__guidance {
+  max-width: 75ch;
+  color: var(--ink-2);
+}
+
+.question__apps {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question__apps li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2) var(--s3);
+}
+
+.question__apps li > a {
+  flex: none;
+  line-height: 1.75rem;
+}
+
+.question__answer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s3);
+  max-width: 56rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.chip {
+  min-height: 1.75rem;
+  padding: 0 var(--s2);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* ---------- Run forms ---------- */
+
+.tabs {
+  display: flex;
+  gap: var(--s1);
+  margin-bottom: var(--s4);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rule);
+  scrollbar-width: none;
+}
+
+.tabs button {
+  position: relative;
+  flex: none;
+  min-height: 2.25rem;
+  padding: 0 var(--s3);
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabs button:hover {
+  color: var(--ink);
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--ink);
+}
+
+.tabs button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--s3);
+  right: var(--s3);
+  bottom: -1px;
+  height: 3px;
+  background: var(--accent);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--s3) var(--s4);
+}
+
+.form-grid--wide {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+.run-form {
+  max-width: 64rem;
+}
+
+.run-form__intro {
+  margin-bottom: var(--s4);
+  color: var(--ink-3);
+}
+
+.pick-list {
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+/* ---------- Toasts and dialogs ---------- */
+
+.toasts {
+  position: fixed;
+  right: var(--s5);
+  bottom: var(--s5);
+  z-index: 40;
+  display: grid;
+  gap: var(--s2);
+  width: min(26rem, calc(100vw - 2 * var(--s4)));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-panel);
+  background: var(--board);
+  color: var(--board-ink);
+  box-shadow: 0 10px 28px rgba(11, 37, 69, 0.24), 0 2px 6px rgba(11, 37, 69, 0.12);
+  animation: toast-in 200ms var(--ease-out);
+}
+
+.toast--bad {
+  background: #5f0d17;
+}
+
+.toast a {
+  color: var(--signal);
+}
+
+.toast p {
+  flex: 1;
+}
+
+.toast .icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--board-ink-2);
+}
+
+.toast .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--board-ink);
+}
+
+.toast :focus-visible {
+  box-shadow: 0 0 0 2px var(--board), 0 0 0 4px var(--signal);
+}
+
+details > summary {
+  width: fit-content;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+details > summary:hover {
+  color: var(--accent-hover);
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.dialog {
+  width: min(32rem, calc(100vw - 2 * var(--s4)));
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 48px rgba(11, 37, 69, 0.28);
+}
+
+.dialog::backdrop {
+  background: rgba(11, 37, 69, 0.35);
+}
+
+.dialog__body {
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s5);
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s2) var(--s4);
+  margin: 0;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.4rem;
+  padding: 0 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  line-height: 1.35rem;
+  text-align: center;
+}
+
+/* ---------- Signed out ---------- */
+
+.signed-out {
+  max-width: 38rem;
+  margin: var(--s7) auto;
+  padding: 0 var(--s4);
+}
+
+.signed-out .panel {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s5);
+}

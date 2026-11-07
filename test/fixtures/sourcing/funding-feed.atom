@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Fictional Atom News</title>
+  <entry>
+    <title type="html">Tyrell Systems emerges from stealth with $15 million</title>
+    <link rel="alternate" href="https://news.crunchbase.com/2026/11/tyrell-systems/"/>
+    <published>2026-11-05T08:00:00Z</published>
+    <summary>Tyrell Systems, a developer tools company, announced its debut.</summary>
+  </entry>
+</feed>

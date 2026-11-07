@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { retriesEmptyWorkdayStep } from "../src/submission/workdayFlow.js";
+import { retriesEmptyWorkdayStep } from "../src/submission/workday/wizard.js";
 
 describe("retriesEmptyWorkdayStep", () => {
   it("reloads a form step that came back empty", () => {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { draftAnswers, type FormQuestion } from "../src/drafting/answers.js";
-import { buildFillPlan, fallbackAnswersForFields, type FieldDescriptor } from "../src/submission/formFields.js";
+import { draftAnswers } from "../src/drafting/answers.js";
+import type { FormQuestion } from "../src/drafting/answers/formQuestion.js";
+import { buildFillPlan } from "../src/submission/formFields.js";
+import { fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
+import type { FieldDescriptor } from "../src/submission/form/fieldModel.js";
 import type { Profile } from "../src/domain/profile.js";
-import { makeCampaign, makeProfile } from "./factories.js";
+import { makeBankEntry, makeCampaign, makeProfile } from "./factories.js";
 
 function profileWith(answers: Profile["answers"]): Profile {
   return { ...makeProfile(), answers };
@@ -24,23 +27,23 @@ function field(label: string, type = "text"): FieldDescriptor {
   return { selectorIndex: 0, label, type, name: "q", required: true };
 }
 
-const basedIn = {
+const basedIn = makeBankEntry({
   key: "based-in-location",
   label: "Currently based in the role's location",
   patterns: ["currently based in", "are you located in", "do you currently live in"],
   answer: "No - based in Vancouver, Canada and willing to relocate.",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
-const relocate = {
+const relocate = makeBankEntry({
   key: "relocation-willing",
   label: "Open to relocation",
   patterns: ["open to relocation", "willing to relocate"],
   answer: "Yes",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 /**
  * Watershed asks "Are you located in, or willing to relocate to the SF area?"
@@ -102,14 +105,14 @@ describe("residence questions that also accept relocation", () => {
   });
 });
 
-const basedOrRelocating = {
+const basedOrRelocating = makeBankEntry({
   key: "willing-to-relocate-to-role-location",
   label: "Based in or willing to relocate to the role's location",
   patterns: ["or open to relocation", "or willing to relocate"],
   answer: "Yes",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 const BREX = "Do you currently live in, or plan to relocate to, the specified location?";
 const BREX_OPTIONS = ["Yes, I live here", "Yes, I plan to relocate", "No"];
@@ -164,14 +167,14 @@ describe("residence-or-relocation questions that spell the answers out", () => {
   });
 });
 
-const relocationAssistance = {
+const relocationAssistance = makeBankEntry({
   key: "relocation-assistance",
   label: "Do you require relocation assistance",
   patterns: ["require relocation assistance", "relocation assistance"],
   answer: "No",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 /**
  * Snap asked "Do you currently live in or are you able to relocate to the
@@ -267,14 +270,14 @@ describe("a relocation question conditioned on not living there", () => {
   });
 });
 
-const onsite = {
+const onsite = makeBankEntry({
   key: "onsite-willingness",
   label: "Willing to work onsite",
   patterns: ["open to working in-office"],
   answer: "Yes",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 /**
  * Retell AI asks "Are you open to working in-office 5x per week in the San
@@ -367,14 +370,14 @@ describe("contact details belonging to someone the question refers to", () => {
   });
 });
 
-const whyMulti = {
+const whyMulti = makeBankEntry({
   key: "why-interested-multi",
   label: "Why are you interested in working here? (select all that apply)",
   patterns: ["why are you interested in working"],
   answer: "Products & Technical Innovation",
   alternatives: [],
   allowAutoFill: true,
-};
+});
 
 /**
  * The stored pick for a "select all that apply" list was pasted into Abby
@@ -418,14 +421,14 @@ describe("answers written for a choice list", () => {
  * New York?" took the generic relocation "Yes" instead.
  */
 describe("a place-specific relocation decision", () => {
-  const noNewYork = {
+  const noNewYork = makeBankEntry({
     key: "relocation-new-york",
     label: "Willing to relocate to New York",
     patterns: ["relocate to new york"],
     answer: "No",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
 
   it("answers a located-in-or-relocate question about that place", () => {
     const label = "Are you located in, or willing to relocate to New York?";
@@ -444,14 +447,14 @@ describe("a place-specific relocation decision", () => {
  * email-infrastructure essay with the candidate's address.
  */
 describe("essay questions that mention a contact word", () => {
-  const mobileEssay = {
+  const mobileEssay = makeBankEntry({
     key: "mobile-security-experience",
     label: "Describe your mobile security experience",
     patterns: ["mobile security experience"],
     answer: "I reviewed the threat model for a mobile banking app and hardened its token storage.",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
 
   it("keeps an approved essay answer", () => {
     const { answers } = draftAnswers(
@@ -503,14 +506,14 @@ describe("a contact detail the third party will use to reach the candidate", () 
  * matched the trailing clause, and the whole essay went out as that one word.
  */
 describe("a stored yes/no answer and a free-text prompt", () => {
-  const recentProcess = {
+  const recentProcess = makeBankEntry({
     key: "recent-hiring-process",
     label: "Participated in a hiring process with us recently",
     patterns: ["in the last 6 months"],
     answer: "No",
     alternatives: ["No"],
     allowAutoFill: true,
-  };
+  });
 
   it("never answers an essay prompt with Yes or No", () => {
     const { answers } = draftAnswers(
@@ -552,14 +555,14 @@ describe("a stored yes/no answer and a free-text prompt", () => {
  * first, telling the employer a Canadian citizen holds US citizenship.
  */
 describe("choices that claim a US status the profile does not record", () => {
-  const authorizedNow = {
+  const authorizedNow = makeBankEntry({
     key: "us-work-authorization-now",
     label: "Currently authorized to work in the US",
     patterns: ["authorized to work in the united states"],
     answer: "Yes",
     alternatives: [],
     allowAutoFill: true,
-  };
+  });
   const seatGeek = choice("Are you currently authorized to work in the United States?", [
     "Yes, I have US work authorization as a US Citizen or US Permanent Resident/Green Card Holder",
     "Yes, I have US Work authorization via a non-immigrant visa (H-1B, L-1, F-1 OPT OR CPT, TN, E-3, O-1, Dependent Visa)",
@@ -606,7 +609,7 @@ describe("choices that claim a US status the profile does not record", () => {
  * case is used - and only there.
  */
 describe("a decline with a value for forms that offer no decline", () => {
-  const gender = {
+  const gender = makeBankEntry({
     key: "gender-self-id",
     label: "Gender",
     patterns: ["gender"],
@@ -614,7 +617,7 @@ describe("a decline with a value for forms that offer no decline", () => {
     alternatives: ["I prefer not to say"],
     allowAutoFill: true,
     whenNoDecline: "Male",
-  };
+  });
 
   it("uses the stored value when no decline is offered", () => {
     const { answers } = draftAnswers([choice("What is your gender?", ["Male", "Female"])], profileWith([gender]), makeCampaign());
