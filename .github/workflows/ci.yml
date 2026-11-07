@@ -35,6 +35,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Some engine tests drive a real headless browser against local pages.
+      - run: npx playwright install --with-deps chromium
       - run: npm test
       - run: npm run build
 
