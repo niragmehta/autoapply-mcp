@@ -59,7 +59,7 @@ function nextActions(input: {
       label: "Decide on offers",
       detail: "Offers with a deadline in the next seven days.",
       count: after.offersDueThisWeek,
-      href: "/interviews?tab=offers",
+      href: "/offers",
       tone: "attention",
     },
     {

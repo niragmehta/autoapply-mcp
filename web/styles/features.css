@@ -416,12 +416,6 @@
   background: var(--paper);
 }
 
-.session + .session {
-  margin-top: var(--s4);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--rule);
-}
-
 /* ---------- Markdown (reports and prep notes) ---------- */
 
 .md {

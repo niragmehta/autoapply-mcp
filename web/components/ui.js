@@ -17,6 +17,8 @@ const ICONS = {
   copy: html`<path d="M5.5 5.5h7v7h-7zM3.5 10.5v-7h7" />`,
   menu: html`<path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />`,
   download: html`<path d="M8 2.5v7.5M4.75 7 8 10.25 11.25 7M3 13.25h10" />`,
+  search: html`<path d="M7 2.75a4.25 4.25 0 1 0 0 8.5 4.25 4.25 0 0 0 0-8.5zM10.1 10.1l3.15 3.15" />`,
+  bell: html`<path d="M4 11.25V7.5a4 4 0 0 1 8 0v3.75l1 1.25H3zM6.5 13.75a1.6 1.6 0 0 0 3 0" />`,
 };
 
 export function Icon({ name, title }) {

@@ -1,6 +1,8 @@
 import { api } from "../api.js";
+import { CompanyNotes } from "../components/company-notes.js";
 import { DismissConfirm, dismissedText } from "../components/dismiss.js";
 import { Drawer } from "../components/drawer.js";
+import { StoryMatch } from "../components/story-match.js";
 import { Button, Check, Empty, ErrorNotice, ExternalLink, Plate, Skeleton, TierPlate } from "../components/ui.js";
 import { ago, dateTime, label, num } from "../lib/format.js";
 import { html, useState } from "../lib/html.js";
@@ -237,6 +239,8 @@ export function JobDetail({ jobId, onClose, onChanged }) {
             <h3>Score breakdown</h3>
             <${Components} components=${evaluation?.components} />
           </section>
+          <${StoryMatch} key=${job.id} jobId=${job.id} />
+          <${CompanyNotes} company=${job.companyName} />
           ${data.duplicates.length
             ? html`<section class="drawer__section">
                 <h3>Same role elsewhere</h3>

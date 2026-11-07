@@ -3,11 +3,13 @@ import type { Db } from "../db/database.js";
 import { appendEvent } from "../db/repositories/events.js";
 import {
   contactIdsForApplication,
+  deleteContactRecord,
   findContactByName,
   getContact,
   listContactRecords,
   saveContactRecord,
 } from "../db/repositories/career/contacts.js";
+import { listOutreachDraftRecords } from "../db/repositories/career/outreach.js";
 import { AppError } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
 import { parseInput, requireApplication, type CareerWorkspace } from "./context.js";
@@ -85,10 +87,67 @@ export function saveContact(workspace: Pick<CareerWorkspace, "db">, input: Conta
   };
   saveContactRecord(db, contact);
   appendEvent(db, existing ? "contact.updated" : "contact.saved", contact.id, { company: contact.company, kind: contact.kind });
-  const warnings = PHONE_LIKE.test(contact.notes)
+  return { contact, updated: existing !== null, warnings: contactWarnings(contact) };
+}
+
+function contactWarnings(contact: Contact): string[] {
+  return PHONE_LIKE.test(contact.notes)
     ? ["The notes look like they contain a phone number; keep contacts to public professional details."]
     : [];
-  return { contact, updated: existing !== null, warnings };
+}
+
+export const UpdateContactSchema = z.object({
+  id: z.string().trim().min(1),
+  company: z.string().trim().min(1).max(200).optional(),
+  name: z.string().trim().min(1).max(160).optional(),
+  role: z.string().trim().max(200).optional(),
+  kind: z.enum(CONTACT_KINDS).optional(),
+  profileUrl: z.string().trim().max(500).optional(),
+  email: z.union([z.literal(""), z.email()]).optional(),
+  notes: z.string().max(4000).optional(),
+  source: z.string().trim().min(1, "say where this contact was publicly found").max(500).optional(),
+});
+type UpdateContactInput = z.input<typeof UpdateContactSchema>;
+
+/**
+ * Edits a contact by id. Unlike saveContact, a field given as "" is cleared:
+ * this is an edit of one known record, not a merge of a second sighting.
+ */
+export function updateContact(workspace: Pick<CareerWorkspace, "db">, input: UpdateContactInput) {
+  const parsed = parseInput(UpdateContactSchema, input, "contact update");
+  const { db } = workspace;
+  const existing = requireContact(db, parsed.id);
+  if (parsed.profileUrl !== undefined) checkProfileUrl(parsed.profileUrl);
+  const next: Contact = {
+    ...existing,
+    company: parsed.company ?? existing.company,
+    name: parsed.name ?? existing.name,
+    role: parsed.role ?? existing.role,
+    kind: parsed.kind ?? existing.kind,
+    profileUrl: parsed.profileUrl ?? existing.profileUrl,
+    email: parsed.email ?? existing.email,
+    notes: parsed.notes ?? existing.notes,
+    source: parsed.source ?? existing.source,
+    updatedAt: nowIso(),
+  };
+  const clash = findContactByName(db, next.company, next.name);
+  if (clash && clash.id !== existing.id) {
+    throw new AppError("contact_exists", `${clash.name} at ${clash.company} is already a contact (${clash.id}); edit that one instead`);
+  }
+  const changed = (Object.keys(next) as Array<keyof Contact>).filter((key) => key !== "updatedAt" && next[key] !== existing[key]);
+  saveContactRecord(db, next);
+  appendEvent(db, "contact.updated", next.id, { company: next.company, kind: next.kind, changed });
+  return { contact: next, changed, warnings: contactWarnings(next) };
+}
+
+/** Deletes a contact. Drafts addressed to them stay, under their company, without the contact link. */
+export function deleteContact(workspace: Pick<CareerWorkspace, "db">, id: string) {
+  const { db } = workspace;
+  const contact = requireContact(db, id);
+  const draftsKept = listOutreachDraftRecords(db, { contactId: contact.id, limit: 500 }).length;
+  deleteContactRecord(db, contact.id);
+  appendEvent(db, "contact.deleted", contact.id, { company: contact.company, draftsKept });
+  return { deleted: contact.id, draftsKept };
 }
 
 type ContactListFilter = { company?: string; kind?: ContactKind; applicationId?: string; limit?: number };

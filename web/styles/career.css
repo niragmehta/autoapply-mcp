@@ -1,0 +1,310 @@
+/* Editors and the career suite: fields with their own warnings, story rows, requirement matches, notes, prep sheets, offers. */
+
+/* ---------- Fields: a warning sits beside the field it is about ---------- */
+
+.field__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.field__count {
+  color: var(--ink-3);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.field__warn {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}
+
+.select[aria-invalid="true"] {
+  border-color: var(--bad-ink);
+}
+
+.check--top {
+  align-items: flex-start;
+}
+
+.check--top input {
+  margin-top: 0.2rem;
+}
+
+/* A control that reads as a link: same blue, underline on hover, never a box. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.link-button[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- Story bank ---------- */
+
+.stories {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.story-row {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.story-row:last-child {
+  border-bottom: 0;
+}
+
+.story-row.is-selected {
+  background: var(--accent-soft);
+}
+
+.story-row__title {
+  color: var(--ink);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.story-row__title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.story-row__lead {
+  max-width: 75ch;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-row__meta {
+  gap: var(--s1) var(--s2);
+}
+
+.theme {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
+
+.theme__head {
+  justify-content: space-between;
+}
+
+.fact-picker__list {
+  display: grid;
+  gap: var(--s2);
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  list-style: none;
+}
+
+.fact-picker__list .check {
+  line-height: 1.4;
+}
+
+/* ---------- Requirements matched to stories ---------- */
+
+.req-list {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.req {
+  display: grid;
+  gap: var(--s1);
+}
+
+.req__text {
+  color: var(--ink-2);
+  font-style: italic;
+  quotes: "\201C" "\201D";
+  overflow-wrap: anywhere;
+}
+
+.req__stories {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: 1rem;
+  list-style: square;
+}
+
+.req__gap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* ---------- Company notes ---------- */
+
+.notes {
+  margin-top: var(--s2);
+}
+
+.note__actions {
+  gap: var(--s2);
+}
+
+.note-form {
+  gap: var(--s3);
+}
+
+/* ---------- Interviews ---------- */
+
+.people-rows {
+  display: grid;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+  padding: 0;
+  list-style: none;
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.sessions {
+  margin-top: var(--s2);
+}
+
+.session {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
+
+/* ---------- Prep sheet ---------- */
+
+.prep-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 1fr);
+  align-items: start;
+  gap: var(--s5);
+  margin-top: var(--s4);
+}
+
+.prep-main,
+.prep-side {
+  display: grid;
+  gap: var(--s4);
+}
+
+.prep-section {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.prep-section h2 {
+  font-size: var(--fs-lg);
+}
+
+.prep-section h3 {
+  margin-top: var(--s2);
+  font-size: var(--fs-base);
+}
+
+.prep-table {
+  border: 1px solid var(--rule);
+}
+
+.prep-person {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.prep-person:last-child {
+  border-bottom: 0;
+}
+
+.prep-person__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--s3);
+}
+
+.prep-stories {
+  display: grid;
+  gap: var(--s3);
+}
+
+.prep-story {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+
+.prep-story h4 {
+  margin-bottom: var(--s2);
+  font-size: var(--fs-base);
+}
+
+.prep .company-notes {
+  margin-top: var(--s4);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.prep-foot {
+  margin-top: var(--s4);
+}
+
+@media (max-width: 1100px) {
+  .prep-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .people-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .people-row input:nth-of-type(2) {
+    grid-column: 1;
+  }
+
+  .prep-section,
+  .prep .company-notes {
+    padding: var(--s3) var(--s4);
+  }
+}

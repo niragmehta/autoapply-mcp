@@ -150,11 +150,13 @@ export type FixtureOptions = {
   features?: boolean;
   /** Top-level campaign.json keys to replace. */
   campaign?: Record<string, unknown>;
+  /** Top-level profile.json keys to replace. */
+  profile?: Record<string, unknown>;
 };
 
 export async function startFixture(prefix: string, options: FixtureOptions = {}): Promise<Fixture> {
   const home = mkdtempSync(join(tmpdir(), `autoapply-${prefix}-`));
-  writeFileSync(join(home, "profile.json"), JSON.stringify(profile));
+  writeFileSync(join(home, "profile.json"), JSON.stringify({ ...profile, ...(options.profile ?? {}) }));
   writeFileSync(join(home, "campaign.json"), JSON.stringify({ ...campaign, ...(options.campaign ?? {}) }));
   writeFileSync(join(home, "companies.json"), JSON.stringify(companies));
   writeFileSync(join(home, ".env"), `AUTOAPPLY_TEST_SECRET=${SECRET_VALUE}\n`);

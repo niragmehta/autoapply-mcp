@@ -57,6 +57,7 @@ export const api = {
   get: (path, query, options = {}) => request("GET", path, { ...options, query }),
   post: (path, body = {}) => request("POST", path, { body }),
   patch: (path, body = {}) => request("PATCH", path, { body }),
+  del: (path) => request("DELETE", path, { body: {} }),
 };
 
 /** Server-sent events for one run; returns a function that closes the stream. */

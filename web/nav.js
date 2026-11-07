@@ -7,13 +7,18 @@
  * this registry, so a new page is one module and one registerView call.
  */
 
-/** Rail sections, in order. A view names its section with `group`. */
+/**
+ * Rail sections, in order: the day's work from a posting to a reply, the
+ * people and companies around it, interviews and offers, what the numbers
+ * say, and the settings that drive it all. A view names its section with
+ * `group`.
+ */
 export const NAV_GROUPS = [
   { id: "pipeline", label: "Pipeline" },
-  { id: "after", label: "After applying" },
+  { id: "network", label: "Network" },
+  { id: "career", label: "Interviews and offers" },
   { id: "insights", label: "Insights" },
-  { id: "sources", label: "Sources" },
-  { id: "system", label: "System" },
+  { id: "settings", label: "Settings" },
 ];
 
 const views = [];
@@ -54,7 +59,7 @@ export function navViews() {
 
 /** Navigable views grouped by rail section, empty sections left out. */
 export function navGroups() {
-  return NAV_GROUPS.map((group) => ({ ...group, views: navViews().filter((view) => (view.group ?? "system") === group.id) })).filter(
+  return NAV_GROUPS.map((group) => ({ ...group, views: navViews().filter((view) => (view.group ?? "settings") === group.id) })).filter(
     (group) => group.views.length > 0,
   );
 }

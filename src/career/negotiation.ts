@@ -129,7 +129,7 @@ function planNumbers(market: Market) {
     walkAway: walkAwayBasis ? roundTo(walkAwayBasis.value) : null,
     basis: {
       target: targetBasis.label,
-      anchor: `target plus up to ${ANCHOR_PREMIUM * 100}%, capped at ${MAX_ANCHOR_UPLIFT * 100}% above the offer unless the target itself is higher`,
+      anchor: `target plus up to ${Math.round(ANCHOR_PREMIUM * 100)}%, capped at ${Math.round(MAX_ANCHOR_UPLIFT * 100)}% above the offer unless the target itself is higher`,
       walkAway: walkAwayBasis?.label ?? "unknown",
     },
     marketSignals,

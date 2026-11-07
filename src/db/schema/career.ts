@@ -1,7 +1,8 @@
 import type { SchemaModule } from "../migrate.js";
 
 /**
- * Story bank, interviews, company research, contacts, outreach drafts and offers.
+ * Story bank, interviews, company research, contacts, outreach drafts and offers,
+ * and which contract-checklist clauses the candidate has read for each offer.
  *
  * `application_id` columns are soft references validated by the career
  * services rather than foreign keys: a cascade from a pruned job or
@@ -119,5 +120,13 @@ CREATE TABLE IF NOT EXISTS offers (
 );
 CREATE INDEX IF NOT EXISTS idx_offers_application ON offers(application_id);
 CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status, created_at);
+
+CREATE TABLE IF NOT EXISTS offer_checklist (
+  offer_id TEXT NOT NULL,
+  clause_id TEXT NOT NULL,
+  checked_at TEXT NOT NULL,
+  PRIMARY KEY (offer_id, clause_id),
+  FOREIGN KEY (offer_id) REFERENCES offers(id) ON DELETE CASCADE
+);
 `,
 };

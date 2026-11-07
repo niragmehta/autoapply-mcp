@@ -100,6 +100,10 @@ function storyText(story: Story): string {
   return [story.title, story.situation, story.task, story.action, story.result, story.reflection, ...story.tags].join("\n");
 }
 
+/** The parts of a story a warning can point at; a null field means the story as a whole. */
+export type StoryField = "title" | "situation" | "task" | "action" | "result" | "reflection" | "skills" | "factIds" | "tags";
+export type StoryWarning = { field: StoryField | null; message: string };
+
 /** Raw material for building or extending the story bank. Reads only; writes nothing. */
 export function storyBankScaffold(workspace: Pick<CareerWorkspace, "db" | "profile">) {
   const { profile } = workspace;
@@ -147,31 +151,41 @@ function knownSkill(profile: Profile, skill: string): boolean {
   return profile.skills.some((entry) => [entry.name, ...entry.aliases].some((name) => lower(name) === wanted));
 }
 
-function storyWarnings(story: Story, profile: Profile, evidence: readonly EvidenceText[], check: NumberCheck): string[] {
-  const warnings: string[] = [];
-  if (!story.situation.trim()) warnings.push("No situation: add one or two sentences of context.");
-  if (!story.result.trim()) warnings.push("No result: a story without an outcome reads as unfinished.");
-  if (!story.reflection.trim()) warnings.push("No reflection: add what you learned or would do differently.");
-  if (story.factIds.length === 0) warnings.push("No factIds: cite the profile facts this story is built on.");
+function storyWarnings(story: Story, profile: Profile, evidence: readonly EvidenceText[], check: NumberCheck): StoryWarning[] {
+  const warnings: StoryWarning[] = [];
+  const warn = (field: StoryField | null, message: string) => warnings.push({ field, message });
+  if (!story.situation.trim()) warn("situation", "No situation: add one or two sentences of context.");
+  if (!story.result.trim()) warn("result", "No result: a story without an outcome reads as unfinished.");
+  if (!story.reflection.trim()) warn("reflection", "No reflection: add what you learned or would do differently.");
+  if (story.factIds.length === 0) warn("factIds", "No factIds: cite the profile facts this story is built on.");
   const cited = new Set(story.factIds.map((id) => `fact:${id}`));
   for (const entry of check.checked) {
     if (entry.verifiedBy && !cited.has(entry.verifiedBy) && story.factIds.length > 0) {
-      warnings.push(`Figure ${entry.token} is verified by ${entry.verifiedBy}, which the story does not cite.`);
+      warn("factIds", `Figure ${entry.token} is verified by ${entry.verifiedBy}, which the story does not cite.`);
     }
   }
-  const context = checkNumbers([story.situation, story.task, story.reflection].join("\n"), evidence);
-  for (const token of context.unverified) {
-    warnings.push(`Figure ${token} in situation/task/reflection is not in the profile; confirm it with the candidate.`);
+  // Each context field is checked on its own, so the warning can sit next to the field that has the figure.
+  for (const field of ["situation", "task", "reflection"] as const) {
+    for (const token of checkNumbers(story[field], evidence).unverified) {
+      warn(field, `Figure ${token} in the ${field} is not in the profile; confirm it with the candidate.`);
+    }
   }
   for (const skill of story.skills.filter((entry) => !knownSkill(profile, entry))) {
-    warnings.push(`Skill "${skill}" is not in profile.skills.`);
+    warn("skills", `Skill "${skill}" is not in profile.skills.`);
   }
   const words = wordCount([story.situation, story.task, story.action, story.result].join(" "));
-  if (words > SPOKEN_WORD_LIMIT) warnings.push(`About ${words} words: longer than a two-minute answer; tighten it.`);
+  if (words > SPOKEN_WORD_LIMIT) warn(null, `About ${words} words: longer than a two-minute answer; tighten it.`);
   return warnings;
 }
 
-type SaveStoryResult = { story: Story; created: boolean; figures: NumberCheck["checked"]; warnings: string[] };
+type SaveStoryResult = {
+  story: Story;
+  created: boolean;
+  figures: NumberCheck["checked"];
+  warnings: string[];
+  /** The same warnings, each with the field it is about. */
+  fieldWarnings: StoryWarning[];
+};
 
 /**
  * Creates or updates a story after checking that its cited facts exist and
@@ -193,7 +207,10 @@ export function saveStory(workspace: Pick<CareerWorkspace, "db" | "profile">, in
     throw new AppError(
       "unverified_figures",
       `result/action contain figures found in neither the cited facts nor anywhere else in the profile: ${check.unverified.join(", ")}. Use only figures from profile facts, or add the fact to profile.json first.`,
-      { offending: check.unverified },
+      {
+        offending: check.unverified,
+        byField: { result: checkNumbers(parsed.result, evidence).unverified, action: checkNumbers(parsed.action, evidence).unverified },
+      },
     );
   }
   const existing = parsed.id ? getStory(db, parsed.id) : null;
@@ -216,7 +233,8 @@ export function saveStory(workspace: Pick<CareerWorkspace, "db" | "profile">, in
   };
   saveStoryRecord(db, story);
   appendEvent(db, existing ? "story.updated" : "story.created", story.id, { facts: factIds.length });
-  return { story, created: !existing, figures: check.checked, warnings: storyWarnings(story, profile, evidence, check) };
+  const fieldWarnings = storyWarnings(story, profile, evidence, check);
+  return { story, created: !existing, figures: check.checked, warnings: fieldWarnings.map((warning) => warning.message), fieldWarnings };
 }
 
 type StoryListFilter = { tag?: string; skill?: string; factId?: string; limit?: number };

@@ -225,16 +225,56 @@ non-GET endpoint also passes the same-origin check.
 | `POST /api/inbox/paste` | `{text, subject?, from?, applicationId?}`: classify a pasted reply into a proposal (never recorded automatically). |
 | `GET /api/follow-ups` | `horizonDays` (0-60, default 7): due follow-ups with drafts and channels, upcoming ones, exclusions, and `handled`: follow-ups sent or skipped in the last 30 days, each with `skipped`. |
 | `POST /api/follow-ups/mark` | `{applicationId, kind, action: done \| skip \| snooze, days?, note?}`, passed to `markFollowUp`. `done` means you sent it, which counts as contact. `skip` resolves the reminder without sending: it is not counted as contact, so the next reminder and the ghost-close date keep their dates. The record carries `skipped`. |
-| `GET /api/interviews` | `scope` (upcoming \| all), `status`, `applicationId`, `limit`. |
-| `GET /api/interviews/:id` | One interview with its prep plans, practice and debrief notes. |
+
+### Career suite
+
+Every write calls a service in `src/career/*` (no SQL in the API layer). Lists take `limit`; `:id` routes answer 404
+with a `*_not_found` code. Nothing here sends anything: outreach is drafted, copied and marked by you.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/stories` | `q, tag, skill, competency, factId, limit`: stories with `count`, `total` and a `tags` facet. |
+| `GET /api/stories/scaffold` | `storyBankScaffold`: competency coverage, themes of facts to start from, facts no story cites yet, the STAR format. |
+| `GET /api/stories/:id`, `POST /api/stories`, `PATCH /api/stories/:id`, `DELETE /api/stories/:id` | Read, create (201), replace (every `StoryInput` field) and delete a story. Saving returns `warnings` and `fieldWarnings: [{field, message}]`. A figure the profile does not hold is refused: 422 `unverified_figures` with `offending` and `byField`. |
+| `GET /api/jobs/:id/story-match` | `matchStoriesToJob` (`perRequirement` 1-5): stories per requirement line, the uncovered lines, the best stories overall. |
+| `GET /api/interviews`, `GET /api/interviews/:id` | `scope` (upcoming \| all), `status`, `applicationId`; one interview with its sessions. |
+| `POST /api/interviews` | `scheduleInterview` (201): `{applicationId, stage, scheduledAt?, durationMinutes?, format?, locationOrLink?, interviewers?, notes?}`. Records the matching outcome once, so response rates stay right. |
+| `PATCH /api/interviews/:id` | `updateInterview`: reschedule, edit, or change status (scheduled \| done \| cancelled); returns what changed. |
+| `GET /api/interviews/:id/prep`, `GET /api/applications/:id/prep` | `interviewContext` (`stage`, `hours` 0.5-40): posting, company notes, matched stories, prep blocks for the stage, panel hints from interviewer titles, evidence to cite, earlier sessions. |
 | `GET /api/interviews/:id/ics` | Calendar file for a scheduled interview, generated on request (not written to disk). |
-| `GET /api/interview-sessions` | `applicationId, interviewId, kind, limit`. |
-| `GET /api/offers`, `GET /api/offers/compare` | Offers (`status`, `applicationId`); comparison in the profile's currency (`includeClosed`). |
-| `GET /api/stories`, `GET /api/stories/scaffold` | Story bank (`tag, skill, limit`); competency coverage. |
-| `GET /api/contacts` | `company, kind, applicationId, limit`. |
-| `GET /api/outreach` | Drafts: `applicationId, contactId, company, status, channel, limit`. |
-| `POST /api/outreach/:id/mark` | `{status: sent_by_user \| discarded \| draft}`: record what you did with a draft. |
-| `GET /api/company-notes` | Research notes for one `company`, or across every company. |
+| `GET /api/interview-sessions`, `POST /api/interview-sessions` | Sessions (`applicationId, interviewId, kind`); save a debrief, practice or plan through `saveInterviewSession` (201). |
+| `GET /api/contacts`, `GET /api/contacts/:id` | `company, kind, applicationId`; one contact with the drafts written to them. |
+| `POST /api/contacts`, `PATCH /api/contacts/:id`, `DELETE /api/contacts/:id` | `saveContact` (201, or 200 when it merged into an existing contact), `updateContact` (an empty string clears a field; 409 `contact_exists` on a clash), `deleteContact` (drafts stay, without the contact; returns `draftsKept`). |
+| `GET /api/outreach`, `GET /api/outreach/:id` | Drafts (`applicationId, contactId, company, status, channel`); one draft with its channel's limits. |
+| `GET /api/outreach/scaffold` | `outreachScaffold` (`channel`, with `contactId`, `applicationId` or `company`): rules for the channel, facts and stories you can cite, attachments (paths shortened to `~`). |
+| `POST /api/outreach`, `PATCH /api/outreach/:id`, `DELETE /api/outreach/:id` | `saveOutreachDraft` (201), `updateOutreachDraft` (drafts only: 409 `outreach_not_editable`), `deleteOutreachDraft` (a sent draft is kept: 409 `outreach_sent`). Saving checks every figure (422 `unverified_figures`) and the channel's limits (400 `too_long`, `subject_required`, `subject_not_allowed`) and returns the rules and warnings. |
+| `POST /api/outreach/:id/mark` | `{status: sent_by_user \| discarded \| draft}`: record what you did with a draft. "Sent" means you sent it yourself. |
+| `GET /api/company-notes`, `POST /api/company-notes` | Notes for one `company` or every company (`kind`); `saveCompanyNote` (201). Research, culture and pay notes need a source; red flags may stand on what you saw. |
+| `PATCH /api/company-notes/:id`, `DELETE /api/company-notes/:id` | `updateCompanyNote` (returns what changed), `deleteCompanyNote`. |
+| `GET /api/offers`, `GET /api/offers/:id` | Offers (`status`, `applicationId`); one offer with its annualized compensation. |
+| `POST /api/offers`, `PATCH /api/offers/:id` | `recordOffer` (201), `updateOffer`. |
+| `GET /api/offers/compare` | `compareOffers` in the campaign currency: `includeClosed`, `years` (1-10, how long a sign-on is spread), `fx=EUR:1.08,GBP:1.27` (what-if rates for this comparison only; never saved). |
+| `GET /api/offers/:id/negotiation` | `negotiationPlan` with its assumptions: `pImprove`, `captureRate`, `pWithdraw` (0-1), `horizonYears` (0.5-10). |
+| `GET /api/offers/:id/checklist`, `POST /api/offers/:id/checklist` | The contract checklist with what this offer makes relevant and which clauses you have read; `{clauseId, checked}` ticks one (stored in `offer_checklist`, audited as `offer.checklist`). General information, not legal advice. |
+
+### Before submitting
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/applications/:id/content` | `{coverLetter?, answers?, notes?}` through `setApplicationContent`. Approval is bound to the packet hash, so saving voids it (`approvalVoided`); the application goes back to awaiting approval, or stays held when questions remain. Skipped applications are refused (409 `application_skipped`). Returns a fact check of the letter (`factCheck`), which informs and never blocks. |
+| `POST /api/applications/:id/cover-letter/check` | `{text}`: the same fact check without saving: figures and claims your resume source and profile do not hold. |
+| `GET /api/applications/:id/tailoring` | Every tailored resume for the application, newest first, with its full change log, pages, headline, dropped bullets, warnings, a link to the PDF and whether it is the one uploaded now; plus the documents policy. |
+
+Tailoring itself is `POST /api/documents/:applicationId/tailor` above. Its result carries `changes`, `swaps`
+(`{in, out, upgrade, inScore, outScore}`), `addedSkills`, `jobTerms` and `warnings`; an application waiting on a
+person stays held, any other goes back to awaiting approval, and any approval is void.
+
+### Errors
+
+Errors are `{error: {code, message, ...details}}` with home paths shortened to `~`. Validation failures are 400
+`invalid_request` with `issues: [{path, message}]`. Only these details reach the browser: `offending`, `byField`,
+`issues`, `unknownFacts`, `characters`, `maxChars`, `words`, `maxWords`. Editors use them to put each problem
+beside its field.
 
 ### Insights and sources
 
@@ -275,28 +315,60 @@ The browser app lives in `web/` and needs no build: Preact and htm are served fr
 map (`/vendor/preact.mjs`, `/vendor/preact-hooks.mjs`, `/vendor/htm.mjs`).
 
 Navigation is a rail drawn as a line map, in five sections. Needs human keeps a yellow count; Inbox, Follow-ups,
-Interviews and Leads show quieter counts. Below 1024 px the rail becomes a top bar with a Menu button and the
+Interviews, Offers and Leads show quieter counts. Below 1024 px the rail becomes a top bar with a Menu button and the
 yellow "need you" count.
 
 | Section | View | Key | What it is for |
 | --- | --- | --- | --- |
 | Pipeline | Overview | `g o` | The pipeline as a line of stations, what needs you (held questions, replies, offers, packets, follow-ups, interviews, proposals, failed runs), recent runs, the after-applying timetable, today and the round cap. |
-| | Jobs | `g j` | Every posting, filtered and sorted in the URL, including a Dismissed filter. Select rows to dismiss (with a reason) or restore in bulk. A row opens the evaluation, liveness and legitimacy with Check now, Prepare, and Dismiss or Restore. Dismissing asks first and says what happens to an unsent application (skipped, approval voided, out of prepared batches). |
-| | Applications | `g a` | Applications by status. A row opens the packet: blocked questions, approval bound to the shown hash (or the rejection that skipped it), a submit run or the manual packet, outcomes, interviews and offers, screenshots and history. A closed posting is called out. |
+| | Jobs | `g j` | Every posting, filtered and sorted in the URL, including a Dismissed filter. Select rows to dismiss (with a reason) or restore in bulk. A row opens the evaluation, liveness and legitimacy with Check now, Prepare, and Dismiss or Restore, your stories matched to the posting's requirements (with the requirements no story covers), and the company's research notes. Dismissing asks first and says what happens to an unsent application (skipped, approval voided, out of prepared batches). |
+| | Applications | `g a` | Applications by status. A row opens the application in five tabs: **Packet** (blocked questions, approval bound to the shown hash or the rejection that skipped it, a submit run or the manual packet, outcomes, screenshots; a closed posting is called out), **Edit** (cover letter, answers and notes, see below), **Resume** (tailoring and its history), **Interviews and notes** (interviews, debriefs, offers, contacts, outreach and company notes for this application) and **History**. |
 | | Needs human | `g n` | Held applications grouped by question, so one answer releases every application asking it. |
 | | Documents | `g d` | The resume and letter each application uses, the rendered PDFs, rendering a variant or tailoring a resume. |
-| After applying | Inbox | `g i` | Replies to review: what each reads as, which application, why it waits; record or dismiss; paste a reply. |
+| | Inbox | `g i` | Replies to review: what each reads as, which application, why it waits; record or dismiss; paste a reply. |
 | | Follow-ups | `g f` | Due follow-ups with drafts to copy; mark sent, skip (not counted as contact) or snooze; what is coming up; what was sent or skipped lately; a dry-run preview of closing silent applications. |
-| | Interviews and offers | `g v` | Interviews with calendar files and prep notes, offers compared, story bank coverage, contacts with outreach drafts, company research. |
+| Network | Contacts | `g p` | Contacts with where you found them, filtered by company and kind; add, edit and delete (two steps; their drafts stay). Outreach drafts to send, sent by you, or discarded: write one from a scaffold, edit, copy, then record "I sent it". |
+| | Company research | `g t` | Notes per company (research, culture, pay, news, red flags) with their sources: add, edit, delete. The same notes show on the company's jobs, applications and interviews. |
+| | Companies | `g c` | Boards with their yield; pause, resume and re-tier; add a board after verifying it. |
+| | Leads | `g l` | Board proposals to accept, leads by source and status with Ignore and Restore (one or many; resolved leads keep their status), harvesting results. |
+| Interviews and offers | Interviews | `g v` | Upcoming and past interviews. Schedule one from an application; reschedule, edit, mark done or cancel; a calendar file; debriefs, practice and prep notes. |
+| | Prep sheet | | Per interview (`/prep?interview=`) or application (`/prep?app=`): the plan for the stage in blocks of your hours, likely questions, who you will meet and what they probe, your stories per requirement, the stories worth rehearsing, evidence to cite, company research and earlier notes. Print gives a clean sheet. |
+| | Story bank | `g b` | STAR stories with search and tag and competency filters, coverage of the common competencies, and themes from your facts to start from. Edit every field; problems are shown beside the field they concern; a figure your profile does not hold is refused. |
+| | Offers | `g m` | Offers side by side in one currency, with what-if exchange rates and how long a sign-on is spread; record and edit an offer; per offer a negotiation plan (with its assumptions as inputs) and the contract checklist, whose ticks are kept. Information, not advice. |
 | Insights | Analytics | `g s` | Funnel and conversion with every rate's sample, timing, rejections, score calibration, skill gaps, gate discards, tracker export. |
 | | Reports | `g e` | Evaluation reports to read, reposted roles, the do-not-apply list. |
-| Sources | Companies | `g c` | Boards with their yield; pause, resume and re-tier; add a board after verifying it. |
-| | Leads | `g l` | Board proposals to accept, leads by source and status with Ignore and Restore (one or many; resolved leads keep their status), harvesting results. |
-| System | Runs | `g r` | Start any run type (forms with defaults; close-stale is a dry run unless you untick it and confirm), history, live logs, cancel. |
+| Settings | Settings | `g ,` | The answers library, and read-only summaries of the campaign and profile (see the note below the table). |
+| | Runs | `g r` | Start any run type (forms with defaults; close-stale is a dry run unless you untick it and confirm), history, live logs, cancel. |
 | | Health | `g h` | Checks, profile readiness, runtime, secret names, read-only configuration, database counts and paths. |
 
-Keyboard: `g` then a view's key moves between views, `/` focuses the page's search, `j`/`k` or arrows move between
-table rows, Enter opens one, Escape closes the panel, `?` lists the shortcuts.
+Every drawer and editor is a link: `?job=`, `?app=&tab=`, `?story=`, `?interview=`, `?offer=&tab=`,
+`?contact=`, `?draft=`, `?compose=1&to=`, `?run=`, `?report=` and `/prep?interview=`, so a page reloads into
+the same place and Back closes it.
+
+**Editing.** Nothing is sent from the dashboard: outreach and follow-ups are copied and sent by you, then recorded.
+Every write is one explicit click; deleting takes a second click on a notice that says what goes and what stays. An
+editor with unsaved changes asks before its drawer closes, before you leave the page in the app, and before the tab
+closes. A refusal is said once at the top of the form and again beside each field it concerns.
+
+**Editing an application before it is sent.** The Edit tab changes the cover letter, answers and notes. Approval is
+bound to the packet hash, so the tab says before you start that saving voids an approval and sends the application
+back to awaiting approval (or keeps it held while questions remain). Check facts runs the letter past your resume
+source and profile and lists any figure or claim they do not hold; it informs and never blocks. Skipped applications
+cannot be edited. The Resume tab's Tailor resume... asks first and says what happens for this application's status:
+one waiting on a person stays held for you, any other goes back to awaiting approval, and any approval is void;
+bullets marked `keep` lead their group and are never swapped out or dropped. The result shows the swaps (an
+upgrade is "a stronger statement of the same work"), the reserve skills added, the moves, the bullets dropped to fit
+the page, the posting's strongest terms and a link to the PDF; every earlier tailoring stays listed with its change
+log.
+
+Keyboard: `g` then a view's key moves between views, `Ctrl+K` searches everything (jobs, applications,
+companies, contacts, stories, notes and pages), `/` focuses the page's search (or searches everything where a page
+has none), `j`/`k` or arrows move between table rows, Enter opens one, Escape closes the panel, `?` lists the
+shortcuts.
+
+The answers library, global search and the notifications tray (the bell: interviews within 48 hours, offer deadlines
+within 7 days, follow-ups due, runs that ended) were added late in round 5 and are not yet reviewed; their endpoints
+are `/api/settings/*`, `/api/search`, `/api/notifications` and `/api/notifications/stream`.
 
 **Adding a view:** write `web/views/<name>.js` with a default component, call
 `registerView({id, path, label, group, order, key, load, badge?})` in `web/views/index.js` (the group is one of

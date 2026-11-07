@@ -262,7 +262,14 @@ function compareOne(workspace: CareerWorkspace, offer: Offer, currency: string, 
   };
 }
 
-type CompareOffersOptions = { includeClosed?: boolean; signOnAmortizationYears?: number };
+type CompareOffersOptions = {
+  includeClosed?: boolean;
+  signOnAmortizationYears?: number;
+  /** What-if exchange rates for this comparison only, merged over campaign.compensation.fx; never saved. */
+  fx?: Readonly<Record<string, number>>;
+};
+
+const FxOverrideSchema = z.record(z.string().regex(/^[A-Z]{3}$/, "a 3-letter upper-case currency code"), z.number().positive().finite().max(1_000_000));
 
 /**
  * Every active offer in the profile's currency: totals, target and minimum,
@@ -271,9 +278,14 @@ type CompareOffersOptions = { includeClosed?: boolean; signOnAmortizationYears?:
 export function compareOffers(workspace: CareerWorkspace, options: CompareOffersOptions = {}) {
   const currency = workspace.profile.compensation.currency.toUpperCase();
   const years = options.signOnAmortizationYears ?? DEFAULT_SIGN_ON_AMORTIZATION_YEARS;
-  const convert = converterTo(currency, workspace.campaign.compensation.fx);
+  const overrides = parseInput(FxOverrideSchema, options.fx ?? {}, "fx");
+  const rates = { ...workspace.campaign.compensation.fx, ...overrides };
+  // The comparison sees the merged rates; the workspace's own configuration is untouched.
+  const scoped: CareerWorkspace = { ...workspace, campaign: { ...workspace.campaign, compensation: { ...workspace.campaign.compensation, fx: rates } } };
+  const convert = converterTo(currency, rates);
   const offers = listOfferRecords(workspace.db, { statuses: options.includeClosed ? undefined : ACTIVE_OFFER_STATUSES });
-  const rows = offers.map((offer) => compareOne(workspace, offer, currency, convert, years));
+  const rows = offers.map((offer) => compareOne(scoped, offer, currency, convert, years));
+  const overridden = Object.keys(overrides).sort();
   const gaps = rows
     .map((row) => row.salaryGap.advertisedMidToOfferedBasePct)
     .filter((value): value is number => value !== null);
@@ -287,7 +299,15 @@ export function compareOffers(workspace: CareerWorkspace, options: CompareOffers
       "Relocation is listed separately and not counted as compensation.",
       "Other currencies are converted with campaign.compensation.fx (static, documented rates), never live rates.",
       "Posted ranges are treated as base pay. Equity is taken at the employer's stated value, not risk-adjusted.",
+      ...(overridden.length > 0
+        ? [
+            `What-if rates for this comparison only, not saved: ${overridden
+              .map((code) => `1 ${code} = ${rates[code]} ${workspace.campaign.compensation.currency.toUpperCase()}`)
+              .join("; ")}.`,
+          ]
+        : []),
     ],
+    fx: { rates, overridden },
     offers: rows,
     ranking,
     aggregates: {

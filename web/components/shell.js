@@ -2,6 +2,7 @@ import { html, useEffect, useRef } from "../lib/html.js";
 import { clock, num } from "../lib/format.js";
 import { useNow } from "../lib/hooks.js";
 import { navGroups, viewForPath } from "../nav.js";
+import { NoticesButton } from "./notifications.js";
 import { Icon } from "./ui.js";
 
 /**
@@ -69,17 +70,28 @@ function RailFooter({ status, onShortcuts }) {
   </div>`;
 }
 
+/** Search everything and the notifications bell, under the brand. */
+function RailTools({ onSearch }) {
+  return html`<div class="rail__tools">
+    <button type="button" class="rail__search" onClick=${onSearch} aria-keyshortcuts="Control+K">
+      <${Icon} name="search" /><span>Search</span><kbd>Ctrl K</kbd>
+    </button>
+    <${NoticesButton} className="bell rail__bell" />
+  </div>`;
+}
+
 /** The persistent rail at laptop widths and up. */
-export function Rail({ path, status, onShortcuts }) {
+export function Rail({ path, status, onShortcuts, onSearch }) {
   return html`<header class="rail">
     <${Brand} status=${status} />
+    <${RailTools} onSearch=${onSearch} />
     <${NavMap} path=${path} status=${status} />
     <${RailFooter} status=${status} onShortcuts=${onShortcuts} />
   </header>`;
 }
 
-/** Narrow screens: brand, the held-for-you count and a Menu button that opens the map. */
-export function TopBar({ status, onMenu }) {
+/** Narrow screens: brand, search, the bell, the held-for-you count and a Menu button that opens the map. */
+export function TopBar({ status, onMenu, onSearch }) {
   const held = status?.applications?.needsHuman ?? 0;
   return html`<header class="topbar">
     <button type="button" class="topbar__menu" onClick=${onMenu} aria-haspopup="dialog">
@@ -87,6 +99,8 @@ export function TopBar({ status, onMenu }) {
     </button>
     <${Brand} status=${status} />
     <div class="topbar__end">
+      <button type="button" class="topbar__icon" onClick=${onSearch} aria-label="Search everything" title="Search everything"><${Icon} name="search" /></button>
+      <${NoticesButton} className="bell topbar__icon" />
       <${LiveRuns} status=${status} />
       ${held > 0 ? html`<a class="plate plate--held topbar__held" href="/needs-human">${num(held)} need you</a>` : null}
     </div>

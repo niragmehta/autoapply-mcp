@@ -2,10 +2,12 @@ import { existsSync } from "node:fs";
 import { z } from "zod";
 import { listCompanyNoteRecords } from "../db/repositories/career/companyNotes.js";
 import {
+  deleteOutreachDraftRecord,
   getOutreachDraft,
   insertOutreachDraftRecord,
   listOutreachDraftRecords,
   setOutreachStatusRecord,
+  updateOutreachDraftRecord,
   type OutreachFilter,
 } from "../db/repositories/career/outreach.js";
 import { listOfferRecords } from "../db/repositories/career/offers.js";
@@ -257,7 +259,13 @@ function enforceLimits(channel: OutreachChannel, limit: ChannelLimit, subject: s
   }
 }
 
-function draftWarnings(workspace: Pick<CareerWorkspace, "db">, target: Target, channel: OutreachChannel, body: string): string[] {
+function draftWarnings(
+  workspace: Pick<CareerWorkspace, "db">,
+  target: Target,
+  channel: OutreachChannel,
+  body: string,
+  selfId: string | null = null,
+): string[] {
   const limit = CHANNEL_LIMITS[channel];
   const warnings = [...target.warnings];
   if (codePoints(body) > limit.recommendedMaxChars) warnings.push(`Over ${limit.recommendedMaxChars} characters. ${limit.note}`);
@@ -271,10 +279,26 @@ function draftWarnings(workspace: Pick<CareerWorkspace, "db">, target: Target, c
   }
   if (channel.startsWith("linkedin") && /\battach/i.test(body)) warnings.push("LinkedIn notes cannot carry attachments.");
   if (contact) {
-    const pending = listOutreachDraftRecords(workspace.db, { contactId: contact.id, channel, status: "draft", limit: 5 });
+    const pending = listOutreachDraftRecords(workspace.db, { contactId: contact.id, channel, status: "draft", limit: 5 }).filter(
+      (draft) => draft.id !== selfId,
+    );
     if (pending.length > 0) warnings.push(`An earlier unsent ${channel} draft to ${contact.name} exists (${pending[0]?.id}); discard it if this replaces it.`);
   }
   return warnings;
+}
+
+/** Limits, then every figure checked against the profile and the role's records; throws on the first failure. */
+function checkDraft(workspace: CareerWorkspace, target: Target, channel: OutreachChannel, subject: string, body: string) {
+  enforceLimits(channel, CHANNEL_LIMITS[channel], subject, body);
+  const check = checkNumbers(figureText(subject, body), draftEvidence(workspace, target, channel));
+  if (check.unverified.length > 0) {
+    throw new AppError(
+      "unverified_figures",
+      `the draft states figures found neither in the profile nor in this role's records: ${check.unverified.join(", ")}. Use only figures from factsToCite, or drop them.`,
+      { offending: check.unverified },
+    );
+  }
+  return check;
 }
 
 /**
@@ -285,15 +309,7 @@ export function saveOutreachDraft(workspace: CareerWorkspace, input: OutreachDra
   const parsed = parseInput(OutreachDraftInputSchema, input, "outreach draft");
   const target = resolveTarget(workspace, parsed);
   const limit = CHANNEL_LIMITS[parsed.channel];
-  enforceLimits(parsed.channel, limit, parsed.subject, parsed.body);
-  const check = checkNumbers(figureText(parsed.subject, parsed.body), draftEvidence(workspace, target, parsed.channel));
-  if (check.unverified.length > 0) {
-    throw new AppError(
-      "unverified_figures",
-      `the draft states figures found neither in the profile nor in this role's records: ${check.unverified.join(", ")}. Use only figures from factsToCite, or drop them.`,
-      { offending: check.unverified },
-    );
-  }
+  const check = checkDraft(workspace, target, parsed.channel, parsed.subject, parsed.body);
   const warnings = draftWarnings(workspace, target, parsed.channel, parsed.body);
   const now = nowIso();
   const draft: OutreachDraft = {
@@ -342,4 +358,69 @@ export function markOutreach(workspace: Pick<CareerWorkspace, "db">, id: string,
   setOutreachStatusRecord(workspace.db, id, status, updatedAt);
   appendEvent(workspace.db, "outreach.marked", id, { from: draft.status, to: status });
   return { draft: { ...draft, status, updatedAt }, changed: true };
+}
+
+export const UpdateOutreachDraftSchema = z.object({
+  id: z.string().trim().min(1),
+  channel: z.enum(OUTREACH_CHANNELS).optional(),
+  subject: z.string().trim().max(200).optional(),
+  body: z.string().trim().min(1).max(10_000).optional(),
+});
+type UpdateOutreachDraftInput = z.input<typeof UpdateOutreachDraftSchema>;
+
+function requireDraft(workspace: Pick<CareerWorkspace, "db">, id: string): OutreachDraft {
+  const draft = getOutreachDraft(workspace.db, id);
+  if (!draft) throw new AppError("outreach_not_found", `no outreach draft ${id}`);
+  return draft;
+}
+
+/**
+ * Edits an unsent draft's channel, subject or body, with the same limits and
+ * figure check as saving one. A sent draft is the record of what went out,
+ * and a discarded one is restored first; neither is edited.
+ */
+export function updateOutreachDraft(workspace: CareerWorkspace, input: UpdateOutreachDraftInput) {
+  const parsed = parseInput(UpdateOutreachDraftSchema, input, "outreach draft update");
+  const existing = requireDraft(workspace, parsed.id);
+  if (existing.status !== "draft") {
+    throw new AppError(
+      "outreach_not_editable",
+      existing.status === "sent_by_user"
+        ? "this draft was sent; it stays as the record of what went out"
+        : "this draft is discarded; restore it to drafts before editing",
+    );
+  }
+  const target = resolveTarget(workspace, {
+    applicationId: existing.applicationId ?? undefined,
+    contactId: existing.contactId ?? undefined,
+    company: existing.company,
+  });
+  const channel = parsed.channel ?? existing.channel;
+  const subject = parsed.subject ?? existing.subject;
+  const body = parsed.body ?? existing.body;
+  const check = checkDraft(workspace, target, channel, subject, body);
+  const draft: OutreachDraft = { ...existing, channel, subject, body, updatedAt: nowIso() };
+  const changed = (["channel", "subject", "body"] as const).filter((key) => draft[key] !== existing[key]);
+  updateOutreachDraftRecord(workspace.db, draft);
+  appendEvent(workspace.db, "outreach.edited", draft.id, { channel: draft.channel, changed });
+  return {
+    draft,
+    changed,
+    characters: codePoints(draft.body),
+    words: wordCount(draft.body),
+    limits: CHANNEL_LIMITS[channel],
+    figures: check.checked,
+    warnings: draftWarnings(workspace, target, channel, body, draft.id),
+  };
+}
+
+/** Deletes a draft that was never sent. A sent one is kept as the record of what went out. */
+export function deleteOutreachDraft(workspace: Pick<CareerWorkspace, "db">, id: string): { deleted: string } {
+  const draft = requireDraft(workspace, id);
+  if (draft.status === "sent_by_user") {
+    throw new AppError("outreach_sent", "this draft was sent; it stays as the record of what went out");
+  }
+  deleteOutreachDraftRecord(workspace.db, draft.id);
+  appendEvent(workspace.db, "outreach.deleted", draft.id, { channel: draft.channel, status: draft.status });
+  return { deleted: draft.id };
 }

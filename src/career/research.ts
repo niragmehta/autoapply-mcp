@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { appendEvent } from "../db/repositories/events.js";
-import { insertCompanyNoteRecord, listCompanyNoteRecords } from "../db/repositories/career/companyNotes.js";
+import {
+  deleteCompanyNoteRecord,
+  getCompanyNoteRecord,
+  insertCompanyNoteRecord,
+  listCompanyNoteRecords,
+  updateCompanyNoteRecord,
+} from "../db/repositories/career/companyNotes.js";
 import { detectInjection } from "../text/untrusted.js";
 import { AppError } from "../util/errors.js";
 import { newId, nowIso } from "../util/hash.js";
@@ -43,11 +49,7 @@ function checkSource(source: string): void {
 
 export function saveCompanyNote(workspace: Pick<CareerWorkspace, "db">, input: CompanyNoteInput) {
   const parsed = parseInput(CompanyNoteInputSchema, input, "company note");
-  const sources = [...new Set(parsed.sources)];
-  sources.forEach(checkSource);
-  if (CITED_KINDS.includes(parsed.kind) && sources.length === 0) {
-    throw new AppError("sources_required", `a ${parsed.kind} note must cite at least one source (a URL or a short citation)`);
-  }
+  const sources = checkedSources(parsed.kind, parsed.sources);
   const note: CompanyNote = {
     id: newId("note"),
     company: parsed.company,
@@ -58,14 +60,66 @@ export function saveCompanyNote(workspace: Pick<CareerWorkspace, "db">, input: C
   };
   insertCompanyNoteRecord(workspace.db, note);
   appendEvent(workspace.db, "company_note.saved", note.id, { company: note.company, kind: note.kind });
+  return { note, warnings: noteWarnings(note) };
+}
+
+/** Deduplicated sources, each a valid http(s) URL when it looks like one; outside material must cite at least one. */
+function checkedSources(kind: NoteKind, raw: readonly string[]): string[] {
+  const sources = [...new Set(raw)];
+  sources.forEach(checkSource);
+  if (CITED_KINDS.includes(kind) && sources.length === 0) {
+    throw new AppError("sources_required", `a ${kind} note must cite at least one source (a URL or a short citation)`);
+  }
+  return sources;
+}
+
+function noteWarnings(note: CompanyNote): string[] {
   const flags = detectInjection(note.content).map((flag) => flag.pattern);
-  return {
-    note,
-    warnings:
-      flags.length > 0
-        ? [`The note contains text that reads like instructions to an AI agent (${flags.join(", ")}); keep research notes to facts.`]
-        : [],
+  return flags.length > 0
+    ? [`The note contains text that reads like instructions to an AI agent (${flags.join(", ")}); keep research notes to facts.`]
+    : [];
+}
+
+export function getCompanyNote(workspace: Pick<CareerWorkspace, "db">, id: string): CompanyNote {
+  const note = getCompanyNoteRecord(workspace.db, id);
+  if (!note) throw new AppError("note_not_found", `no company note ${id}`);
+  return note;
+}
+
+export const UpdateCompanyNoteSchema = z.object({
+  id: z.string().trim().min(1),
+  company: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(NOTE_KINDS).optional(),
+  content: z.string().trim().min(1).max(20_000).optional(),
+  sources: z.array(z.string().trim().min(1).max(500)).max(30).optional(),
+});
+type UpdateCompanyNoteInput = z.input<typeof UpdateCompanyNoteSchema>;
+
+/** Edits a note under the same source rules as saving one. */
+export function updateCompanyNote(workspace: Pick<CareerWorkspace, "db">, input: UpdateCompanyNoteInput) {
+  const parsed = parseInput(UpdateCompanyNoteSchema, input, "company note update");
+  const existing = getCompanyNote(workspace, parsed.id);
+  const kind = parsed.kind ?? existing.kind;
+  const note: CompanyNote = {
+    ...existing,
+    company: parsed.company ?? existing.company,
+    kind,
+    content: parsed.content ?? existing.content,
+    sources: checkedSources(kind, parsed.sources ?? existing.sources),
   };
+  const changed = (["company", "kind", "content", "sources"] as const).filter(
+    (key) => JSON.stringify(note[key]) !== JSON.stringify(existing[key]),
+  );
+  updateCompanyNoteRecord(workspace.db, note);
+  appendEvent(workspace.db, "company_note.updated", note.id, { company: note.company, kind: note.kind, changed });
+  return { note, changed, warnings: noteWarnings(note) };
+}
+
+export function deleteCompanyNote(workspace: Pick<CareerWorkspace, "db">, id: string): { deleted: string } {
+  const note = getCompanyNote(workspace, id);
+  deleteCompanyNoteRecord(workspace.db, note.id);
+  appendEvent(workspace.db, "company_note.deleted", note.id, { company: note.company, kind: note.kind });
+  return { deleted: note.id };
 }
 
 /** Notes for one company, newest first; company names match case-insensitively. */

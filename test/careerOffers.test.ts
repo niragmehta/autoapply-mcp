@@ -185,6 +185,7 @@ describe("negotiationPlan", () => {
     expect(plan.current.annualizedTotal).toBe(250000);
     expect(plan.numbers).toMatchObject({ anchor: 338000, target: 338000, walkAway: 260000 });
     expect(plan.numbers.basis.walkAway).toContain("Maple Systems");
+    expect(plan.numbers.basis.anchor).toBe("target plus up to 7%, capped at 25% above the offer unless the target itself is higher");
     expect(plan.recommendedCounter).toMatchObject({ annualizedTotal: 338000, base: 280000, baseIncrease: 80000, additionalAnnualEquity: 0 });
     expect(plan.expectedValue).toMatchObject({ value: 92400, positive: true, breakEvenWithdrawProbability: 1 });
     expect(plan.expectedValue.inputs).toMatchObject({ requestedIncrease: 88000, gainIfImproved: 132000, lossIfWithdrawn: 0 });
@@ -303,7 +304,7 @@ describe("contractChecklist", () => {
     });
     const checklist = contractChecklistFor(workspace, stored.id);
     const byId = new Map(checklist.clauses.map((clause) => [clause.id, clause]));
-    expect(byId.get("clawbacks")?.relevance).toContain("25000 USD sign-on bonus");
+    expect(byId.get("clawbacks")?.relevance).toContain("25,000 USD sign-on bonus");
     expect(byId.get("equity")?.relevantToThisOffer).toBe(true);
     expect(byId.get("start_and_notice")?.relevance).toContain("2030-02-01");
     expect(byId.get("immigration")?.relevance).toContain("TN");

@@ -202,6 +202,14 @@ const STATUS_BY_CODE: Record<string, number> = {
   unknown_question_key: 400,
   missing_argument: 400,
   reply_text_required: 400,
+  sources_required: 400,
+  subject_required: 400,
+  subject_not_allowed: 400,
+  too_long: 400,
+  unknown_fact: 400,
+  unverified_figures: 422,
+  fact_check_failed: 422,
+  ai_policy_ask_me: 422,
   invalid_round_cap: 503,
   config_missing: 503,
   config_invalid: 503,
@@ -217,13 +225,27 @@ function statusForAppCode(code: string): number {
   return code.startsWith("invalid_") ? 400 : 409;
 }
 
+/**
+ * Details a service attaches to a refusal that an editor needs to point at the
+ * right field: the figures or claims that failed a check, and a draft's size
+ * against its limit. Nothing else in an error's details reaches the browser.
+ */
+const PUBLIC_DETAIL_KEYS = ["offending", "byField", "issues", "unknownFacts", "characters", "maxChars", "words", "maxWords"] as const;
+
+function publicDetails(details: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(PUBLIC_DETAIL_KEYS.filter((key) => details[key] !== undefined).map((key) => [key, details[key]]));
+}
+
 /** HTTP status for a thrown error, and the body the client sees. Unexpected errors are not described; home paths are shortened to ~. */
 export function errorResponse(error: unknown): { status: number; body: { error: Record<string, unknown> } } {
   if (error instanceof HttpError) {
     return { status: error.status, body: { error: { code: error.code, message: scrubHome(error.message), ...error.details } } };
   }
   if (isAppError(error)) {
-    return { status: statusForAppCode(error.code), body: { error: { code: error.code, message: scrubHome(error.message) } } };
+    return {
+      status: statusForAppCode(error.code),
+      body: { error: { code: error.code, message: scrubHome(error.message), ...publicDetails(error.details) } },
+    };
   }
   return { status: 500, body: { error: { code: "internal_error", message: "The dashboard hit an unexpected error; details are in its terminal." } } };
 }

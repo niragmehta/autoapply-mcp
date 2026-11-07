@@ -1,6 +1,11 @@
+import { z } from "zod";
 import type { Db } from "../db/database.js";
+import { clearChecklistTick, listChecklistTicks, setChecklistTick } from "../db/repositories/career/checklist.js";
+import { appendEvent } from "../db/repositories/events.js";
 import type { Profile } from "../domain/profile.js";
-import type { CareerWorkspace } from "./context.js";
+import { AppError } from "../util/errors.js";
+import { nowIso } from "../util/hash.js";
+import { parseInput, type CareerWorkspace } from "./context.js";
 import { offerComp } from "./offerMath.js";
 import { jobForOffer, requireOffer } from "./offers.js";
 import type { Offer } from "./types.js";
@@ -238,6 +243,8 @@ const ABSENCES_TO_CHECK: readonly string[] = [
 
 type ChecklistContext = { offer?: Offer | null; jobCountry?: string | null; profile?: Profile | null };
 
+const amount = (value: number, currency: string) => `${Math.round(value).toLocaleString("en-US")} ${currency}`;
+
 function relevanceFor(clause: ContractClause, context: ChecklistContext): string | null {
   const offer = context.offer;
   if (clause.id === "immigration") return immigrationRelevance(context);
@@ -246,12 +253,12 @@ function relevanceFor(clause: ContractClause, context: ChecklistContext): string
   switch (clause.id) {
     case "clawbacks":
       return comp.signOn > 0 || comp.relocation > 0
-        ? `This offer includes${comp.signOn > 0 ? ` a ${comp.signOn} ${offer.currency} sign-on bonus` : ""}${comp.signOn > 0 && comp.relocation > 0 ? " and" : ""}${comp.relocation > 0 ? ` ${comp.relocation} ${offer.currency} relocation` : ""}.`
+        ? `This offer includes${comp.signOn > 0 ? ` a ${amount(comp.signOn, offer.currency)} sign-on bonus` : ""}${comp.signOn > 0 && comp.relocation > 0 ? " and" : ""}${comp.relocation > 0 ? ` ${amount(comp.relocation, offer.currency)} relocation` : ""}.`
         : null;
     case "equity":
-      return comp.annualEquity > 0 || offer.equityDetails.trim() ? `Equity recorded: ${offer.equityDetails.trim() || `${comp.annualEquity} ${offer.currency} a year`}.` : null;
+      return comp.annualEquity > 0 || offer.equityDetails.trim() ? `Equity recorded: ${offer.equityDetails.trim() || `${amount(comp.annualEquity, offer.currency)} a year`}.` : null;
     case "compensation_terms":
-      return comp.targetBonus > 0 ? `Target bonus recorded: ${comp.targetBonus} ${offer.currency}.` : null;
+      return comp.targetBonus > 0 ? `Target bonus recorded: ${amount(comp.targetBonus, offer.currency)}.` : null;
     case "start_and_notice":
       return offer.startDate ? `Start date recorded: ${offer.startDate}.` : null;
     case "benefits_and_location":
@@ -306,4 +313,45 @@ export function contractChecklistFor(workspace: Pick<CareerWorkspace, "db" | "pr
   const offer = requireOffer(db, offerId);
   const job = jobForOffer(db, offer);
   return { offerId: offer.id, company: offer.company, ...contractChecklist({ offer, jobCountry: job?.country ?? null, profile: workspace.profile }) };
+}
+
+/** An offer's checklist with the clauses the candidate has ticked off, and how far through they are. */
+export function offerChecklist(workspace: Pick<CareerWorkspace, "db" | "profile">, offerId: string) {
+  const checklist = contractChecklistFor(workspace, offerId);
+  const ticks = listChecklistTicks(workspace.db, offerId);
+  const clauses = checklist.clauses.map((clause) => ({ ...clause, checkedAt: ticks.get(clause.id) ?? null }));
+  return {
+    ...checklist,
+    offerId,
+    clauses,
+    progress: { checked: clauses.filter((clause) => clause.checkedAt !== null).length, total: clauses.length },
+  };
+}
+
+export const ChecklistTickSchema = z.object({
+  offerId: z.string().trim().min(1),
+  clauseId: z.string().trim().min(1).max(60),
+  checked: z.boolean(),
+});
+type ChecklistTickInput = z.input<typeof ChecklistTickSchema>;
+
+/** Ticks a clause off as read for an offer, or unticks it. Only the tick is kept, never contract text. */
+export function setChecklistItem(workspace: Pick<CareerWorkspace, "db" | "profile">, input: ChecklistTickInput) {
+  const parsed = parseInput(ChecklistTickSchema, input, "checklist item");
+  const { db } = workspace;
+  const offer = requireOffer(db, parsed.offerId);
+  if (!CONTRACT_CLAUSES.some((clause) => clause.id === parsed.clauseId)) {
+    throw new AppError("invalid_clause", `no checklist clause ${parsed.clauseId}`);
+  }
+  if (parsed.checked) setChecklistTick(db, offer.id, parsed.clauseId, nowIso());
+  else clearChecklistTick(db, offer.id, parsed.clauseId);
+  appendEvent(db, "offer.checklist", offer.id, { clauseId: parsed.clauseId, checked: parsed.checked });
+  const ticks = listChecklistTicks(db, offer.id);
+  return {
+    offerId: offer.id,
+    clauseId: parsed.clauseId,
+    checked: parsed.checked,
+    checkedAt: ticks.get(parsed.clauseId) ?? null,
+    progress: { checked: CONTRACT_CLAUSES.filter((clause) => ticks.has(clause.id)).length, total: CONTRACT_CLAUSES.length },
+  };
 }

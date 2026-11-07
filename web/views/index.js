@@ -8,7 +8,7 @@ import { registerView } from "../nav.js";
 
 const afterApply = (status) => status?.afterApply ?? null;
 
-/* ---------- Pipeline ---------- */
+/* ---------- Pipeline: from a posting to a reply ---------- */
 
 registerView({ id: "overview", path: "/", label: "Overview", group: "pipeline", order: 10, key: "o", load: () => import("./overview.js") });
 
@@ -47,13 +47,11 @@ registerView({
   load: () => import("./documents.js"),
 });
 
-/* ---------- After applying ---------- */
-
 registerView({
   id: "inbox",
   path: "/inbox",
   label: "Inbox",
-  group: "after",
+  group: "pipeline",
   order: 60,
   key: "i",
   badge: (status) => afterApply(status)?.repliesToReview ?? null,
@@ -65,7 +63,7 @@ registerView({
   id: "follow-ups",
   path: "/follow-ups",
   label: "Follow-ups",
-  group: "after",
+  group: "pipeline",
   order: 70,
   key: "f",
   badge: (status) => afterApply(status)?.followUpsDue ?? null,
@@ -73,45 +71,69 @@ registerView({
   load: () => import("./followups.js"),
 });
 
-registerView({
-  id: "interviews",
-  path: "/interviews",
-  label: "Interviews and offers",
-  group: "after",
-  order: 80,
-  key: "v",
-  badge: (status) => afterApply(status)?.interviewsThisWeek ?? null,
-  badgeLabel: "this week",
-  load: () => import("./interviews.js"),
-});
+/* ---------- Network: people, companies and where roles come from ---------- */
 
-/* ---------- Insights ---------- */
+registerView({ id: "contacts", path: "/contacts", label: "Contacts", group: "network", order: 80, key: "p", load: () => import("./contacts.js") });
 
-registerView({ id: "analytics", path: "/analytics", label: "Analytics", group: "insights", order: 90, key: "s", load: () => import("./analytics.js") });
+registerView({ id: "research", path: "/research", label: "Company research", group: "network", order: 82, key: "t", load: () => import("./research.js") });
 
-registerView({ id: "reports", path: "/reports", label: "Reports", group: "insights", order: 100, key: "e", load: () => import("./reports.js") });
-
-/* ---------- Sources ---------- */
-
-registerView({ id: "companies", path: "/companies", label: "Companies", group: "sources", order: 110, key: "c", load: () => import("./companies.js") });
+registerView({ id: "companies", path: "/companies", label: "Companies", group: "network", order: 84, key: "c", load: () => import("./companies.js") });
 
 registerView({
   id: "leads",
   path: "/leads",
   label: "Leads",
-  group: "sources",
-  order: 120,
+  group: "network",
+  order: 86,
   key: "l",
   badge: (status) => afterApply(status)?.pendingProposals ?? null,
   badgeLabel: "proposals to review",
   load: () => import("./leads.js"),
 });
 
-/* ---------- System ---------- */
+/* ---------- Interviews and offers ---------- */
 
-registerView({ id: "runs", path: "/runs", label: "Runs", group: "system", order: 130, key: "r", load: () => import("./runs.js") });
+registerView({
+  id: "interviews",
+  path: "/interviews",
+  label: "Interviews",
+  group: "career",
+  order: 90,
+  key: "v",
+  badge: (status) => afterApply(status)?.interviewsThisWeek ?? null,
+  badgeLabel: "this week",
+  load: () => import("./interviews.js"),
+});
 
-registerView({ id: "health", path: "/health", label: "Health", group: "system", order: 140, key: "h", load: () => import("./health.js") });
+registerView({ id: "prep", path: "/prep", label: "Prep sheet", order: 91, nav: false, load: () => import("./prep.js") });
+
+registerView({ id: "stories", path: "/stories", label: "Story bank", group: "career", order: 92, key: "b", load: () => import("./stories.js") });
+
+registerView({
+  id: "offers",
+  path: "/offers",
+  label: "Offers",
+  group: "career",
+  order: 94,
+  key: "m",
+  badge: (status) => afterApply(status)?.activeOffers ?? null,
+  badgeLabel: "in play",
+  load: () => import("./offers.js"),
+});
+
+/* ---------- Insights ---------- */
+
+registerView({ id: "analytics", path: "/analytics", label: "Analytics", group: "insights", order: 100, key: "s", load: () => import("./analytics.js") });
+
+registerView({ id: "reports", path: "/reports", label: "Reports", group: "insights", order: 110, key: "e", load: () => import("./reports.js") });
+
+/* ---------- Settings: what drives the rest ---------- */
+
+registerView({ id: "settings", path: "/settings", label: "Settings", group: "settings", order: 120, key: ",", load: () => import("./settings.js") });
+
+registerView({ id: "runs", path: "/runs", label: "Runs", group: "settings", order: 130, key: "r", load: () => import("./runs.js") });
+
+registerView({ id: "health", path: "/health", label: "Health", group: "settings", order: 140, key: "h", load: () => import("./health.js") });
 
 registerView({
   id: "not-found",

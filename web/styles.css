@@ -9,4 +9,9 @@
 @import url("/styles/data.css");
 @import url("/styles/panels.css");
 @import url("/styles/features.css");
+@import url("/styles/career.css");
+@import url("/styles/workspace.css");
+@import url("/styles/settings.css");
 @import url("/styles/shell.css");
+@import url("/styles/appwide.css");
+@import url("/styles/print.css");

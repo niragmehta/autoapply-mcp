@@ -1,0 +1,72 @@
+/* Printing: a prep sheet (or any page) on white paper, without the rail, the top bar or the controls. */
+
+@media print {
+  :root {
+    --paper: #ffffff;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 10.5pt;
+  }
+
+  .rail,
+  .topbar,
+  .skip,
+  .toasts,
+  .sheet,
+  .drawer,
+  .no-print,
+  .btn,
+  .icon-btn,
+  .page-head__actions,
+  details > summary {
+    display: none !important;
+  }
+
+  .shell {
+    display: block;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  details {
+    display: block;
+  }
+
+  details > * {
+    display: block;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .prep-grid {
+    display: block;
+  }
+
+  .prep-section,
+  .prep .company-notes,
+  .prep-story {
+    margin-bottom: 10pt;
+    border-color: #999999;
+    break-inside: avoid;
+  }
+
+  .plate {
+    border: 1px solid #777777;
+    background: none;
+    color: #000000;
+  }
+
+  .notice {
+    border: 1px solid #777777;
+    background: none;
+    color: #000000;
+  }
+}

@@ -129,6 +129,21 @@ a.route__count:hover {
   border-bottom: 0;
 }
 
+/* Row headers (th scope=row) read as cells, not as the sticky column header. */
+.table tbody th {
+  position: static;
+  padding: 0.55rem var(--s3);
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  vertical-align: top;
+}
+
+.table tbody tr:last-child th {
+  border-bottom: 0;
+}
+
 .table tbody tr.is-row {
   cursor: pointer;
   transition: background-color 120ms var(--ease-out);

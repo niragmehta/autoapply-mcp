@@ -76,6 +76,13 @@ widths, and a band that scrolls sideways hides pages.
 - **Narrow screens. Decided:** below 1024 px the rail is replaced by a top bar (Menu, wordmark, live runs, and the
   yellow "N need you" chip, so held work stays one tap away) and the same map opens as a modal sheet that traps focus
   and closes on Escape, a choice or the backdrop.
+- **Round 5 regroup.** With the career suite becoming pages of its own (Story bank, Offers, Contacts, Company
+  research) the sections now read as one app: **Pipeline** (Overview, Jobs, Applications, Needs human, Documents,
+  Inbox, Follow-ups: a posting to a reply), **Network** (Contacts, Company research, Companies, Leads: people,
+  companies and where roles come from), **Interviews and offers** (Interviews, Story bank, Offers; the prep sheet is
+  reached from an interview), **Insights** (Analytics, Reports) and **Settings** (Settings, Runs, Health). Interviews
+  and offers share one line because an Offers line with a single stop reads as a mistake on a line map. New keys:
+  `b` story bank, `m` offers, `p` people (contacts), `t` company research, `,` settings.
 - **Run types.** Ten run types do not fit a tab row either. The Runs page lists them in the same four sections as
   radio rows with a one-line purpose; below 1024 px the list becomes a grouped select so the form stays in view.
 
@@ -130,6 +137,9 @@ Status to tone mapping lives in `web/lib/format.js` (`tone()`), so every view ag
 - **Drawer:** detail opens in a panel beside the table (36rem, 48rem for packets, logs, reports and interviews) so
   the list stays usable. It is URL state (`?job=`, `?app=`, `?run=`, `?interview=`, `?report=`), so it survives
   reloads and Back closes it.
+- **Tabs in a drawer** (an application's Packet, Edit, Resume, Interviews and notes, History; an offer's Terms,
+  Negotiation plan, Contract checklist) stay pinned at the top of the drawer while it scrolls; the bar runs edge to
+  edge so nothing shows beside or above it.
 - **Tabs** for pages with several views of one subject (Interviews and offers, Reports, the Inbox's reply
   statuses), kept in the URL (`?tab=`, `?status=`), with arrow, Home and End keys. They scroll sideways inside
   themselves on phones instead of widening the page.
@@ -159,6 +169,14 @@ Status to tone mapping lives in `web/lib/format.js` (`tone()`), so every view ag
 | Notices | Info, ok, bad, held. Held notices guard consequential steps (approval blocked, submit-run confirmation, recording ghosted, dismissing a role); bad notices explain a closed posting and the ways forward. |
 | Run log | Dark pane, `role="log"`, time column, SENT green, SKIP, CLOSED and warnings amber, FAIL red, a "posting closed" tag on lines whose data carries `code: "posting_closed"` (never inferred from wording); follows the tail until the user scrolls up. |
 | Toasts | Navy, polite live region, optional link ("Watch it", "Download"); failures stay twice as long. |
+| Editor drawer | Every create and edit form opens in the drawer (wide where the form is long), keyed in the URL. With unsaved changes, closing it (button or Escape) first shows a held "Discard your changes?" notice in the drawer; leaving the page asks through the router's leave guard; closing the tab asks through `beforeunload`. |
+| Field messages | Under a field: hint (ink-3), error (bad ink, `aria-invalid`, linked with `aria-describedby`), warning (warn ink). Server refusals land on the field they name (`issues`, `byField`, `offending`); the top of the form says once what happened in plain words. Story warnings (a figure verified by a fact the story does not cite, an empty situation) sit beside their own field. |
+| Two-step delete | "Delete..." names what it deletes for screen readers ("Delete this story"); it opens a held notice saying what goes and what stays ("Drafts written to them stay, under their company") with Delete and Keep it. Focus moves in; Escape backs out. |
+| Composer | The outreach editor beside a guidance panel on paper: the channel's limit, what to write, facts and stories you can cite. A counter shows characters against the channel's limit and turns into an error over it. Saved drafts get Copy text, I sent it, Edit, Discard and Delete. |
+| Change log | Tailoring results grouped by what changed: swaps (with "Stronger statement of the same work" on upgrades), skills added, moves, bullets dropped to fit, other changes, warnings. Terms are outline plates; the log's own "because of terms [...]" text is replaced by them. |
+| Plan tables | Negotiation numbers (the walk-away row tinted and plated Private), levers, talking points with Copy. Below 720px each row stacks: label and figures on one line, the reasoning under it. |
+| Checklist | Contract clauses as rows with a checkbox (ticks saved, the box updates at once), what to check and what to ask your lawyer in two columns, plates for standard, commonly negotiated and ask your lawyer; relevance to this offer in info ink. |
+| Prep sheet | A page, not a drawer, so it prints: the plan as a table of blocks with minutes, likely questions, people and what they probe, stories per requirement, evidence, research and earlier notes. The print stylesheet drops the rail, controls and tints, keeps hairlines, and avoids breaking a story across pages. |
 
 ## States
 
@@ -248,6 +266,27 @@ Register it in `web/views/index.js` with a rail section and a free `g` key (see 
 - Round r4-confirm: no console errors, failed requests or overflow; each fix checked on its screenshot. The impeccable
   detector found no issues over `web/`.
 
+### Round 5 (career suite and application workspace)
+
+- Round r5: 27 views and editors at 1440x900 and 20 at 390x844 (story bank and editor with field warnings, interviews
+  with detail, debrief and scheduling, the prep sheet and its print rendering, offers with terms, plan and checklist,
+  contacts, composer and a refused draft, research, an application's Edit with a fact check, Resume with its
+  confirmation and a real tailoring rendered by Chromium, Interviews and notes, and story matching on a job), all
+  against a throwaway home with synthetic data. No console errors, failed requests or horizontal overflow.
+  Interaction flows (create, refuse, discard, delete a story; schedule, reschedule, debrief and cancel an interview;
+  plan hours; record an offer, tick the checklist, compare with a what-if rate; add, edit, delete a contact; compose,
+  refuse and save a draft; add, edit, delete a note; edit a letter; tailor a resume) all passed.
+- Fixed in one batch: a literal `&nbsp;` label above two buttons (htm does not decode entities); session notes
+  printed flush against their card's edge; row headers drawn as sticky column headers (borders out of line with
+  their row) and `cell-main` used on table cells; the tailoring tabs letting the log show above and beside them;
+  no space between the tabs and the panel; a doubled border on the research list; the negotiation plan's
+  "7.000000000000001%" and unformatted amounts in contract relevance ("26500 CAD", now "26,500 CAD"); the move log
+  repeating its terms and printing "because of terms []"; a font warning showing the full home path (warnings are now
+  shortened to `~`); a refused draft's message naming an internal parameter at the top of the form; plan tables
+  unreadable at 390px (now stacked rows).
+- Round r5c (the changed views only): each fix checked on its screenshot; no console errors, failed requests or
+  overflow.
+
 ## Open items
 
 - Filters take a full screen on phones; a collapsible filter bar would help mobile.
@@ -255,3 +294,7 @@ Register it in `web/views/index.js` with a rail section and a free `g` key (see 
 - Dense tables show 50 rows per page; virtualised scrolling was not needed at current volumes.
 - Company proposals are read from the latest propose run's summary; proposals from earlier runs are not listed.
 - The rail is 14rem; at 1280px wide the jobs table is dense but fits. A collapsible rail would help 1024 to 1280.
+- Late in round 5, the answers library (Settings), global search and the notifications tray were built but not yet
+  reviewed: one screenshot pass found the Campaign and Profile tabs of Settings overflowing at 390px (25px and 13px),
+  and their components are not described above yet.
+- The contacts table scrolls sideways on phones rather than stacking.

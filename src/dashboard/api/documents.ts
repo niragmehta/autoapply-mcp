@@ -26,6 +26,14 @@ function fileHref(documentsDir: string, id: string, path: string): string | null
   return storedFileInside(documentsDir, path, [".pdf"]) ? `/api/documents/files/${encodeURIComponent(id)}` : null;
 }
 
+/** Font and check warnings can name files under the home folder; the browser sees `~`. */
+function scrubbedWarnings<T extends { warnings: string[]; checks: { warnings: string[] } }>(result: T) {
+  return {
+    warnings: result.warnings.map((warning) => scrubHome(warning)),
+    checks: { ...result.checks, warnings: result.checks.warnings.map((warning) => scrubHome(warning)) },
+  };
+}
+
 type StatusReport = ReturnType<typeof documentStatus>;
 type HistoryEntry = StatusReport["history"][number];
 
@@ -84,7 +92,13 @@ export function registerRoutes(router: Router): void {
     const { resumeId } = parseParams(ResumeParams, request);
     parseBody(z.object({}).strict(), request);
     const result = await renderResumeVariant(request.ctx.workspace(), resumeId);
-    return { ...result, path: displayPath(result.path), profilePath: result.profilePath ? displayPath(result.profilePath) : null };
+    return {
+      ...result,
+      ...scrubbedWarnings(result),
+      path: displayPath(result.path),
+      profilePath: result.profilePath ? displayPath(result.profilePath) : null,
+      nextStep: scrubHome(result.nextStep),
+    };
   });
 
   router.get("/api/documents/:id", (request) => {
@@ -98,6 +112,6 @@ export function registerRoutes(router: Router): void {
     const { id } = parseParams(IdParams, request);
     const body = parseBody(TailorBody, request);
     const result = await generateTailoredResume(request.ctx.workspace(), id, { headline: body.headline });
-    return { ...result, path: displayPath(result.path), previousResumePath: displayPath(result.previousResumePath) };
+    return { ...result, ...scrubbedWarnings(result), path: displayPath(result.path), previousResumePath: displayPath(result.previousResumePath) };
   });
 }

@@ -52,6 +52,12 @@ export function registerRoutes(router: Router): void {
         offerStatuses: OFFER_STATUSES,
       },
       companies: workspace.companies.map((company) => company.name).sort((a, b) => a.localeCompare(b)),
+      compensation: {
+        profileCurrency: workspace.profile.compensation.currency.toUpperCase(),
+        campaignCurrency: campaign.compensation.currency.toUpperCase(),
+        fx: campaign.compensation.fx,
+      },
+      documents: campaign.documents,
       submission: {
         mode: campaign.submission.mode,
         dailyLimit: campaign.submission.dailyLimit,

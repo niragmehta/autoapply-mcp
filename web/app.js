@@ -1,5 +1,7 @@
 import { render } from "preact";
 import { api } from "./api.js";
+import { NoticesProvider, NoticesTray } from "./components/notifications.js";
+import { SearchPalette } from "./components/palette.js";
 import { MenuSheet, Rail, TopBar } from "./components/shell.js";
 import { Toaster } from "./components/toaster.js";
 import { html, useCallback, useEffect, useRef, useState } from "./lib/html.js";
@@ -63,7 +65,8 @@ function ShortcutsDialog({ open, onClose }) {
         <section aria-labelledby="keys-page">
           <h3 id="keys-page" class="keys__group">On a page</h3>
           <dl class="keys">
-            <dt><kbd>/</kbd></dt><dd>Search or filter this page</dd>
+            <dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search everything</dd>
+            <dt><kbd>/</kbd></dt><dd>Search or filter this page (everything, where a page has no search)</dd>
             <dt><kbd>j</kbd> <kbd>k</kbd></dt><dd>Next or previous row in a table</dd>
             <dt><kbd>Enter</kbd></dt><dd>Open the focused row</dd>
             <dt><kbd>Esc</kbd></dt><dd>Close the detail panel</dd>
@@ -80,11 +83,16 @@ function isTyping(target) {
   return target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 }
 
-function useShortcuts(openHelp) {
+function useShortcuts(openHelp, openSearch) {
   // Survives re-renders between the two keys of a "g x" chord.
   const pendingG = useRef(0);
   useEffect(() => {
     const onKey = (event) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        openSearch();
+        return;
+      }
       if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       if (event.key === "?") {
         event.preventDefault();
@@ -93,10 +101,9 @@ function useShortcuts(openHelp) {
       }
       if (event.key === "/") {
         const search = document.querySelector("main [data-search]");
-        if (search instanceof HTMLElement) {
-          event.preventDefault();
-          search.focus();
-        }
+        event.preventDefault();
+        if (search instanceof HTMLElement) search.focus();
+        else openSearch();
         return;
       }
       if (event.key === "g") {
@@ -114,7 +121,7 @@ function useShortcuts(openHelp) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [openHelp]);
+  }, [openHelp, openSearch]);
 }
 
 function SignedOut() {
@@ -131,14 +138,16 @@ function App() {
   const [signedOut, setSignedOut] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const status = useResource(() => api.get("/api/status"), [], { interval: STATUS_POLL_MS });
   const meta = useResource(() => api.get("/api/meta"), []);
   const { view, component: View, error } = useView(location.path);
   const main = useRef(null);
   const firstRender = useRef(true);
   const openHelp = useCallback(() => setHelpOpen(true), []);
+  const openSearch = useCallback(() => setSearchOpen(true), []);
 
-  useShortcuts(openHelp);
+  useShortcuts(openHelp, openSearch);
 
   useEffect(() => {
     const onSignedOut = () => setSignedOut(true);
@@ -160,11 +169,12 @@ function App() {
 
   return html`<${StatusContext.Provider} value=${status}>
     <${MetaContext.Provider} value=${meta}>
+    <${NoticesProvider}>
       <a class="skip" href="#main">Skip to content</a>
       <div class="shell">
-        <${Rail} path=${location.path} status=${status.data} onShortcuts=${openHelp} />
+        <${Rail} path=${location.path} status=${status.data} onShortcuts=${openHelp} onSearch=${openSearch} />
         <div class="shell__body">
-          <${TopBar} status=${status.data} onMenu=${() => setMenuOpen(true)} />
+          <${TopBar} status=${status.data} onMenu=${() => setMenuOpen(true)} onSearch=${openSearch} />
           <main id="main" tabindex="-1" ref=${main}>
             ${error
               ? html`<div class="notice notice--bad" role="alert">Could not load this page: ${error.message}</div>`
@@ -175,8 +185,11 @@ function App() {
         </div>
       </div>
       <${MenuSheet} open=${menuOpen} onClose=${() => setMenuOpen(false)} path=${location.path} status=${status.data} onShortcuts=${openHelp} />
+      <${NoticesTray} />
+      <${SearchPalette} open=${searchOpen} onClose=${() => setSearchOpen(false)} />
       <${Toaster} />
       <${ShortcutsDialog} open=${helpOpen} onClose=${() => setHelpOpen(false)} />
+    </${NoticesProvider}>
     </${MetaContext.Provider}>
   </${StatusContext.Provider}>`;
 }

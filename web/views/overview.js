@@ -135,7 +135,7 @@ function AfterApplying({ after }) {
     {
       id: "offers",
       label: "Offers",
-      href: "/interviews?tab=offers",
+      href: "/offers",
       value: after.activeOffers
         ? html`<strong>${num(after.activeOffers)}</strong> in play${after.offersDueThisWeek ? html`, <strong>${num(after.offersDueThisWeek)}</strong> to decide this week` : ""}`
         : "None in play",

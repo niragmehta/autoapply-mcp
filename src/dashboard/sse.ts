@@ -114,3 +114,48 @@ export function streamRunEvents(request: ApiRequest, runId: string): typeof STRE
   request.raw.on("close", cleanup);
   return STREAMED;
 }
+
+const NOTICE_POLL_MS = 5_000;
+
+/**
+ * Server-sent events for the notifications tray: one `run` event each time
+ * any run finishes, fails, is cancelled or is interrupted. Runs hosted in this
+ * process are pushed as they end; runs hosted elsewhere are found by polling.
+ */
+export function streamRunNotices(request: ApiRequest, toNotice: (run: RunRecord) => Record<string, unknown>): typeof STREAMED {
+  const { res, ctx } = request;
+  const queue = ctx.queue;
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+  });
+  res.write("retry: 5000\n\n");
+
+  let closed = false;
+  const announced = new Set<string>();
+  const startedAt = new Date().toISOString();
+  const announce = (run: RunRecord | null) => {
+    if (closed || !run || !isFinished(run) || announced.has(run.id)) return;
+    announced.add(run.id);
+    res.write(sseFrame("run", toNotice(run)));
+  };
+  const unsubscribe = queue.subscribe("*", (event) => {
+    if (event.kind === "status") announce(event.run);
+  });
+  const timers = [
+    setInterval(() => {
+      for (const run of queue.list({ limit: 20 })) if (run.finishedAt && run.finishedAt >= startedAt) announce(run);
+    }, NOTICE_POLL_MS),
+    setInterval(() => {
+      if (!closed) res.write(": keepalive\n\n");
+    }, KEEPALIVE_MS),
+  ];
+  request.raw.on("close", () => {
+    if (closed) return;
+    closed = true;
+    unsubscribe();
+    for (const timer of timers) clearInterval(timer);
+  });
+  return STREAMED;
+}

@@ -8,6 +8,21 @@ import { useEffect, useState } from "./html.js";
 
 const listeners = new Set();
 
+/** One editor at a time may hold unsaved changes; it is asked before the app navigates away. */
+let leaveGuard = null;
+
+export function setLeaveGuard(guard) {
+  leaveGuard = guard;
+  return () => {
+    if (leaveGuard === guard) leaveGuard = null;
+  };
+}
+
+/** After the person chose to discard their changes, nothing should ask them again. */
+export function releaseLeaveGuard() {
+  leaveGuard = null;
+}
+
 function snapshot() {
   return { path: window.location.pathname, query: new URLSearchParams(window.location.search) };
 }
@@ -27,6 +42,7 @@ export function navigate(href, { replace = false } = {}) {
   }
   const next = `${url.pathname}${url.search}`;
   if (next === `${window.location.pathname}${window.location.search}`) return;
+  if (leaveGuard && !leaveGuard()) return;
   window.history[replace ? "replaceState" : "pushState"]({}, "", next);
   notify();
 }

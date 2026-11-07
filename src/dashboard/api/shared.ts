@@ -24,6 +24,10 @@ export function queryInt(min: number, max: number, fallback: number) {
 
 export const queryNumber = z.preprocess(blankToUndefined, z.coerce.number().finite().optional());
 
+/** An optional number within [min, max]; anything else is a 400. */
+export const queryBounded = (min: number, max: number) =>
+  z.preprocess(blankToUndefined, z.coerce.number().finite().min(min).max(max).optional());
+
 export const queryBool = z.preprocess((value) => {
   if (value === undefined || value === "") return undefined;
   const text = String(value).toLowerCase();

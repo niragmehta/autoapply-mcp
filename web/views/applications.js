@@ -120,14 +120,14 @@ export default function Applications({ query }) {
       sort=${sort}
       dir=${dir}
       onSort=${(nextSort, nextDir) => setQuery({ sort: nextSort, dir: nextDir, page: undefined })}
-      onOpen=${(row) => setQuery({ app: row.id }, { replace: false })}
+      onOpen=${(row) => setQuery({ app: row.id, tab: undefined }, { replace: false })}
       selectedKey=${openApp}
       loading=${list.loading}
       empty=${empty}
     />
     <${Pager} page=${page} pageSize=${PAGE_SIZE} total=${list.data?.total} onPage=${(next) => setQuery({ page: next }, { replace: false })} />
     ${openApp
-      ? html`<${ApplicationDetail} key=${openApp} applicationId=${openApp} onClose=${() => setQuery({ app: undefined })} onChanged=${() => list.reload({ quiet: true })} />`
+      ? html`<${ApplicationDetail} key=${openApp} applicationId=${openApp} tab=${query.get("tab")} onClose=${() => setQuery({ app: undefined, tab: undefined })} onChanged=${() => list.reload({ quiet: true })} />`
       : null}
   </div>`;
 }

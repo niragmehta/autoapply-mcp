@@ -1,0 +1,253 @@
+/* The application workspace, outreach composer and offers: tabs in a drawer, change logs, guidance beside an editor, plans and checklists. */
+
+/* ---------- Tabs inside a drawer ---------- */
+
+/* Full-bleed and flush with the top of the scrolling body (whose padding is s4 by s5), so nothing shows above or beside it. */
+.drawer__tabs {
+  position: sticky;
+  top: calc(-1 * var(--s4));
+  z-index: 2;
+  margin: var(--s4) calc(-1 * var(--s5));
+  padding: var(--s2) var(--s5) 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.drawer__tabs .tabs {
+  margin-bottom: -1px;
+  border-bottom: 0;
+}
+
+.subhead {
+  margin: var(--s4) 0 var(--s2);
+  font-size: var(--fs-md);
+}
+
+/* ---------- Editing an application ---------- */
+
+.answer-edit {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-panel);
+}
+
+.answer-edit--blocked {
+  background: #fff8d6;
+  box-shadow: inset 0 0 0 1px #e9cf5f;
+}
+
+.answer-edit__meta {
+  gap: var(--s2);
+}
+
+.form-actions--sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: var(--s4) calc(-1 * var(--s5)) calc(-1 * var(--s4));
+  padding: var(--s3) var(--s5);
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+/* ---------- Tailoring ---------- */
+
+.terms {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  vertical-align: middle;
+}
+
+.changelog {
+  display: grid;
+  gap: var(--s3);
+}
+
+.changelog__group h5 {
+  margin-bottom: var(--s1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.tailor-result {
+  margin-top: var(--s3);
+}
+
+.tailor-history {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.tailor-entry {
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.tailor-entry:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Outreach composer: the editor, with what to write beside it ---------- */
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(14rem, 1fr);
+  align-items: start;
+  gap: var(--s5);
+}
+
+.guidance {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+
+.guidance h3 {
+  font-size: var(--fs-base);
+}
+
+.guidance h4 {
+  margin-top: var(--s2);
+  font-size: var(--fs-sm);
+}
+
+/* ---------- Offers ---------- */
+
+.offer-controls {
+  align-items: flex-end;
+}
+
+.fx-controls {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.fx-field {
+  min-width: 9rem;
+}
+
+.plan-numbers th {
+  width: 12rem;
+  color: var(--ink-2);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.plan-numbers td.num {
+  width: 9rem;
+}
+
+.plan-private {
+  background: #fffbea;
+}
+
+.clauses {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+
+.clause {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.clause:last-child {
+  border-bottom: 0;
+}
+
+.clause__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.clause--relevant .clause__why {
+  color: var(--info-ink);
+  font-weight: 600;
+}
+
+.clause__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--s3);
+}
+
+@media (max-width: 900px) {
+  .composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .form-actions--sticky {
+    margin: var(--s4) calc(-1 * var(--s4)) calc(-1 * var(--s4));
+    padding: var(--s3) var(--s4);
+  }
+
+  /* The plan's tables become stacked rows: the label and figures on one line, the reasoning beneath. */
+  .plan-numbers,
+  .plan-numbers tbody,
+  .plan-levers,
+  .plan-levers tbody {
+    display: block;
+  }
+
+  .plan-levers thead {
+    display: none;
+  }
+
+  .plan-numbers tr,
+  .plan-levers tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: baseline;
+    gap: var(--s1) var(--s3);
+    padding: var(--s3) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .plan-numbers tr:last-child,
+  .plan-levers tr:last-child {
+    border-bottom: 0;
+  }
+
+  .plan-numbers tr.plan-private {
+    padding-inline: var(--s2);
+  }
+
+  .table.plan-numbers th,
+  .table.plan-numbers td,
+  .table.plan-levers td {
+    width: auto;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .plan-numbers td.small,
+  .plan-levers td.small {
+    grid-column: 1 / -1;
+  }
+
+  .plan-levers td[data-label]::before {
+    content: attr(data-label) " ";
+    color: var(--ink-3);
+    font-size: var(--fs-xs);
+  }
+}

@@ -91,3 +91,8 @@ export function contactIdsForApplication(db: Db, applicationId: string): string[
     .all(applicationId) as Row[];
   return rows.map((row) => text(row.contact_id)).filter((id) => id.length > 0);
 }
+
+/** Removes a contact. Outreach drafts addressed to it keep their company; the foreign key clears their contact link. */
+export function deleteContactRecord(db: Db, id: string): boolean {
+  return Number(db.prepare("DELETE FROM contacts WHERE id = ?").run(id).changes) > 0;
+}

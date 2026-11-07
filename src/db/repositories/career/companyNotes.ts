@@ -39,3 +39,23 @@ export function listCompanyNoteRecords(db: Db, company: string, kind?: NoteKind,
         .all(company.trim(), limitOf(limit, 50)) as Row[]);
   return rows.map(rowToNote);
 }
+
+export function getCompanyNoteRecord(db: Db, id: string): CompanyNote | null {
+  const row = db.prepare("SELECT * FROM company_notes WHERE id = ?").get(id) as Row | undefined;
+  return row ? rowToNote(row) : null;
+}
+
+/** Rewrites a note's company, kind, text and sources; it keeps its id and creation time. */
+export function updateCompanyNoteRecord(db: Db, note: CompanyNote): void {
+  db.prepare("UPDATE company_notes SET company = ?, kind = ?, content = ?, sources_json = ? WHERE id = ?").run(
+    note.company,
+    note.kind,
+    note.content,
+    JSON.stringify(note.sources),
+    note.id,
+  );
+}
+
+export function deleteCompanyNoteRecord(db: Db, id: string): boolean {
+  return Number(db.prepare("DELETE FROM company_notes WHERE id = ?").run(id).changes) > 0;
+}

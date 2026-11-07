@@ -47,6 +47,24 @@ export function setOutreachStatusRecord(db: Db, id: string, status: OutreachStat
   db.prepare("UPDATE outreach_drafts SET status = ?, updated_at = ? WHERE id = ?").run(status, updatedAt, id);
 }
 
+/** Rewrites a draft's channel and text; who it is for and its status stay. */
+export function updateOutreachDraftRecord(
+  db: Db,
+  draft: Pick<OutreachDraft, "id" | "channel" | "subject" | "body" | "updatedAt">,
+): void {
+  db.prepare("UPDATE outreach_drafts SET channel = ?, subject = ?, body = ?, updated_at = ? WHERE id = ?").run(
+    draft.channel,
+    draft.subject,
+    draft.body,
+    draft.updatedAt,
+    draft.id,
+  );
+}
+
+export function deleteOutreachDraftRecord(db: Db, id: string): boolean {
+  return Number(db.prepare("DELETE FROM outreach_drafts WHERE id = ?").run(id).changes) > 0;
+}
+
 export type OutreachFilter = {
   applicationId?: string;
   contactId?: string;

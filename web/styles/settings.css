@@ -1,0 +1,88 @@
+/* Settings: the answers library and read-only configuration summaries. */
+
+.cell-clamp {
+  display: -webkit-box;
+  max-width: 48ch;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.lock-cell {
+  display: grid;
+  justify-items: start;
+  gap: var(--s1);
+}
+
+.mode-picker {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mode-picker__option {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.mode-picker__option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mode-picker__option > span {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.mode-picker__title {
+  font-weight: 600;
+}
+
+.mode-picker:disabled .mode-picker__option {
+  opacity: 0.7;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  gap: var(--s4);
+}
+
+.settings-block h3 {
+  font-size: var(--fs-md);
+}
+
+.settings-limits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--s3);
+}
+
+.input--short {
+  max-width: 7rem;
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel__head h3 {
+  font-size: var(--fs-md);
+}
+
+.panel > .table-wrap {
+  border: 0;
+}
