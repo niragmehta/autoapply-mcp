@@ -136,8 +136,9 @@ export type ApprovalRecord = {
 
 /** Latest approval decision for an application, used as the submission gate. */
 export function latestApproval(db: Db, applicationId: string): ApprovalRecord | null {
+  // Decisions recorded in the same millisecond tie on decided_at; insertion order breaks the tie.
   const row = db
-    .prepare("SELECT * FROM approvals WHERE application_id = ? ORDER BY decided_at DESC LIMIT 1")
+    .prepare("SELECT * FROM approvals WHERE application_id = ? ORDER BY decided_at DESC, rowid DESC LIMIT 1")
     .get(applicationId) as Row | undefined;
   if (!row) return null;
   return {

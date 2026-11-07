@@ -97,7 +97,7 @@ export function getBatch(db: Db, id: string): Batch | null {
 }
 
 export function latestBatch(db: Db): Batch | null {
-  const row = db.prepare("SELECT * FROM batches ORDER BY created_at DESC LIMIT 1").get() as Row | undefined;
+  const row = db.prepare("SELECT * FROM batches ORDER BY created_at DESC, rowid DESC LIMIT 1").get() as Row | undefined;
   return row ? rowToBatch(row) : null;
 }
 
