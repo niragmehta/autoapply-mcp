@@ -93,6 +93,19 @@ describe("withChangedContent", () => {
     expect(withChangedContent(waiting, job, {}).status).toBe("needs_human");
     expect(withChangedContent({ ...approved, status: "skipped" }, job, {}).status).toBe("skipped");
   });
+
+  it("leaves an application a person must handle with them, unless it is a fresh draft", () => {
+    const workspace = docWorkspace();
+    const job = docJob();
+    const aborted = seedApplication(workspace, job, {
+      status: "needs_human",
+      notes: "[2026-10-01T00:00:00.000Z] aborted: submit control clicked but no submission confirmation was detected; verify this application manually.",
+    });
+    // A new document answers no question and settles no failed submission.
+    expect(withChangedContent(aborted, job, { resumePath: "/new/resume.pdf" }).status).toBe("needs_human");
+    // A fresh draft's only other blocker can be the resume the change replaces.
+    expect(withChangedContent(aborted, job, { resumePath: "/new/resume.pdf" }, { freshDraft: true }).status).toBe("awaiting_approval");
+  });
 });
 
 describe("prepare_application hook", () => {
@@ -134,6 +147,7 @@ describe("prepare_application hook", () => {
     expect(result.status).toBe(stored?.status);
     // The missing variant file no longer blocks once a verified tailored file replaces it.
     expect(result.resumeBlocker).toBeUndefined();
+    expect(result.status).toBe("awaiting_approval");
   }, 60_000);
 });
 
@@ -167,6 +181,17 @@ describe.skipIf(!available)("tailored resume rendering", () => {
     expect(status.resume).toMatchObject({ tailored: true, exists: true, path: result.path });
     expect(status.history).toHaveLength(1);
     expect(status.nextStep).toContain("cover_letter_scaffold");
+  }, 60_000);
+
+  it("keeps an application flagged after an aborted submission waiting on a person", async () => {
+    const workspace = docWorkspace({ source: exampleResumeJson() });
+    const application = seedApplication(workspace, docJob(), {
+      status: "needs_human",
+      notes: "[2026-10-01T00:00:00.000Z] aborted: the employer refused the submission. Submit this one by hand.",
+    });
+    const result = await generateTailoredResume(workspace, application.id);
+    expect(result.status).toBe("needs_human");
+    expect(getApplication(workspace.db, application.id)).toMatchObject({ status: "needs_human", resumePath: result.path });
   }, 60_000);
 
   it("drops the least relevant bullets until an overflowing resume fits one page", async () => {

@@ -62,14 +62,22 @@ async function renderFitted(
 }
 
 /**
- * The application with new content: any approval is void, and the status is
- * recomputed the way set_application_content does it.
+ * The application with new content: any approval is void. An application
+ * waiting on a person stays with them, because a new document answers no
+ * question and settles no failed submission. Only a fresh draft, whose one
+ * other blocker can be the resume itself, takes its status from its answers.
  */
-export function withChangedContent(application: Application, job: Pick<Job, "companyName" | "title" | "applyUrl">, changes: Partial<Application>): Application {
+export function withChangedContent(
+  application: Application,
+  job: Pick<Job, "companyName" | "title" | "applyUrl">,
+  changes: Partial<Application>,
+  options: { freshDraft?: boolean } = {},
+): Application {
   const next: Application = { ...application, ...changes, approvedAt: null };
   const kept: ReadonlySet<ApplicationStatus> = new Set(["skipped", "failed"]);
   const missing = next.answers.some((answer) => answer.requiresHuman && answer.required && answer.answer.trim().length === 0);
-  const status: ApplicationStatus = kept.has(application.status) ? application.status : missing ? "needs_human" : "awaiting_approval";
+  const waitingOnPerson = application.status === "needs_human" && !options.freshDraft;
+  const status: ApplicationStatus = kept.has(application.status) ? application.status : missing || waitingOnPerson ? "needs_human" : "awaiting_approval";
   const updated = { ...next, status };
   return { ...updated, packetHash: computePacketHash(buildPacket(updated, job)) };
 }
@@ -99,12 +107,14 @@ type TailoredResumeResult = {
 /**
  * Renders a resume tailored to the application's posting, verifies it, stores
  * it under documents/<applicationId>/ and makes it the application's resume.
- * The packet hash changes with the file, so an approval is void.
+ * The packet hash changes with the file, so an approval is void. An
+ * application waiting on a person stays that way unless `freshDraft` says it
+ * was just drafted (see withChangedContent).
  */
 export async function generateTailoredResume(
   workspace: Workspace,
   applicationId: string,
-  options: { headline?: string } = {},
+  options: { headline?: string; freshDraft?: boolean } = {},
 ): Promise<TailoredResumeResult> {
   const { application, job } = loadApplicationContext(workspace, applicationId);
   if (application.status === "submitted") throw new AppError("already_submitted", "cannot change the resume of a submitted application");
@@ -137,7 +147,7 @@ export async function generateTailoredResume(
     changes: fitted.tailored.changes,
     checks: { ...checks, warnings, dropped: fitted.tailored.dropped, renders: fitted.attempts, headline: fitted.tailored.headline },
   });
-  const updated = withChangedContent(application, job, { resumePath: written.path });
+  const updated = withChangedContent(application, job, { resumePath: written.path }, { freshDraft: options.freshDraft });
   saveApplication(workspace.db, updated);
   appendEvent(workspace.db, "document.resume_tailored", application.id, {
     documentId: stored.id,

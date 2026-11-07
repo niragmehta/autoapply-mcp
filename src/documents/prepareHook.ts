@@ -25,7 +25,8 @@ export async function attachTailoredResume<T extends Prepared>(workspace: Worksp
     };
   }
   try {
-    const result = await generateTailoredResume(workspace, prepared.applicationId);
+    // A fresh draft: prepare_application just set its status from its answers and its resume check.
+    const result = await generateTailoredResume(workspace, prepared.applicationId, { freshDraft: true });
     // The variant's problems no longer matter once a verified tailored file replaces it.
     const unblocked = prepared.resumeBlocker
       ? {

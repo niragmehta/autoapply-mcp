@@ -36,7 +36,7 @@ Everything is off by default. In `campaign.json`:
 
 | Tool | What it does |
 |---|---|
-| `tailor_resume {applicationId, headline?}` | Renders, verifies and attaches a tailored resume; returns the change log. An optional headline must pass the fact check. |
+| `tailor_resume {applicationId, headline?}` | Renders, verifies and attaches a tailored resume; returns the change log, the swaps and the added skills. It voids an approval, and an application waiting on a person (unanswered questions, an aborted submission) stays `needs_human`. An optional headline must pass the fact check. |
 | `cover_letter_scaffold {applicationId}` | Company, role, the posting's top requirements paired with proof points, gaps, keywords safe to mirror, structure and word budget. |
 | `save_cover_letter {applicationId, text, renderPdf?}` | Fact-checks and stores the letter (voiding approval); optionally renders the PDF. |
 | `render_resume_variant {resumeId}` | Rebuilds a fixed track variant into `documents/variants/<resumeId>.pdf`. |
