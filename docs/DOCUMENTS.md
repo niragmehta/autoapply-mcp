@@ -2,11 +2,11 @@
 
 autoapply-mcp can render the resume it uploads from a structured source instead of using one fixed PDF per track:
 
-- **Tailored resume**: for each application, the bullet groups, bullets and skills are reordered by relevance to that posting and printed to a verified PDF that replaces the track's variant on the application.
+- **Tailored resume**: for each application, the bullet groups, bullets and skills are reordered by relevance to that posting, the candidate's own reserve bullets and skills come in where the posting calls for them, and the result is printed to a verified PDF that replaces the track's variant on the application.
 - **Fixed variants**: the same source renders the per-track PDFs that `profile.resumes` points at.
 - **Cover letters**: the agent writes the letter from a server-built scaffold; the server fact-checks it, stores it on the application and can render it as a PDF in the resume's design.
 
-Nothing here writes content. Tailoring reorders and, only when the page overflows, drops; the agent's prose (a headline, a letter) must pass a fact check against the candidate's own evidence. The approach follows [career-ops](https://github.com/career-ops-hq/career-ops) (MIT): a CV rendered per job from the candidate's own material, with a fact check in code.
+Nothing here writes content. Tailoring reorders, swaps in reserve content the candidate wrote into the source, and only when the page overflows, drops; the agent's prose (a headline, a letter) must pass a fact check against the candidate's own evidence. The approach follows [career-ops](https://github.com/career-ops-hq/career-ops) (MIT): a CV rendered per job from the candidate's own material, with a fact check in code.
 
 ## Turning it on
 
@@ -16,7 +16,9 @@ Everything is off by default. In `campaign.json`:
 "documents": {
   "tailorResume": true,
   "coverLetterPdf": false,
-  "minBulletsPerRole": 2
+  "minBulletsPerRole": 2,
+  "maxSwaps": 2,
+  "maxAddedSkills": 4
 }
 ```
 
@@ -25,6 +27,8 @@ Everything is off by default. In `campaign.json`:
 | `tailorResume` | `false` | `prepare_application` ends by rendering a tailored resume and attaching it. A failure keeps the track variant and is reported in the result's `documents.warning`; it never blocks a preparation. |
 | `coverLetterPdf` | `false` | `save_cover_letter` also renders a PDF unless the call says `renderPdf: false`. |
 | `minBulletsPerRole` | `2` | Fewest bullets a role keeps when bullets are dropped to fit the page. |
+| `maxSwaps` | `2` | Most [reserve bullets](#reserve-bullets-and-skills) a tailored resume swaps in for different printed work. Upgrades don't count. `0` allows upgrades only. |
+| `maxAddedSkills` | `4` | Most reserve skill terms a tailored resume adds because the posting names them. |
 
 `prepare_batch` prepares through the drafting layer directly and does not tailor; run `tailor_resume` on each application, or the `tailor_application_documents` prompt, when a batch should carry tailored resumes.
 
@@ -103,11 +107,45 @@ The source lives at `AUTOAPPLY_HOME/resume.json` (override with `AUTOAPPLY_RESUM
 | bullet `id` | Unique across the file; the change log and variants refer to bullets by id. |
 | bullet `text` | Printed as written. Wrap figures in `[[...]]` to set them in bold, the only bold a bullet carries. |
 | bullet `factIds`, `tags` | Never printed. They add matching terms (a fact's tags count too) and link a bullet to `profile.facts` for cover-letter proof. |
+| bullet `keep` | Tailoring never swaps this bullet out or drops it to fit the page. Its upgrade may still restate it. |
+| bullet `reserve`, `replaces`, `upgrade` | A reserve bullet stays off every fixed variant; tailoring may print it instead of a printed bullet. See [Reserve bullets and skills](#reserve-bullets-and-skills). |
 | `additional[]` | One-line entries such as earlier internships: **Organization**, location — title, dates. |
-| `skills.categories[]` | Terms print comma-separated, categories separated by a bullet. An optional `label` prints in italics before the terms. |
-| `variants` | Keyed by `profile.resumes` id. `headline` replaces the header headline; `groupOrder` and `skillOrder` list ids to print first (the rest follow in source order); `includeBullets` keeps only the listed bullets; `excludeBullets` drops bullets. Groups left empty disappear. |
+| `skills.categories[]` | Terms print comma-separated, categories separated by a bullet. An optional `label` prints in italics before the terms. Optional `reserve` terms print only on a tailored resume whose posting names them. |
+| `variants` | Keyed by `profile.resumes` id. `headline` replaces the header headline; `groupOrder` and `skillOrder` list ids to print first (the rest follow in source order); `includeBullets` keeps only the listed bullets (a reserve it lists prints like any other bullet); `excludeBullets` drops bullets and keeps a reserve from being offered. Groups left empty disappear. |
 
-Validation names every problem by path: duplicate ids, a variant referring to an id that does not exist, an unclosed `[[`, a colour or length that is not a plain value (theme values are written into CSS, so nothing else is accepted), a link with another scheme.
+Validation names every problem by path: duplicate ids, a variant referring to an id that does not exist, an unclosed `[[`, a colour or length that is not a plain value (theme values are written into CSS, so nothing else is accepted), a link with another scheme, and reserve fields used where they cannot apply.
+
+### Reserve bullets and skills
+
+A resume that fits one page leaves out work that matters to some postings. Write that work into the source as reserve bullets: they never print on a fixed variant, so the PDFs `profile.resumes` points at stay exactly as they are, and tailoring brings a few in where a posting calls for them.
+
+```json
+"bullets": [
+  { "id": "k8s-migration", "text": "Led the migration of [[120+]] services to Kubernetes.", "keep": true },
+  { "id": "ci-pipeline", "text": "Maintained the CI pipeline for the platform team." },
+  {
+    "id": "ci-pipeline-figures",
+    "text": "Rebuilt the CI pipeline on GitHub Actions, cutting median build time from [[14]] to [[5]] minutes.",
+    "reserve": true,
+    "upgrade": true,
+    "replaces": ["ci-pipeline"]
+  },
+  {
+    "id": "fraud-model",
+    "text": "Shipped a fraud-scoring service handling [[3,000]] requests a second at p99 under [[40 ms]].",
+    "reserve": true,
+    "tags": ["machine learning", "low latency"]
+  }
+]
+```
+
+- **Upgrade** (`upgrade: true`, naming exactly one printed bullet in its own group in `replaces`): the same work, stated more strongly. A tailored resume prints it in that bullet's place whenever it suits the posting at least as well, and it doesn't count against `maxSwaps`.
+- **Swap** (any other reserve): different work. It may displace a printed bullet in its own role, only the ones it names in `replaces` when it names any, and never one marked `keep`.
+- **Reserve skills** (`skills.categories[].reserve`): terms added to their category when the posting names them by a phrase of the skill, or by the word itself for a one-word skill. "Azure Data Explorer" needs "data explorer", not just "data".
+
+Upgrades and swaps cost the page nothing they don't earn: if a longer reserve overflows it, the usual page fitting drops the least relevant bullet that may go.
+
+Validation refuses a reserve marked `keep`, `replaces` naming anything but a printed bullet in the same role, a swap naming a kept bullet, an upgrade that doesn't name exactly one printed bullet in its own group, and a reserve skill already printed in its category.
 
 ## Design and fonts
 
@@ -137,13 +175,14 @@ Latin Modern is distributed under the [GUST Font License](https://www.gust.org.p
 `tailorResume(source, variantId, job, profile, options)` is deterministic: the same inputs always give the same resume and the same change log.
 
 1. Start from the application's track variant (its `resumeId`). A variant the source does not define starts from the source order, and the log says so.
-2. Extract the posting's terms: single words and two- or three-word phrases. A term is worth the weight of the most important section it appears in (title 3, requirements 2, responsibilities 1.5, preferred and unlabelled text 1, company and benefits boilerplate 0), half as much again for each further line that repeats it (up to four), and half as much again when it is a phrase, so where a term appears matters more than how often. Stop words, generic posting vocabulary ("experience", "years", "issues") and verbs or adjectives ("strong", "operating") never count on their own. A profile skill's aliases fold onto its name, so `k8s` and `Kubernetes` match, and a compound names its parts (`Kafka-backed` is evidence of Kafka).
+2. Extract the posting's terms: single words and two- or three-word phrases. A term is worth the weight of the most important section it appears in (title 3, requirements 2, responsibilities 1.5, preferred and unlabelled text 1, company and benefits boilerplate 0), half as much again for each further line that repeats it (up to four), and half as much again when it is a phrase, so where a term appears matters more than how often. Stop words, generic posting vocabulary ("experience", "years", "issues") and verbs or adjectives ("strong", "operating") never count on their own. A profile skill's aliases fold onto its name, so `k8s` and `Kubernetes` match; a hyphen between letters reads as a space, so `least-privilege` and `least privilege` match; and a slashed compound names its parts (`Python/Go` is evidence of Python).
 3. Score each bullet by the weighted overlap between those terms and the bullet's text, tags and linked facts' tags; a phrase match counts once, not again for each of its words.
-4. Within each role, order bullets inside each group by score and the groups by their best bullet plus their mean plus their label's score. Order skill categories and the terms inside them the same way; skill terms are never removed. Ties keep the variant's order, so a posting that shares nothing with the resume leaves the variant exactly as it was.
-5. Render. While the PDF exceeds `maxPages`, drop the least relevant bullet that may go (the later one among equals) and render again. A role never falls below `minBulletsPerRole` and a group never loses its last bullet; if the page still overflows, verification fails and the variant stays attached.
-6. Headline: the variant's, or an agent-supplied one that passes the fact check. The headline check gets no posting context, so the target job's title cannot become the candidate's headline unless they have held it.
+4. Bring in reserves. Each printed bullet with an upgrade gets the most relevant one that scores at least as well as it does. Then, up to `maxSwaps`, a reserve worth at least 4 (about two requirement terms) displaces a printed bullet that is not kept, in its role, when it beats that bullet's strongest statement (its upgrade, if it has one) by at least 2. The biggest gains go first, no bullet is swapped twice and no group is emptied. An upgrade prints where the bullet it restates stood; a swap joins its own group. Then add up to `maxAddedSkills` reserve skills the posting names, the most relevant first.
+5. Within each role, order bullets inside each group by score and the groups by their best bullet plus their mean plus their label's score. Order skill categories and the terms inside them the same way; skill terms are never removed. Ties keep the variant's order, so a posting that shares nothing with the resume leaves the variant exactly as it was, apart from its upgrades.
+6. Render. While the PDF exceeds `maxPages`, drop the least relevant bullet that may go (the later one among equals) and render again. A kept bullet never goes, a role never falls below `minBulletsPerRole` and a group never loses its last bullet; if the page still overflows, verification fails and the variant stays attached.
+7. Headline: the variant's, or an agent-supplied one that passes the fact check. The headline check gets no posting context, so the target job's title cannot become the candidate's headline unless they have held it.
 
-Every move is logged, for example `moved group "platform" from 3 to 1 in Northwind Logistics / Senior Software Engineer – Platform because of terms [platform, ci/cd pipeline, github actions]`, along with each dropped bullet and its score. Only upward moves are logged; an item pushed down by another has nothing to explain.
+Every change is logged, for example `moved group "platform" from 3 to 1 in Northwind Logistics / Senior Software Engineer – Platform because of terms [platform, ci/cd pipeline, github actions]`, `swapped reserve "fraud-model" in for "ci-pipeline" (relevance 14 vs 3.5) because of terms [machine learning, low latency]` or `replaced "ci-pipeline" with reserve "ci-pipeline-figures", a stronger statement of the same work (relevance 6 vs 4)`, along with each added skill and each dropped bullet and its score. The `tailor_resume` result also lists the swaps (`in`, `out`, `upgrade`, both scores) and the added skills. Only upward moves are logged; an item pushed down by another has nothing to explain.
 
 ## The fact check
 

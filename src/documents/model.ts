@@ -25,7 +25,12 @@ export type ResumeDocument = {
   skills: SkillCategory[];
 };
 
-type VariantResult = { document: ResumeDocument; variantFound: boolean };
+type PlacedBullet = { entry: number; role: number; groupId: string; bullet: ResumeBullet };
+
+/** A reserve bullet a tailored resume may swap in, with the group it prints under. */
+export type ReserveBullet = PlacedBullet & { groupLabel?: string };
+
+type VariantResult = { document: ResumeDocument; variantFound: boolean; reserves: ReserveBullet[] };
 
 /** Orders items by a preferred id list; unlisted items follow in their original order. */
 export function orderByIds<T>(items: readonly T[], order: readonly string[] | undefined, idOf: (item: T) => string): T[] {
@@ -39,28 +44,40 @@ export function orderByIds<T>(items: readonly T[], order: readonly string[] | un
 
 /**
  * Applies a fixed track variant: its headline, group and skill order, and
- * bullet selection. A variant id the source does not define renders the
- * source as written, which the caller reports.
+ * bullet selection. Reserve bullets stay out unless the variant names them in
+ * includeBullets; the rest are returned for tailoring to draw on. A variant id
+ * the source does not define renders the source as written, which the caller
+ * reports.
  */
 export function applyVariant(source: ResumeSource, variantId: string | null): VariantResult {
   // hasOwn, because a record parsed from JSON still inherits "constructor" and friends.
   const variant = variantId && Object.hasOwn(source.variants, variantId) ? source.variants[variantId] : undefined;
   const include = variant?.includeBullets ? new Set(variant.includeBullets) : null;
   const exclude = new Set(variant?.excludeBullets ?? []);
-  const keep = (bullet: ResumeBullet) => (include ? include.has(bullet.id) : true) && !exclude.has(bullet.id);
+  const allowed = (bullet: ResumeBullet) => (include ? include.has(bullet.id) || bullet.reserve : true) && !exclude.has(bullet.id);
+  const printed = (bullet: ResumeBullet) => allowed(bullet) && (!bullet.reserve || (include?.has(bullet.id) ?? false));
 
-  const experience = source.experience.map((entry) => ({
+  const reserves: ReserveBullet[] = [];
+  const experience = source.experience.map((entry, e) => ({
     ...entry,
-    roles: entry.roles.map((role) => ({
-      ...role,
-      groups: orderByIds(role.groups, variant?.groupOrder, (group) => group.id)
-        .map((group) => ({ ...group, bullets: group.bullets.filter(keep) }))
-        .filter((group) => group.bullets.length > 0),
-    })),
+    roles: entry.roles.map((role, r) => {
+      for (const group of role.groups) {
+        for (const bullet of group.bullets) {
+          if (allowed(bullet) && !printed(bullet)) reserves.push({ entry: e, role: r, groupId: group.id, groupLabel: group.label, bullet });
+        }
+      }
+      return {
+        ...role,
+        groups: orderByIds(role.groups, variant?.groupOrder, (group) => group.id)
+          .map((group) => ({ ...group, bullets: group.bullets.filter(printed) }))
+          .filter((group) => group.bullets.length > 0),
+      };
+    }),
   }));
 
   return {
     variantFound: variant !== undefined,
+    reserves,
     document: {
       header: { ...source.header, headline: variant?.headline ?? source.header.headline },
       theme: source.theme,
@@ -73,8 +90,6 @@ export function applyVariant(source: ResumeSource, variantId: string | null): Va
     },
   };
 }
-
-type PlacedBullet = { entry: number; role: number; groupId: string; bullet: ResumeBullet };
 
 /** Every bullet in print order, with where it sits. */
 export function placedBullets(document: { readonly experience: readonly ExperienceEntry[] }): PlacedBullet[] {

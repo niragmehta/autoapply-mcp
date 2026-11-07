@@ -234,10 +234,10 @@ connections so they load the new schema. Once the new code is running,
 ### documents
 
 ```json
-{ "tailorResume": false, "coverLetterPdf": false, "minBulletsPerRole": 2 }
+{ "tailorResume": false, "coverLetterPdf": false, "minBulletsPerRole": 2, "maxSwaps": 2, "maxAddedSkills": 4 }
 ```
 
-With `tailorResume` on, `prepare_application` renders a resume tailored to each posting from `resume.json` and attaches it in place of the track variant. Tailoring reorders and selects content already in the source; it never writes new claims. See [DOCUMENTS.md](DOCUMENTS.md).
+With `tailorResume` on, `prepare_application` renders a resume tailored to each posting from `resume.json` and attaches it in place of the track variant. Tailoring reorders and selects content already in the source; it never writes new claims. Upgrades (reserve bullets that restate a printed bullet more strongly) print wherever they suit the posting at least as well; `maxSwaps` caps the reserve bullets swapped in for different printed work, never for a bullet marked `keep`; `maxAddedSkills` caps the reserve skills added because the posting names them. See [DOCUMENTS.md](DOCUMENTS.md).
 
 ### inbox and followUps
 

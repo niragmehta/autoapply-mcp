@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasMap, extractJobTerms, scoreTerms, SECTION_WEIGHT, termSet, textTerms } from "../src/documents/terms.js";
+import { aliasMap, extractJobTerms, namingTerms, scoreTerms, SECTION_WEIGHT, termSet, textTerms } from "../src/documents/terms.js";
 import { normalizeTerm } from "../src/text/words.js";
 import { docJob, docProfile } from "./documents.fixtures.js";
 
@@ -48,6 +48,25 @@ describe("term extraction", () => {
 
   it("folds -es plurals onto their singular", () => {
     expect(termSet(["Automated review processes and branches"])).toEqual(termSet(["Automated review process and branch"]));
+  });
+
+  it("reads a hyphen between letters as a space, so either spelling matches", () => {
+    expect(termSet(["Zero-trust networking with least-privilege access"])).toEqual(termSet(["Zero trust networking with least privilege access"]));
+    expect([...termSet(["least-privilege access"])]).toEqual(expect.arrayContaining(["least privilege", "least privilege access"]));
+    expect([...termSet(["Evaluated GPT-4o and SHA-256 hashing"])]).toEqual(expect.arrayContaining(["gpt-4o", "gpt", "sha-256"]));
+  });
+});
+
+describe("terms that name a skill", () => {
+  it("are its phrases, so a shared word alone does not name it", () => {
+    expect(namingTerms("Azure Data Explorer").sort()).toEqual(["azure data", "azure data explorer", "data explorer"]);
+    expect(namingTerms("Least-Privilege Access")).toEqual(expect.arrayContaining(["least privilege", "least privilege access"]));
+    expect(namingTerms("Least-Privilege Access")).not.toContain("access");
+  });
+
+  it("are its words when it has no phrase", () => {
+    expect(namingTerms("Rust")).toEqual(["rust"]);
+    expect(namingTerms("Key Vault")).toEqual(["vault"]);
   });
 });
 

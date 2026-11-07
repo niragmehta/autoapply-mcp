@@ -88,6 +88,8 @@ type TailoredResumeResult = {
   previousResumePath: string;
   approvalVoided: boolean;
   changes: TailorChange[];
+  swaps: TailoredResume["swaps"];
+  addedSkills: string[];
   dropped: string[];
   jobTerms: TailoredResume["jobTerms"];
   checks: PdfVerification;
@@ -108,14 +110,15 @@ export async function generateTailoredResume(
   if (application.status === "submitted") throw new AppError("already_submitted", "cannot change the resume of a submitted application");
   const source: ResumeSource = loadResumeSource(workspace.paths);
   const fonts = loadFonts(workspace.paths.fonts);
-  const minBulletsPerRole = workspace.campaign.documents.minBulletsPerRole;
+  const { minBulletsPerRole, maxSwaps, maxAddedSkills } = workspace.campaign.documents;
+  const tailorOptions = { minBulletsPerRole, maxSwaps, maxAddedSkills, headline: options.headline };
   // Tailor once up front so a headline that fails the fact check stops before Chromium starts.
-  tailorResume(source, application.resumeId, job, workspace.profile, { minBulletsPerRole, headline: options.headline });
+  tailorResume(source, application.resumeId, job, workspace.profile, tailorOptions);
 
   const fitted = await withPdfRenderer((renderer) =>
     renderFitted(
       renderer,
-      (dropBullets) => tailorResume(source, application.resumeId, job, workspace.profile, { minBulletsPerRole, headline: options.headline, dropBullets }),
+      (dropBullets) => tailorResume(source, application.resumeId, job, workspace.profile, { ...tailorOptions, dropBullets }),
       fonts,
     ),
   );
@@ -159,6 +162,8 @@ export async function generateTailoredResume(
     previousResumePath: application.resumePath,
     approvalVoided: application.status === "approved",
     changes: fitted.tailored.changes,
+    swaps: fitted.tailored.swaps,
+    addedSkills: fitted.tailored.addedSkills,
     dropped: fitted.tailored.dropped,
     jobTerms: fitted.tailored.jobTerms,
     checks,

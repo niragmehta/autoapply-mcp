@@ -640,7 +640,7 @@ _writes local data_
 
 ### `tailor_resume`
 
-**Tailor the resume to a posting.** Renders the application's resume from resume.json with bullet groups, bullets and skills reordered by relevance to the posting, dropping the least relevant bullets only when the page overflows. Never adds or rewords content, and returns a log of every change with the posting terms behind it. The verified PDF replaces the track variant on the application, which voids any approval.
+**Tailor the resume to a posting.** Renders the application's resume from resume.json with bullet groups, bullets and skills reordered by relevance to the posting, dropping the least relevant bullets only when the page overflows (never one marked keep). It prints the candidate's upgrades (reserve bullets that restate a printed bullet more strongly) where they suit the posting at least as well, swaps in up to documents.maxSwaps other reserve bullets, each only where it clearly suits the posting better than the printed bullet it displaces, and adds reserve skills the posting names. Never writes or rewords content, and returns a log of every change with the posting terms behind it, plus the swaps and added skills. The verified PDF replaces the track variant on the application, which voids any approval.
 
 | Input | Type | Required | Notes |
 |---|---|---|---|

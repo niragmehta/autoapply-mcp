@@ -67,6 +67,21 @@ const ResumeBulletSchema = z.object({
   factIds: z.array(nonEmpty).default([]),
   /** Extra matching terms; never printed. */
   tags: z.array(nonEmpty).default([]),
+  /**
+   * Held back from the fixed variants. Tailoring may swap it in for a printed
+   * bullet in the same role when it clearly suits the posting better.
+   */
+  reserve: z.boolean().default(false),
+  /** For a reserve bullet: the only printed bullets it may stand in for. Empty means any in its role. */
+  replaces: z.array(nonEmpty).default([]),
+  /**
+   * For a reserve bullet: it states the same work as the one printed bullet it
+   * replaces, more strongly. Tailoring prints it instead whenever it suits the
+   * posting at least as well, without counting it against the swap limit.
+   */
+  upgrade: z.boolean().default(false),
+  /** For a printed bullet: tailoring never swaps it out or drops it to fit the page. Its upgrade may still restate it. */
+  keep: z.boolean().default(false),
 });
 
 const BulletGroupSchema = z.object({
@@ -107,6 +122,8 @@ const SkillCategorySchema = z.object({
   id: identifier,
   label: z.string().trim().min(1).optional(),
   terms: z.array(nonEmpty).min(1),
+  /** Terms printed only on a tailored resume whose posting names them. */
+  reserve: z.array(nonEmpty).default([]),
 });
 
 /**
@@ -136,6 +153,34 @@ const SectionTitlesSchema = z
 
 type ReferenceField = "groupOrder" | "skillOrder" | "includeBullets" | "excludeBullets";
 
+type PrintedSpot = { groupId: string; keep: boolean };
+type Problem = { message: string; path: Array<string | number> };
+
+/** What is wrong with how a bullet uses reserve, replaces, upgrade and keep. */
+function reserveProblems(
+  bullet: z.output<typeof ResumeBulletSchema>,
+  group: z.output<typeof BulletGroupSchema>,
+  printedInRole: ReadonlyMap<string, PrintedSpot>,
+): Problem[] {
+  if (!bullet.reserve) {
+    return bullet.replaces.length > 0 || bullet.upgrade ? [{ message: "replaces and upgrade only apply to a reserve bullet", path: ["reserve"] }] : [];
+  }
+  const problems: Problem[] = bullet.keep ? [{ message: "keep only applies to a printed bullet; a reserve prints only when tailoring swaps it in", path: ["keep"] }] : [];
+  bullet.replaces.forEach((id, index) => {
+    const spot = printedInRole.get(id);
+    if (!spot) {
+      problems.push({ message: `"${id}" is not a printed bullet in this role; a reserve can only replace one`, path: ["replaces", index] });
+    } else if (spot.keep && !bullet.upgrade) {
+      problems.push({ message: `"${id}" is kept, so only an upgrade may replace it`, path: ["replaces", index] });
+    }
+  });
+  const [only, ...others] = bullet.replaces;
+  if (bullet.upgrade && (only === undefined || others.length > 0 || printedInRole.get(only)?.groupId !== group.id)) {
+    problems.push({ message: "an upgrade restates exactly one printed bullet in its own group; name it in replaces", path: ["replaces"] });
+  }
+  return problems;
+}
+
 const ResumeSourceSchema = z
   .object({
     version: z.literal(1),
@@ -156,6 +201,9 @@ const ResumeSourceSchema = z
     source.experience.forEach((entry, e) =>
       entry.roles.forEach((role, r) => {
         const inRole = new Set<string>();
+        const printedInRole = new Map(
+          role.groups.flatMap((group) => group.bullets.filter((bullet) => !bullet.reserve).map((bullet) => [bullet.id, { groupId: group.id, keep: bullet.keep }] as const)),
+        );
         role.groups.forEach((group, g) => {
           const groupPath = ["experience", e, "roles", r, "groups", g];
           if (inRole.has(group.id)) {
@@ -164,14 +212,18 @@ const ResumeSourceSchema = z
           inRole.add(group.id);
           groupIds.add(group.id);
           group.bullets.forEach((bullet, b) => {
+            const bulletPath = [...groupPath, "bullets", b];
             if (bulletIds.has(bullet.id)) {
               ctx.addIssue({
                 code: "custom",
                 message: `duplicate bullet id "${bullet.id}"; bullet ids must be unique across the resume`,
-                path: [...groupPath, "bullets", b, "id"],
+                path: [...bulletPath, "id"],
               });
             }
             bulletIds.add(bullet.id);
+            for (const problem of reserveProblems(bullet, group, printedInRole)) {
+              ctx.addIssue({ code: "custom", message: problem.message, path: [...bulletPath, ...problem.path] });
+            }
           });
         });
       }),
@@ -182,6 +234,12 @@ const ResumeSourceSchema = z
         ctx.addIssue({ code: "custom", message: `duplicate skill category id "${category.id}"`, path: ["skills", "categories", c, "id"] });
       }
       categoryIds.add(category.id);
+      const printed = new Set(category.terms.map((term) => term.toLowerCase()));
+      category.reserve.forEach((term, index) => {
+        if (printed.has(term.toLowerCase())) {
+          ctx.addIssue({ code: "custom", message: `"${term}" is already printed in this category`, path: ["skills", "categories", c, "reserve", index] });
+        }
+      });
     });
     const references: Array<[ReferenceField, Set<string>, string]> = [
       ["groupOrder", groupIds, "group"],

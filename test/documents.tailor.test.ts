@@ -87,8 +87,8 @@ describe("tailorResume", () => {
             title: "Engineer",
             dates: "2020",
             groups: [
-              { id: "a", bullets: ["a1", "a2"].map((id) => ({ id, text: id, factIds: [], tags: [] })) },
-              { id: "b", bullets: ["b1", "b2", "b3"].map((id) => ({ id, text: id, factIds: [], tags: [] })) },
+              { id: "a", bullets: ["a1", "a2"].map((id) => ({ id, text: id, factIds: [], tags: [], keep: false, reserve: false, replaces: [], upgrade: false })) },
+              { id: "b", bullets: ["b1", "b2", "b3"].map((id) => ({ id, text: id, factIds: [], tags: [], keep: false, reserve: false, replaces: [], upgrade: false })) },
             ],
           },
         ],

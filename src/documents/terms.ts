@@ -11,7 +11,8 @@ import { foldAcronymPlurals, normalizeTerm, normalizeWord, STOP_WORDS } from "..
  * the title and the requirements count most, the company boilerplate not at
  * all. Matching is on normalized words and two- or three-word phrases, with
  * the profile's skill aliases folded onto one canonical form ("k8s" counts as
- * "kubernetes"). Everything is deterministic so a reordering can be explained.
+ * "kubernetes") and a hyphen between letters read as a space. Everything is
+ * deterministic so a reordering can be explained.
  */
 
 /** Where a term appears: a section of the description, or the job title. */
@@ -82,6 +83,10 @@ function isPhrase(slice: readonly string[]): boolean {
 
 type RawTerm = { term: string; display: string; size: number };
 
+// A hyphen between letters reads as a space, so "least-privilege" and "least
+// privilege" are one term. "gpt-4o" and "sha-256" stay whole.
+const LETTER_HYPHEN = /([a-z])-(?=[a-z])/g;
+
 /** Terms in one piece of text: single words and two- or three-word phrases, aliases folded in. */
 export function textTerms(text: string, aliases: AliasMap = new Map()): RawTerm[] {
   const found = new Map<string, RawTerm>();
@@ -91,11 +96,14 @@ export function textTerms(text: string, aliases: AliasMap = new Map()): RawTerm[
     if (canonical && !found.has(canonical)) found.set(canonical, { term: canonical, display: canonical, size: canonical.split(" ").length });
   };
   for (const chunk of foldAcronymPlurals(text).split(CHUNK_BREAK)) {
-    const surface = normalizeForMatch(chunk).split(" ").filter((word) => word.length > 0);
+    const surface = normalizeForMatch(chunk)
+      .replace(LETTER_HYPHEN, "$1 ")
+      .split(" ")
+      .filter((word) => word.length > 0);
     const normal = surface.map(normalizeWord);
     normal.forEach((word, index) => {
       if (isTermWord(word) || aliases.has(word)) add(word, surface[index] ?? word, 1);
-      // A compound also names its parts: "Kafka-backed" is evidence of Kafka.
+      // A compound also names its parts: "Python/Go" is evidence of Python.
       for (const part of /[-/]/.test(word) ? word.split(/[-/]/).map(normalizeWord) : []) {
         if (part.length >= 3 && (isTermWord(part) || aliases.has(part))) add(part, part, 1);
       }
@@ -106,6 +114,17 @@ export function textTerms(text: string, aliases: AliasMap = new Map()): RawTerm[
     });
   }
   return [...found.values()];
+}
+
+/**
+ * The terms that name a skill outright: its two- and three-word phrases, or
+ * its words when it has no phrase ("Rust"; "Key Vault", whose "key" is
+ * filler). "Azure Data Explorer" is named by "data explorer", never by "data".
+ */
+export function namingTerms(skill: string, aliases: AliasMap = new Map()): string[] {
+  const terms = textTerms(skill, aliases);
+  const phrases = terms.filter((entry) => entry.size > 1);
+  return (phrases.length > 0 ? phrases : terms).map((entry) => entry.term);
 }
 
 /** Every normalized term in `text`, for set intersection. */

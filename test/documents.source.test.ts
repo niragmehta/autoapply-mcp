@@ -155,7 +155,13 @@ describe("variants", () => {
 });
 
 describe("documents policy", () => {
-  it("is off by default and keeps two bullets per role when fitting", () => {
-    expect(DocumentsPolicySchema.parse(undefined)).toEqual({ tailorResume: false, coverLetterPdf: false, minBulletsPerRole: 2 });
+  it("is off by default, keeps two bullets per role when fitting and allows a few reserve swaps", () => {
+    expect(DocumentsPolicySchema.parse(undefined)).toEqual({
+      tailorResume: false,
+      coverLetterPdf: false,
+      minBulletsPerRole: 2,
+      maxSwaps: 2,
+      maxAddedSkills: 4,
+    });
   });
 });
