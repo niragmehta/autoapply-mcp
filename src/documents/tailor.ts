@@ -24,11 +24,11 @@ import { aliasMap, extractJobTerms, namingTerms, round, scoreTerms, termSet, typ
  * strongly) wherever they suit the posting at least as well, and when allowed
  * swaps in a few other reserve bullets, each only where it clearly suits the
  * posting better than the printed bullet it displaces. Bullets marked keep are
- * never displaced. It adds the reserve skills the posting names. When asked
- * to, it drops the least relevant bullets to fit the page, never a kept one,
- * never below a minimum per role and never a group's last bullet. It never
- * edits or rewords a bullet, and every change is logged with the terms that
- * caused it.
+ * never displaced and lead their group. It adds the reserve skills the posting
+ * names. When asked to, it drops the least relevant bullets to fit the page,
+ * never a kept one, never below a minimum per role and never a group's last
+ * bullet. It never edits or rewords a bullet, and every change is logged with
+ * the terms that caused it.
  */
 
 const DEFAULT_MIN_BULLETS_PER_ROLE = 2;
@@ -138,7 +138,8 @@ function makeScorer(jobTerms: ReadonlyMap<string, JobTerm>, aliases: AliasMap, p
 
 function tailorGroup(group: BulletGroup, place: string, scorer: Scorer): Tailored<Scored<BulletGroup>> {
   const before = group.bullets.map((bullet) => ({ item: bullet, match: scorer.bullet(bullet) }));
-  const after = rank(before);
+  // Kept bullets are the candidate's anchors: they lead their group, each part ordered by relevance.
+  const after = [...rank(before.filter((entry) => entry.item.keep)), ...rank(before.filter((entry) => !entry.item.keep))];
   const changes = movedUp(before, after, (bullet) => bullet.id, (id, from, to, terms) => ({
     kind: "bullet-moved",
     target: id,

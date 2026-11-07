@@ -80,7 +80,7 @@ const ResumeBulletSchema = z.object({
    * posting at least as well, without counting it against the swap limit.
    */
   upgrade: z.boolean().default(false),
-  /** For a printed bullet: tailoring never swaps it out or drops it to fit the page. Its upgrade may still restate it. */
+  /** For a printed bullet: tailoring never swaps it out or drops it to fit the page, and it leads its group. Its upgrade may still restate it. */
   keep: z.boolean().default(false),
 });
 

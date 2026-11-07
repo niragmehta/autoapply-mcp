@@ -228,6 +228,12 @@ describe("bullets marked keep", () => {
     expect(topicSwaps(tailored).map((swap) => swap.out)).not.toContain("cloud-policy");
     expect(tailored.droppable).not.toContain("cloud-policy-figures");
   });
+
+  it("lead their group, ahead of more relevant bullets that are not kept", () => {
+    const firewall = docJob({ title: "Host Security Engineer", descriptionText: "Requirements\n- Host firewall enforcement for Windows servers" });
+    const tailored = tailorResume(resume({ cloud: cloud("cloud-alerts") }), "main", firewall, profile);
+    expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-alerts", "cloud-firewall", "cloud-policy-figures"]);
+  });
 });
 
 describe("reserve skills", () => {
