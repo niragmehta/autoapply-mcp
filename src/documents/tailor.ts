@@ -140,13 +140,16 @@ function tailorGroup(group: BulletGroup, place: string, scorer: Scorer): Tailore
   const before = group.bullets.map((bullet) => ({ item: bullet, match: scorer.bullet(bullet) }));
   // Kept bullets are the candidate's anchors: they lead their group, each part ordered by relevance.
   const after = [...rank(before.filter((entry) => entry.item.keep)), ...rank(before.filter((entry) => !entry.item.keep))];
+  const kept = new Set(group.bullets.filter((bullet) => bullet.keep).map((bullet) => bullet.id));
   const changes = movedUp(before, after, (bullet) => bullet.id, (id, from, to, terms) => ({
     kind: "bullet-moved",
     target: id,
     from,
     to,
     terms,
-    message: `moved bullet "${id}" from ${from} to ${to} in ${place} > ${group.id} because of terms [${terms.join(", ")}]`,
+    message: `moved bullet "${id}" from ${from} to ${to} in ${place} > ${group.id} ${
+      kept.has(id) && terms.length === 0 ? "because it is marked keep" : `because of terms [${terms.join(", ")}]`
+    }`,
   }));
   const scores = after.map((entry) => entry.match.score);
   const best = Math.max(0, ...scores);

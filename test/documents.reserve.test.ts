@@ -233,6 +233,7 @@ describe("bullets marked keep", () => {
     const firewall = docJob({ title: "Host Security Engineer", descriptionText: "Requirements\n- Host firewall enforcement for Windows servers" });
     const tailored = tailorResume(resume({ cloud: cloud("cloud-alerts") }), "main", firewall, profile);
     expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-alerts", "cloud-firewall", "cloud-policy-figures"]);
+    expect(tailored.changes.find((change) => change.target === "cloud-alerts")?.message).toMatch(/from 3 to 1 .* because it is marked keep$/);
   });
 });
 
