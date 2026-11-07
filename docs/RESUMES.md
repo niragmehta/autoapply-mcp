@@ -2,6 +2,8 @@
 
 The server uploads a real file to the employer's form. That file is validated before an application can be approved, so a missing, empty or mislabelled resume fails loudly instead of producing a submission with no attachment.
 
+The files can be maintained by hand, as this page describes, or rendered from one `resume.json` source, which also produces a resume tailored to each posting; see [DOCUMENTS.md](DOCUMENTS.md).
+
 ## What the validator requires
 
 `prepare_application` and the submission guard both run `validateResumeFile`:

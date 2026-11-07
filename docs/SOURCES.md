@@ -9,9 +9,14 @@ Restart the registered MCP server after building to load new tool definitions;
 
 ## Employer boards
 
-All seven ATS kinds use the existing `add_company_board`, `discover_jobs`,
+The original seven ATS kinds below use the existing `add_company_board`, `discover_jobs`,
 `list_queue` and `explain_job` workflow. `add_company_board` verifies actual
-postings before saving a board; pass `save:false` for verification only.
+postings before saving a board; pass `save:false` for verification only. The same
+workflow covers 12 enterprise systems, documented in
+[SOURCES_ENTERPRISE.md](SOURCES_ENTERPRISE.md), and 12 small-business systems plus
+10 further lead sources, documented in [SOURCES_SMB_AND_LEADS.md](SOURCES_SMB_AND_LEADS.md).
+Ways to find new employers (job-alert emails, funding news, proposals and the
+Common Crawl harvest) are in [SOURCING.md](SOURCING.md).
 
 | ATS | Board token | Source |
 |---|---|---|

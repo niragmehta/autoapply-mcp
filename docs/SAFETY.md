@@ -141,14 +141,28 @@ Batches do not bypass any guard. `approve_batch` records a separate approval per
 
 ## Untrusted content
 
-Job descriptions, careers pages and form labels are third-party input. The server:
+Job descriptions, careers pages, form labels, employer emails and lead-source listings are third-party input. The server:
 
 - scans for instruction-injection patterns (override attempts, role injection, chat control tokens, exfiltration requests, "submit without review", "do not tell the user")
-- attaches the findings to the evaluation as `injection:*` flags
+- attaches the findings to the evaluation as `injection:*` flags, and holds an email that carries them for a person to read instead of recording its outcome
 - neutralizes chat control tokens
 - wraps any description handed to a model in an explicit boundary stating it is data, never instructions
 
 `explain_job` never returns raw description text without that wrapper.
+
+## Outbound requests
+
+URLs reach the server from job descriptions, emails and aggregator listings, so a malicious link must not be able to reach your own network. Every request starts over HTTPS, and it and every redirect it follows is refused with `private_host` when the host is, or resolves to, a loopback, private, link-local, carrier-grade NAT, documentation, multicast or reserved address. Redirects are followed by hand so each hop is checked before it is requested, and credentials are dropped when a redirect leaves the origin.
+
+Two lead sources, Built In and Job Bank, have terms that forbid automated access. They stay off, failing with `source_restricted`, until you name them in `AUTOAPPLY_ENABLE_RESTRICTED_SOURCES`; enabling one is your decision to accept that site's terms risk.
+
+## Mail and messages
+
+The inbox scanner opens your mailbox read-only and never marks, moves or deletes mail. Only outcomes listed in `inbox.autoRecord` (by default acknowledgements and rejections) are recorded without you, and only when classified with high confidence; everything else is proposed and waits for `confirm_reply` or `dismiss_reply`. Follow-up and outreach drafts are text for you to send. The server never sends email, LinkedIn messages or any other message on your behalf.
+
+## The dashboard
+
+The dashboard can approve and submit, so it binds to a loopback address only, requires a session token on every request, and rejects cross-origin and cross-site requests. It calls the same services as the tools, so every guard, approval check and audit event is identical. See [DASHBOARD.md](DASHBOARD.md#security-model).
 
 ## Anti-bot controls
 
@@ -191,6 +205,7 @@ submissions.
 - Fabricate experience, skills, dates or metrics
 - Answer immigration, compensation, demographic or legal questions on your behalf
 - Submit without a recorded, content-bound human approval
+- Send email or messages on your behalf, or record a reply's outcome you have not confirmed (beyond the high-confidence kinds you allow)
 
 ## Residual risks you own
 
@@ -198,3 +213,4 @@ submissions.
 - **Compensation heuristics.** Text-parsed pay can be wrong on multi-zone postings. Verify before relying on a number.
 - **Employer terms.** Some employers restrict automated applications in their own terms. Check the boards you target.
 - **Volume judgement.** The tool will pace you, but choosing to apply to 120 roles rather than 30 targeted ones is your decision, not the tool's.
+- **DNS rebinding.** The private-address guard resolves a host just before each request; a host that changes its answer between that check and the connection is not fully excluded.

@@ -218,6 +218,46 @@ connections so they load the new schema. Once the new code is running,
 
 `maxBatchSize` caps how many applications a single `prepare_batch` or `submit_batch` run may touch, even when a caller passes a larger explicit limit. Keeping it small keeps a run reviewable and avoids the rapid consecutive submissions that ATS platforms rate-limit. `maxPerCompany` caps how many live applications may exist for one employer, since several reject the excess outright.
 
+### hygiene
+
+```json
+{
+  "liveness": { "beforePrepare": true, "beforeSubmit": true, "maxAgeHours": 24 },
+  "reposts": { "windowDays": 90, "minPostings": 2 },
+  "experience": { "toleranceYears": 1.5, "enforce": false },
+  "blacklist": [{ "scope": "company", "value": "Example Corp", "reason": "declined after onsite", "since": "2026-09-01" }]
+}
+```
+
+`liveness` confirms a posting is still open before an application is prepared and again before it is submitted; a confirmed closure refuses with `posting_closed`, an inconclusive check never blocks, and a verdict younger than `maxAgeHours` is reused. `reposts` groups postings of the same role into clusters (`find_reposts`). `experience` flags postings whose minimum years exceed yours by more than `toleranceYears` (years come from `profile.experience` unless `candidateYears` is set) and rejects them at the gate only when `enforce` is true. `blacklist` is your do-not-apply list, written by `blacklist_company`: a `company` entry's `value` matches the employer name, a `domain` entry's matches the posting host and its subdomains. To rule out a single posting rather than an employer, use `dismiss_job`. See [EVALUATION.md](EVALUATION.md).
+
+### documents
+
+```json
+{ "tailorResume": false, "coverLetterPdf": false, "minBulletsPerRole": 2 }
+```
+
+With `tailorResume` on, `prepare_application` renders a resume tailored to each posting from `resume.json` and attaches it in place of the track variant. Tailoring reorders and selects content already in the source; it never writes new claims. See [DOCUMENTS.md](DOCUMENTS.md).
+
+### inbox and followUps
+
+```json
+{
+  "inbox": { "enabled": false, "lookbackDays": 30, "autoRecord": ["acknowledged", "rejected"] },
+  "followUps": { "enabled": true, "firstAfterDays": 7, "secondAfterDays": 14, "ghostAfterDays": 45 }
+}
+```
+
+`inbox` reads the configured mailbox, read-only, for employer replies. Only the outcomes in `autoRecord` are recorded without confirmation, and only when classified with high confidence; everything else is proposed for you to confirm. `followUps` sets when a first and second follow-up fall due and when a silent application is closed as ghosted. Drafts are text for you to send: the server never sends email. See [AFTER_APPLY.md](AFTER_APPLY.md).
+
+### runner
+
+```json
+{ "paceSeconds": 90, "roundCap": null, "autoAllowlist": false, "headed": false, "codeWaitSeconds": 300 }
+```
+
+Settings for runs started from the dashboard or `start_run`. `paceSeconds` is the wait between applications in a submit run, on top of `submission.minDelaySeconds`. `roundCap` (`{ "max": 2, "since": "2026-11-01T00:00:00Z" }`) limits submissions per company within a round. `autoAllowlist` adds a company to `submission.allowedCompanies` just before a run submits to it; it is off because the allowlist is a deliberate per-company decision. See [DASHBOARD.md](DASHBOARD.md).
+
 ## companies.json
 
 ```json
@@ -229,7 +269,7 @@ connections so they load the new schema. Once the new code is running,
 }
 ```
 
-`ats` is `greenhouse`, `lever`, `ashby` or `workday` (also `smartrecruiters`, `workable` and `recruitee`, and the career sites below). `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it. For Workday there is no single slug: `board` is the `tenant/datacenter/site` triple read off the employer's career-site URL, e.g. `nvidia/wd5/NVIDIAExternalCareerSite`, and it cannot be guessed, so record it with `add_company_board`. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances. `query` is a server-side search filter, worth setting on large Workday tenants that publish thousands of unrelated postings.
+`ats` is one of the 35 supported kinds: `greenhouse`, `lever`, `ashby` and `workday`; `smartrecruiters`, `workable` and `recruitee`; the enterprise systems in [SOURCES_ENTERPRISE.md](SOURCES_ENTERPRISE.md) (`icims`, `taleo`, `successfactors`, `oraclecloud`, `phenom`, `eightfold`, `avature`, `csod`, `ultipro`, `adp`, `paylocity`, `jobvite`); the small-business systems in [SOURCES_SMB_AND_LEADS.md](SOURCES_SMB_AND_LEADS.md) (`bamboohr`, `jazzhr`, `breezy`, `rippling`, `gem`, `pinpoint`, `dover`, `teamtailor`, `personio`, `hibob`, `zohorecruit`, `clearcompany`); and the career sites below. `board` is the public board slug, which is rarely the company name - use `resolve_company_board` to find it, or `add_company_board` with a value read from the careers URL. For Workday there is no single slug: `board` is the `tenant/datacenter/site` triple read off the employer's career-site URL, e.g. `nvidia/wd5/NVIDIAExternalCareerSite`, and it cannot be guessed. Each enterprise and small-business kind documents its own board format. `tier` influences scoring when compensation is unpublished. `region` is `eu` for EU-hosted Lever and Ashby instances. `query` is a server-side search filter, worth setting on large Workday tenants that publish thousands of unrelated postings.
 
 `name` is an identity, not a label. Boards are matched on it case-insensitively, and `submission.maxPerCompany` is keyed by it, so two spellings of one employer become two boards with two separate ceilings.
 
@@ -357,3 +397,53 @@ What each site's walker does:
   AI-preference consent appears in a dialog after Submit and is answered only
   from a recorded answer.
 - **Apple** is discovery only; applications there are not automated.
+
+## Environment variables
+
+Paths and configuration files:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTOAPPLY_HOME` | `~/.autoapply` | Root for configuration, database and artifacts |
+| `AUTOAPPLY_PROFILE` | `$HOME/profile.json` | Candidate profile |
+| `AUTOAPPLY_CAMPAIGN` | `$HOME/campaign.json` | Campaign policy |
+| `AUTOAPPLY_COMPANIES` | `$HOME/companies.json` | Company board list |
+| `AUTOAPPLY_DB` | `$HOME/data/autoapply.sqlite` | SQLite database |
+| `AUTOAPPLY_ARTIFACTS` | `$HOME/artifacts` | Screenshots and submission evidence |
+| `AUTOAPPLY_RESUME_SOURCE` | `$HOME/resume.json` | Resume source for tailored resumes ([DOCUMENTS.md](DOCUMENTS.md)) |
+| `AUTOAPPLY_FONTS` | `$HOME/resumes/fonts` | TrueType fonts for rendered resumes |
+| `AUTOAPPLY_DOCUMENTS` | `$HOME/documents` | Rendered resumes and cover letters |
+| `AUTOAPPLY_REPORTS` | `$HOME/reports` | Saved evaluation reports ([EVALUATION.md](EVALUATION.md)) |
+| `AUTOAPPLY_EXPORTS` | `$HOME/exports` | Tracker exports and interview calendar files |
+| `AUTOAPPLY_SECRETS` | `$HOME/.env` | `KEY=value` file the dashboard and CLIs load without overriding the shell |
+
+Server behaviour:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTOAPPLY_TOOLSETS` | all | Comma-separated toolsets to register; `core` is always on ([TOOLS.md](TOOLS.md)) |
+| `AUTOAPPLY_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `AUTOAPPLY_USER_AGENT` | `autoapply-mcp/<version> (personal job-search client)` | User-Agent sent to job boards and sources |
+| `AUTOAPPLY_MIN_INTERVAL_MS` | `700` | Minimum delay between requests to one host |
+| `AUTOAPPLY_MAX_RESPONSE_MB` | `64` | Response size ceiling |
+| `AUTOAPPLY_DASHBOARD_PORT` | `4317` | Dashboard port when `--port` is not given ([DASHBOARD.md](DASHBOARD.md)) |
+| `AUTOAPPLY_DASHBOARD_TOKEN` | random | Fixed dashboard sign-in token, 24 or more URL-safe characters |
+
+Sources:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTOAPPLY_ENABLE_RESTRICTED_SOURCES` | unset | Lead sources whose terms forbid automated access (`builtin`, `jobbankca`) that you choose to enable |
+| `AUTOAPPLY_FOORILLA_API_KEY` | unset | Key for an existing Foorilla PRO+ subscription |
+| `AUTOAPPLY_THEMUSE_API_KEY` | unset | The Muse API key for use beyond testing |
+| `AUTOAPPLY_<ATS>_MAX_POSTINGS` | `500` | Postings read per enterprise board, e.g. `AUTOAPPLY_ICIMS_MAX_POSTINGS` ([SOURCES_ENTERPRISE.md](SOURCES_ENTERPRISE.md)) |
+| `AUTOAPPLY_<ATS>_MAX_DETAILS` | `100` | Per-posting description requests per enterprise board; `0` turns them off |
+| `AUTOAPPLY_SMB_DETAIL_LIMIT` | `100` | Per-posting detail requests per small-business board |
+
+Accounts and mailboxes (never written to a file):
+
+| Variable | Purpose |
+|---|---|
+| `AUTOAPPLY_ATS_PASSWORD`, `AUTOAPPLY_ATS_EMAIL` | Candidate accounts on Workday and similar tenants (see above) |
+| `AUTOAPPLY_OTP_IMAP_USER`, `_PASSWORD`, `_HOST`, `_PORT`, `AUTOAPPLY_OTP_MAILBOX`, `AUTOAPPLY_OTP_FROM` | Mailbox read for one-time verification codes (see above) |
+| `AUTOAPPLY_INBOX_IMAP_USER`, `_PASSWORD`, `_HOST`, `_PORT`, `_MAILBOX` | Mailbox read for employer replies; each falls back to its `AUTOAPPLY_OTP_IMAP_*` counterpart ([AFTER_APPLY.md](AFTER_APPLY.md)) |
