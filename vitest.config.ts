@@ -1,10 +1,16 @@
 import { defineConfig } from "vitest/config";
 
+// Windows runners are slow at file-heavy tests (SQLite files, temp folders
+// scanned on every write), so the default limits there read slowness as failure.
+const slowFileSystem = process.platform === "win32";
+
 export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
     setupFiles: ["test/setup.ts"],
+    testTimeout: slowFileSystem ? 30_000 : 5_000,
+    hookTimeout: slowFileSystem ? 60_000 : 10_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
