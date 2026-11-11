@@ -49,6 +49,11 @@ The two databases do not sync. While both machines run discovery and submissions
 ## On a cloud sandbox
 
 - **Browser.** Install it with `npx playwright install --with-deps chromium`. The career-site walkers (Google, Meta, Apple, Amazon) default to Chrome; set `AUTOAPPLY_BROWSER_CHANNEL=chromium` unless Chrome is installed.
-- **Secrets.** Provide them as environment secrets of the sandbox, never in a file in the repository: `AUTOAPPLY_ATS_PASSWORD` for Workday-style accounts, and the `AUTOAPPLY_OTP_IMAP_*` mailbox for emailed verification codes. See [CONFIGURATION.md](CONFIGURATION.md).
+- **Secrets.** Provide them as environment secrets of the sandbox, never in a file in the repository: `AUTOAPPLY_ATS_PASSWORD` for Workday-style accounts, and the `AUTOAPPLY_OTP_IMAP_*` mailbox for emailed verification codes. See [CONFIGURATION.md](CONFIGURATION.md). In a GitHub Copilot cloud session they are the repository's **Agents** secrets (Settings → Secrets and variables → Agents). They are injected when the sandbox starts: add them first, then start the session, because a running sandbox never sees secrets added later.
+- **Network.** A GitHub Copilot cloud sandbox has a firewall that allows GitHub, package registries and little else. Every job board and `imap.gmail.com` are blocked, so discovery, submissions and verification-code reads all fail until the repository allows them under Settings → Copilot → Internet access → "Copilot in the cloud". There are two ways to allow them:
+  - **A custom allowlist** (each domain includes its subdomains), for example `greenhouse.io`, `ashbyhq.com`, `lever.co`, `myworkdayjobs.com`, `smartrecruiters.com`, `workable.com`, `recruitee.com`, `metacareers.com`, `amazon.jobs`, `apple.com`, `google.com`, `gstatic.com` and `imap.gmail.com`. Employer pages and CAPTCHA providers load other hosts as well; the sandbox's firewall log names each blocked host.
+  - **Turning the firewall off**, which works like a home machine. GitHub warns that it lets an agent reach any host, which raises the risk of data leaving the sandbox; here that data is your profile and secrets.
+
+  Start a new session after changing either, since a running sandbox may keep the rules it started with.
 - **Signing in again.** Browser sessions do not travel, so accounts on employer sites sign in again on the new machine.
 - **CAPTCHAs.** Data-centre addresses are challenged and spam-flagged more often than a home connection. Expect more boards to need a person.
