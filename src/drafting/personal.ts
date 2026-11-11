@@ -1,5 +1,6 @@
 import type { Personal, Profile, StoredAnswer } from "../domain/profile.js";
 import { asksAbilityToMeetRequirement } from "../text/requirementQuestion.js";
+import { opensAsYesNo } from "../text/yesNoQuestion.js";
 import { normalizeQuestionLabel } from "./blockedQuestions.js";
 import { asksAboutOwnResidence, NATIONALITY_QUESTION, NON_POSTAL_STATE } from "./residence.js";
 
@@ -325,6 +326,8 @@ const RESOLVERS: readonly Resolver[] = [
  * opted this field in for automatic use.
  */
 const SELF_ID_CATEGORIES: ReadonlySet<string> = new Set(["demographic", "veteran", "disability"]);
+/** Resolvers whose value is a place: an address part or the identity location. */
+const PLACE_CITATION = /^(?:personal\.address|identity\.location)/;
 
 export function resolvePersonal(label: string, profile: Profile): (PersonalResolution & { category: string }) | null {
   const normalized = normalizeQuestionLabel(label);
@@ -339,8 +342,14 @@ export function resolvePersonal(label: string, profile: Profile): (PersonalResol
   // about meeting a requirement never asks for a characteristic, so no
   // self-identification resolver may answer it.
   const requirementQuestion = asksAbilityToMeetRequirement(label) || asksAbilityToMeetRequirement(normalized);
+  // Procore asked whether he had been "employed by a U.S. federal, state or local
+  // government entity", and Abbott opened its question with "State and federal
+  // law require...". A yes/no question names a place only in passing, so no
+  // address or location value answers one.
+  const yesNoQuestion = opensAsYesNo(label);
   for (const resolver of RESOLVERS) {
     if (requirementQuestion && SELF_ID_CATEGORIES.has(resolver.category)) continue;
+    if (yesNoQuestion && PLACE_CITATION.test(resolver.citation)) continue;
     if (
       (resolver.citation.startsWith("personal.address") || resolver.category === "contact") &&
       (NON_POSTAL_STATE.test(label) || NON_POSTAL_STATE.test(normalized) || NATIONALITY_QUESTION.test(label))

@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
 import { buildFillPlan, orderFieldsForBrowser, stalePlaceholderFields } from "../src/submission/formFields.js";
-import { bankAnswerFor, isAiDetectionPrompt } from "../src/submission/form/answerBank.js";
+import { bankAnswerFor, bestBankEntry, isAiDetectionPrompt, isReservedForHuman } from "../src/submission/form/answerBank.js";
 import { declinesByLeavingBlank } from "../src/submission/form/answerVocabulary.js";
 import { augmentAnswersForBrowser } from "../src/submission/form/browserAnswers.js";
 import { educationDateLabels, fallbackAnswersForFields } from "../src/submission/form/fallbackAnswers.js";
@@ -3919,5 +3919,198 @@ describe("a list of choices whose label mentions a contact detail", () => {
     const matches = matchFields([field("Phone Number", { type: "tel" })], [answer("Phone", "+1 604 555 0100")]);
 
     expect(matches[0]?.answer?.answer).toBe("+1 604 555 0100");
+  });
+});
+
+// Procore's Workday asked "Within the past 2 years, have you been employed by a
+// U.S. federal, state or local government entity ...?", Abbott's opened with
+// "State and federal law require Abbott to track ..." before asking "Are you:
+// (A) ... (C) None of the above.", and Breeze Airways asked "Do the first and
+// last names provided on the first page match your legal name ...?" and "If you
+// do not currently reside in the area of the position ..., are you willing to
+// relocate ...?". None opens with "do you" or "are you", so the yes/no guard
+// missed all four: two took the stored province on the word "state", Breeze
+// took the full name and the stored location, and each failed on its list.
+describe("yes/no questions that do not open with the question", () => {
+  const region = (label: string) =>
+    /\bstate\b/.test(normalizeLabel(label))
+      ? { answer: "British Columbia", citation: "personal.address.region", category: "contact", authorized: true }
+      : null;
+  const dropdown = (label: string) => field(label, { type: "select", required: true });
+  const filledFromProfile = (label: string) => {
+    const control = dropdown(label);
+    return buildFillPlan([control], fallbackAnswersForFields([control], [], [], region)).toFill;
+  };
+  const legalName = answer("Legal name", "Casey Moore", { questionKey: "derived-legal-name" });
+  const location = answer("Location", "Vancouver, British Columbia, Canada", {
+    questionKey: "location",
+    citation: "identity.location",
+  });
+
+  it("refuses the stored province behind a time phrase", () => {
+    expect(
+      filledFromProfile(
+        "Within the past 2 years, have you been employed by a U.S. federal, state or local government entity or, at any time, held U.S. public office?",
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses the stored province after a statement", () => {
+    expect(
+      filledFromProfile(
+        "State and federal law require Abbott to track and report certain payments and transfers of value provided to certain health care professionals (HCPs) in connection with recruiting. Are you: (A) A physician with an active license to practice in the US; (B) a Massachusetts-licensed prescriber, or (C) None of the above.",
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses the stored name for a question asking whether names match", () => {
+    const names = dropdown(
+      "Do the first and last names provided on the first page match your legal name as shown on your passport, driver's license, Social Security card, or other government-issued identification?",
+    );
+    expect(matchFields([names], [legalName])[0]?.answer).toBeNull();
+  });
+
+  it("refuses the bank's legal name for the same question", () => {
+    // With the derived name refused, the bank's "Legal name if different"
+    // entry took the question through its "legal name" pattern instead.
+    const names = dropdown(
+      "Do the first and last names provided on the first page match your legal name as shown on your passport, driver's license, Social Security card, or other government-issued identification?",
+    );
+    const bankLegalName = {
+      key: "legal-name",
+      label: "Legal name if different",
+      patterns: ["legal name"],
+      answer: "Casey Moore",
+      alternatives: [],
+      allowAutoFill: true,
+    };
+    expect(buildFillPlan([names], fallbackAnswersForFields([names], [], [bankLegalName])).toFill).toEqual([]);
+  });
+
+  it("refuses the stored location for a relocation question behind a condition", () => {
+    const relocate = dropdown(
+      "If you do not currently reside in the area of the position for which you are applying, are you willing to relocate if required for the role?",
+    );
+    expect(matchFields([relocate], [location])[0]?.answer).toBeNull();
+  });
+
+  it("still gives the stored province to a question asking which state", () => {
+    expect(filledFromProfile("Which state do you currently reside in?")[0]?.answer?.answer).toBe("British Columbia");
+    expect(filledFromProfile("If you live in the US, which state do you live in?")[0]?.answer?.answer).toBe("British Columbia");
+  });
+});
+
+// Expedia's Workday asked candidates to agree "not to utilize any AI tools
+// during the assessment and/or interview process", adding that a "disability
+// accommodation" may allow tools. The disability resolver took the question on
+// that word and offered the decline-to-answer choice to an AI-policy
+// acknowledgement - a question the candidate answers himself every time.
+describe("an AI-use prohibition", () => {
+  const policy =
+    "We value the authenticity and originality of responses during our assessment and interview process. Therefore, we ask that you not use Artificial Intelligence (AI) to answer questions. We believe that genuine, personal insights are crucial for a meaningful evaluation. By proceeding, you acknowledge and agree not to utilize any AI tools during the assessment and/or interview process. Note that If selected to interview, you may request a disability accommodation and usage of tools may be considered. Please enter \u201cYes\u201d if you acknowledge. If you enter \u201cNo\u201d we may not consider your application.";
+
+  it("is reserved for a person", () => {
+    expect(isReservedForHuman(policy)).toBe(true);
+  });
+
+  it("takes no answer from the stored personal details", () => {
+    const control = field(policy, { type: "select", required: true });
+    const decline = () => ({
+      answer: "I do not wish to answer",
+      citation: "personal.demographics.disabilityStatus",
+      category: "disability",
+      authorized: true,
+    });
+    expect(buildFillPlan([control], fallbackAnswersForFields([control], [], [], decline)).toFill).toEqual([]);
+  });
+
+  it("does not reserve a question about how the candidate uses AI", () => {
+    expect(isReservedForHuman("How frequently and extensively do you use AI tools in your daily work?")).toBe(false);
+    expect(isReservedForHuman("How are you leveraging AI to make your work more efficient and productive? Please explain.")).toBe(false);
+  });
+});
+
+// Trellix's Workday asked "By submitting this application for employment, I
+// agree that Musarubra, Trellix and Skyhigh Security has my permission to send
+// me correspondence via SMS..." over Yes and No. The general acknowledgement
+// entry matched "I agree" and offered "Yes" - consent to text messages, which
+// this candidate refuses - and only the menu's own wording kept it unselected.
+describe("text-message consent worded as an agreement", () => {
+  const sms =
+    "By submitting this application for employment, I agree that Musarubra, Trellix and Skyhigh Security has my permission to send me correspondence via SMS. To unsubscribe from SMS, reply STOP to the message. Msg and data rates may apply.";
+  const acknowledgement = {
+    key: "acknowledgement",
+    label: "Acknowledgement",
+    patterns: ["i acknowledge", "i agree", "privacy policy"],
+    answer: "Yes",
+    allowAutoFill: true,
+  };
+  const textConsent = {
+    key: "sms-consent",
+    label: "Text message consent",
+    patterns: ["consent to receiving text messages"],
+    answer: "No - I do not consent to receiving text messages",
+    allowAutoFill: true,
+  };
+
+  it("is not answered by a general acknowledgement", () => {
+    expect(bestBankEntry(field(sms, { type: "select", required: true }), [acknowledgement, textConsent])).toBeUndefined();
+  });
+
+  it("is answered by an entry written about text messages", () => {
+    const asked = field("Do you consent to receiving text messages about your application?", { type: "select", required: true });
+    expect(bestBankEntry(asked, [acknowledgement, textConsent])?.key).toBe("sms-consent");
+  });
+
+  it("leaves the general acknowledgement to other agreements", () => {
+    const agreement = field("I agree to the privacy policy", { type: "checkbox", required: true });
+    expect(bestBankEntry(agreement, [acknowledgement, textConsent])?.key).toBe("acknowledgement");
+  });
+});
+
+// Early Warning asked "As of your desired start date, which state will you
+// reside in permanently?" over a list of states. The stored notice period won it
+// on "start date", and the run searched the states for "Approximately four weeks
+// from offer acceptance."
+describe("a question asking which state", () => {
+  const where = field("As of your desired start date, which state will you reside in permanently?", {
+    type: "select",
+    required: true,
+  });
+
+  it("never takes a notice period", () => {
+    const notice = answer("Start date", "Approximately four weeks from offer acceptance.", { questionKey: "start-date" });
+    expect(matchFields([where], [notice])[0]?.answer).toBeNull();
+  });
+
+  it("falls through to the stored province instead", () => {
+    const startDate = {
+      key: "start-date",
+      label: "Start date",
+      patterns: ["start date"],
+      answer: "Approximately four weeks from offer acceptance.",
+      allowAutoFill: true,
+    };
+    const region = () => ({ answer: "British Columbia", citation: "personal.address.region", category: "contact", authorized: true });
+    const plan = buildFillPlan([where], fallbackAnswersForFields([where], [], [startDate], region));
+    expect(plan.toFill[0]?.answer?.answer).toBe("British Columbia");
+  });
+});
+
+// BlackLine asked "What is your earliest possible start date?", Western Governors
+// University "When are you available to start?" and Early Warning "What is your
+// desired start date?", each as a Workday date picker. The stored answer is a
+// notice period, which a date control refuses, so all three stopped the wizard
+// until a date was typed in by hand.
+describe("an availability question on a date picker", () => {
+  const notice = answer("Start date", "Approximately four weeks from offer acceptance.", { questionKey: "start-date" });
+
+  it("takes the notice period", () => {
+    const picker = field("What is your earliest possible start date?", { type: "date", required: true, domId: "formField-start" });
+    expect(matchFields([picker], [notice])[0]?.answer?.answer).toBe("Approximately four weeks from offer acceptance.");
+  });
+
+  it("still refuses it on a date that is not about starting", () => {
+    expect(matchFields([field("Date of birth", { type: "date", required: true })], [notice])[0]?.answer).toBeNull();
   });
 });

@@ -341,3 +341,34 @@ describe("the location field Greenhouse renders but does not publish", () => {
     expect(resolvePersonal("Location Postal Code", profile)?.citation).toBe("personal.address.postalCode");
   });
 });
+
+// Procore and Abbott asked yes/no questions that name a state only in passing -
+// "employed by a U.S. federal, state or local government entity", "State and
+// federal law require Abbott to track..." - and the region rule answered both
+// with the stored province, which neither Yes/No nor (A)/(B)/(C) list offers.
+describe("a yes/no question that mentions a state", () => {
+  const profile = withPersonal({
+    address: { street: "1 Main St", city: "Vancouver", region: "BC", postalCode: "V6B 1A1", country: "Canada" },
+    addressAutoFill: true,
+  });
+
+  it("is not answered with the stored province", () => {
+    expect(
+      resolvePersonal(
+        "Within the past 2 years, have you been employed by a U.S. federal, state or local government entity or, at any time, held U.S. public office?",
+        profile,
+      ),
+    ).toBeNull();
+    expect(
+      resolvePersonal(
+        "State and federal law require Abbott to track and report certain payments and transfers of value provided to certain health care professionals (HCPs) in connection with recruiting. Are you: (A) A physician; (B) a Massachusetts-licensed prescriber, or (C) None of the above.",
+        profile,
+      ),
+    ).toBeNull();
+  });
+
+  it("still answers a question asking which state", () => {
+    expect(resolvePersonal("Which state do you currently reside in?", profile)?.answer).toBe("BC");
+    expect(resolvePersonal("State/Province", profile)?.answer).toBe("BC");
+  });
+});

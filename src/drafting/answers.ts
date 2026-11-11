@@ -17,6 +17,7 @@ import {
   soleDocumentConsentOption,
 } from "./answers/consent.js";
 import { CONTACT_RESOLVERS, contactResolverFor } from "./answers/contact.js";
+import { citizenshipChoice } from "./answers/citizenship.js";
 import type { FormQuestion } from "./answers/formQuestion.js";
 import {
   canonicalSponsorshipDecision, canonicalTnSponsorshipDecision, definesSponsorshipWithTn, namesTnRoute, resolveTnChoice,
@@ -96,6 +97,28 @@ function fitToQuestion(
   };
 }
 
+/**
+ * What a person is asked to confirm on a work-authorization question the draft
+ * may not settle. A suggestion the form does not offer is no suggestion: every
+ * readiness check reads a non-blank answer as given, so Navan's Yes/No/Unknown
+ * question carrying the free-text authorization statement looked answered, was
+ * sent for submission and failed at the dropdown, as ten others did in the
+ * November 2026 round. Blank, it stays outstanding until a person chooses. A
+ * stored answer is offered as the choice it resolves to; the statement, written
+ * for no list, only where a choice reads exactly the same.
+ */
+function offeredSuggestion(
+  question: FormQuestion,
+  resolved: { value: string; unmatchedChoice: boolean } | undefined,
+  statement: string,
+): string {
+  if (resolved) return resolved.unmatchedChoice ? "" : resolved.value;
+  const options = question.options ?? [];
+  if (options.length === 0) return statement;
+  const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return options.find((option) => plain(option) === plain(statement)) ?? "";
+}
+
 function answerOne(
   question: FormQuestion,
   profile: Profile,
@@ -168,22 +191,41 @@ function answerOne(
     const resolved = approved ? (resolveTnChoice(approved, question) ?? resolveApprovedValue(approved, question, profile)) : undefined;
     const unusable = resolved?.unmatchedChoice === true;
     const useApproved = approved !== undefined && canAutoFill(approved) && !reviewAll && !unusable;
+    const citizenship = !approved && !reviewAll && category === "citizenship" ? citizenshipChoice(question, profile) : undefined;
+    if (citizenship) {
+      return {
+        questionKey: question.key,
+        label: question.label,
+        answer: citizenship,
+        source: "profile",
+        citation: "profile.workAuthorization.citizenships",
+        requiresHuman: false,
+        category,
+        guidance: "",
+      };
+    }
+    const suggestion = useApproved
+      ? (resolved?.value ?? approved.answer)
+      : offeredSuggestion(question, resolved, profile.workAuthorization.statement);
+    const options = question.options ?? [];
     return {
       questionKey: question.key,
       label: question.label,
-      answer: useApproved ? (resolved?.value ?? approved.answer) : (approved?.answer ?? profile.workAuthorization.statement),
+      answer: suggestion,
       source: approved ? "approved-answer" : "profile",
       citation: approved ? `profile.answers.${approved.key}` : "profile.workAuthorization.statement",
       requiresHuman: !useApproved,
       category,
       guidance:
         unusable && approved
-          ? `"${approved.answer}" is not one of the offered options: ${(question.options ?? []).join(" | ")}`
+          ? `"${approved.answer}" is not one of the offered options: ${options.join(" | ")}`
           : !approved && tnDefined
             ? tnSponsorshipGuidance(question)
             : !approved && workPermissionScopeMismatch(question.label, [])
               ? "This authorization scope needs an explicit matching decision; a generic work-permission answer does not establish it."
-              : "",
+              : !approved && suggestion === "" && options.length > 0
+                ? `The work authorization statement is not one of the offered options: ${options.join(" | ")}`
+                : "",
     };
   }
 

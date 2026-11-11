@@ -72,16 +72,68 @@ function namesTnChoice(option: string): boolean {
 /** The one offered choice that affirms needing sponsorship as TN, such as Mintlify's "Yes, TN". */
 function tnAffirmingChoice(question: FormQuestion): string | undefined {
   const choices = (question.options ?? []).filter(
-    (option) => namesTnChoice(option) && /^\s*yes\b/i.test(option) && !NEGATED.test(option),
+    (option) => namesTnChoice(option) && /^\s*yes\b/i.test(option) && !negates(option),
   );
   return choices.length === 1 ? choices[0] : undefined;
 }
 
 const NEGATED = /\b(?:not|don't|do not|doesn't|does not|never|no longer|won't|will not)\b/i;
 
+/**
+ * "Includes but is not limited to ... TN" lists TN; it does not exclude it.
+ * Redwood Materials defined sponsorship that way, and the "not" read as a
+ * negation sent a question the TN decision answers to a person.
+ */
+const NOT_LIMITED_TO = /\b(?:but\s+)?(?:is\s+|are\s+)?not\s+limited\s+to\b/gi;
+
+function negates(text: string): boolean {
+  return NEGATED.test(text.replace(NOT_LIMITED_TO, " "));
+}
+
+/**
+ * The one choice stating that the candidate needs sponsorship, where it names
+ * TN as a kind of sponsorship. Mixpanel and NexHealth offer "My current work
+ * authorization requires a renewal or sponsorship now or in the future (ie:
+ * H1-B, OPT, TN, etc.)" and Lyft "I require/will require Lyft's sponsorship ...
+ * (e.g. H-1B, TN, etc.)" under labels asking only about authorization. The form
+ * counts TN as sponsorship in its own choices, so the TN decision picks that
+ * choice whatever the label says.
+ */
+function sponsorshipNeedChoice(question: FormQuestion): string | undefined {
+  if (TN_DEFINED_SPONSORSHIP.test(question.label)) return undefined;
+  const choices = (question.options ?? []).filter(
+    (option) =>
+      TN_DEFINED_SPONSORSHIP.test(option) &&
+      /sponsor/i.test(option) &&
+      /\b(?:require[sd]?|need(?:s|ed)?)\b/i.test(option) &&
+      !negates(option),
+  );
+  return choices.length === 1 ? choices[0] : undefined;
+}
+
+const UNSURE = /^\s*(?:unsure|not sure|i'?m not sure|maybe|unknown|i don'?t know|prefer not to (?:say|answer))\b/i;
+
+/**
+ * The affirmative of a yes/no question, however its choices spell it: a bare
+ * "Yes", CreativeX's "Yes, I will require visa sponsorship now or in the
+ * future.", or Redwood Materials' "Yes" beside "Unsure". Exactly one choice may
+ * open with yes and one with no; any others may only be uncertain. A yes naming
+ * a route other than TN ("Yes, H-1B") claims that route, so it is not taken.
+ */
+function polarAffirmative(question: FormQuestion): string | undefined {
+  const options = (question.options ?? []).map((option) => option.trim()).filter((option) => option.length > 0);
+  const affirmative = options.filter((option) => /^yes\b/i.test(option));
+  const negative = options.filter((option) => /^no\b/i.test(option));
+  const rest = options.filter((option) => !/^(?:yes|no)\b/i.test(option));
+  if (affirmative.length !== 1 || negative.length !== 1 || !rest.every((option) => UNSURE.test(option))) return undefined;
+  const choice = affirmative[0]!;
+  if (NAMED_IMMIGRATION_CLASS.test(choice) && !TN_DEFINED_SPONSORSHIP.test(choice)) return undefined;
+  return choice;
+}
+
 export function tnSponsorshipGuidance(question: FormQuestion): string {
   const affirming = (question.options ?? []).filter(
-    (option) => TN_DEFINED_SPONSORSHIP.test(option) && /sponsor/i.test(option) && !NEGATED.test(option),
+    (option) => TN_DEFINED_SPONSORSHIP.test(option) && /sponsor/i.test(option) && !negates(option),
   );
   const choice = affirming.length === 1 ? affirming[0] : tnAffirmingChoice(question);
   const base = "This form counts TN as sponsorship, which the generic sponsorship answer does not cover.";
@@ -122,22 +174,29 @@ export function canonicalSponsorshipDecision(
  *
  * Held to the limits of the generic fallback and three more. The question must
  * ask whether sponsorship will be required - "authorized without sponsorship
- * (e.g. H-1B, TN)" takes the opposite answer. It must offer only Yes and No. And
- * a form saying TN is not counted is asking the generic question, so any
- * negation in the sentence naming TN leaves the answer to a person.
+ * (e.g. H-1B, TN)" takes the opposite answer. Its choices must be a yes and a
+ * no, beside nothing but an "Unsure". And a form saying TN is not counted is
+ * asking the generic question, so any negation in the sentence naming TN
+ * leaves the answer to a person. A choice that states the need for sponsorship
+ * and names TN stands in for all three: the form has defined the yes itself.
  */
 export function canonicalTnSponsorshipDecision(
   profile: Profile,
   question: FormQuestion,
 ): Profile["answers"][number] | undefined {
-  if (!asksWhetherSponsorshipRequired(question.label)) return undefined;
-  const namingTn = question.label.split(/[.?;]/).filter((clause) => TN_DEFINED_SPONSORSHIP.test(clause));
-  if (namingTn.some((clause) => NEGATED.test(clause))) return undefined;
-  const options = question.options ?? [];
-  const yesOrNo = options.length === 2 && options.every((option) => YES_OR_NO.test(option.trim()));
-  // Either the wording names TN over a plain yes/no, or the choices offer TN as
-  // one kind of yes; resolveTnChoice then selects that choice.
-  if (!(namingTn.length > 0 && yesOrNo) && tnAffirmingChoice(question) === undefined) return undefined;
+  // A choice that itself states the need for sponsorship and names TN settles
+  // the question, as at Mixpanel and Lyft; otherwise the label has to ask.
+  if (sponsorshipNeedChoice(question) === undefined) {
+    if (!asksWhetherSponsorshipRequired(question.label)) return undefined;
+    const namingTn = question.label.split(/[.?;]/).filter((clause) => TN_DEFINED_SPONSORSHIP.test(clause));
+    if (namingTn.some((clause) => negates(clause))) return undefined;
+    // Either the wording names TN over a yes/no - bare, spelled out, or beside
+    // "Unsure" - or the choices offer TN as one kind of yes; resolveTnChoice
+    // then selects that choice.
+    if (!(namingTn.length > 0 && polarAffirmative(question) !== undefined) && tnAffirmingChoice(question) === undefined) {
+      return undefined;
+    }
+  }
   return profile.answers.find(
     (entry) =>
       canAutoFill(entry) &&
@@ -150,6 +209,8 @@ export function canonicalTnSponsorshipDecision(
 /**
  * The TN decision is a plain "Yes", which a list of visa types offers several
  * times over ("Yes, H1B Transfer", "Yes, TN"); only the choice naming TN states it.
+ * Where no choice names TN, the one choice stating the need for sponsorship
+ * does, and failing that the affirmative of a yes/no question.
  */
 export function resolveTnChoice(
   entry: Profile["answers"][number],
@@ -158,6 +219,6 @@ export function resolveTnChoice(
   if (!namesTnRoute(entry) || !/^\s*yes\b/i.test(entry.answer)) return undefined;
   const options = question.options ?? [];
   if (options.every((option) => YES_OR_NO.test(option.trim()))) return undefined;
-  const choice = tnAffirmingChoice(question);
+  const choice = tnAffirmingChoice(question) ?? sponsorshipNeedChoice(question) ?? polarAffirmative(question);
   return choice ? { value: choice, unmatchedChoice: false } : { value: entry.answer, unmatchedChoice: true };
 }

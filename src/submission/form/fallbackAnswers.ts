@@ -1,6 +1,6 @@
 import type { DraftAnswer } from "../../domain/job.js";
 import {
-  bestBankEntry, type ApprovedAnswerEntry, type NarrativeResolver, type PersonalResolver,
+  bestBankEntry, isReservedForHuman, type ApprovedAnswerEntry, type NarrativeResolver, type PersonalResolver,
 } from "./answerBank.js";
 import { isIncompatible } from "./compatibility.js";
 import { groupIdentity, signatureDateField, type FieldDescriptor } from "./fieldModel.js";
@@ -193,7 +193,14 @@ export function fallbackAnswersForFields(
     // Employment history first: these labels are exact, and they name the
     // position being left rather than the one being applied for, so no broader
     // bank pattern should be able to win them.
-    const experience = resolveExperienceAnswer?.(resolverLabel);
+    //
+    // A question reserved for a person takes no answer the profile merely
+    // happens to hold. Expedia's undertaking not to use AI tools mentions a
+    // "disability accommodation", and the stored disability status answered it.
+    // Only a bank entry written about the same subject may, under the rule
+    // bestBankEntry applies.
+    const reserved = isReservedForHuman(match.field.label) || isReservedForHuman(match.field.questionLabel ?? "");
+    const experience = reserved ? null : resolveExperienceAnswer?.(resolverLabel);
     // Standalone controls are pinned to the answer derived for them; option
     // groups bind by label because each option arrives as its own field.
     const pinned = match.field.optionLabel ? {} : { fieldIndex: match.field.selectorIndex };
@@ -288,6 +295,7 @@ export function fallbackAnswersForFields(
       }
     }
 
+    if (reserved) continue;
     const personal = resolvePersonalAnswer?.(resolverLabel);
     if (personal && personal.authorized && personal.answer.trim().length > 0) {
       // Radios arrive one field per option, so an option group keys on the

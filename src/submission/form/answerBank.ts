@@ -83,6 +83,9 @@ function sponsorshipBankEntry(
 
 const PLAIN_YES_OR_NO = /^(?:yes|no)$/i;
 
+/** Messages sent to the candidate's phone: SMS, texts, WhatsApp. */
+const TEXT_MESSAGING = /\b(?:sms|text messag\w*|texts?\s+(?:me|you)|whatsapp)\b/i;
+
 /**
  * Whether the control can only say yes or no. The TN decision is a bare yes or
  * no, so a list of visa types or a free-text box asks more than it answers and
@@ -154,6 +157,11 @@ export function bestBankEntry(
   // A synthetic field (selectorIndex -1) carries only a label, not a control.
   const freeTextControl = field.selectorIndex >= 0 && /^(?:text|textarea|email|tel|url|search|number)$/.test(field.type);
   const reserved = rawTexts.some((value) => RESERVED_FOR_HUMAN.test(value));
+  // Trellix's Workday asked "...I agree that ... has my permission to send me
+  // correspondence via SMS" and the general acknowledgement took it on "I agree",
+  // offering consent to text messages this candidate refuses. A question about
+  // texting him is answered only by an entry written about texting.
+  const textMessaging = rawTexts.some((value) => TEXT_MESSAGING.test(value));
   // See asksResidenceOrRelocation: on a choice control the residence denial is
   // no answer to a question that relocating satisfies.
   const residenceOrRelocation = offersOptions(field) && candidates.some((value) => asksResidenceOrRelocation(value));
@@ -164,6 +172,7 @@ export function bestBankEntry(
   for (const entry of bank) {
     if (restrictiveAgreement && !BOOLEAN_ANSWER.test(entry.answer.trim())) continue;
     if (reserved && ![entry.label, ...entry.patterns].some((text) => RESERVED_FOR_HUMAN.test(text))) continue;
+    if (textMessaging && ![entry.key, entry.label, ...entry.patterns].some((text) => TEXT_MESSAGING.test(text))) continue;
     if (residenceOrRelocation && deniesResidenceOnly(entry.answer)) continue;
     if (candidates.some((value) => statesUnrelatedExperience(value, [entry.label, ...entry.patterns]))) continue;
     if (candidates.some((value) => countsYearsAsLookback(value, [entry.label, ...entry.patterns]))) continue;
@@ -208,9 +217,15 @@ export function bestBankEntry(
  * of AI to create written transcripts of your interviews", a different question
  * with a different answer. On a live form only an entry written about the same
  * subject may answer one; `bankAnswerFor` never stops asking a person about one.
+ *
+ * An undertaking not to use AI is one of these whatever it is called. Expedia
+ * asked candidates to agree "not to utilize any AI tools during the assessment
+ * and/or interview process" without the word "policy", and the question was
+ * answered from the stored disability status on its mention of a "disability
+ * accommodation".
  */
 const RESERVED_FOR_HUMAN =
-  /arbitration|unauthorized outside assistance|\b(?:AI|A\.I\.|artificial intelligence)\b.{0,40}(?:policy|consent|notetak|transcri|attest|record)|(?:notetak|transcri|attest).{0,40}(?:\b(?:AI|A\.I\.)(?!\w)|consent)/i;
+  /arbitration|unauthorized outside assistance|\b(?:AI|A\.I\.|artificial intelligence)\b.{0,40}(?:policy|consent|notetak|transcri|attest|record)|(?:notetak|transcri|attest).{0,40}(?:\b(?:AI|A\.I\.)(?!\w)|consent)|\bnot\s+(?:to\s+)?(?:use|utili[sz]e|rely on|leverage|employ)\s+(?:any\s+)?(?:AI|A\.I\.|artificial intelligence|generative AI|gen ?AI|LLMs?|large language models?|ChatGPT)\b|\b(?:AI|A\.I\.|artificial intelligence)\s+(?:tools?|assistan(?:ts?|ce))\b.{0,20}\bduring\b.{0,30}\b(?:assessment|interview)/i;
 
 /** True for a question a person answers every time, whatever was decided before. */
 export function isReservedForHuman(label: string): boolean {

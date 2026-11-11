@@ -171,6 +171,12 @@ Employers phrase this several ways and the phrasings do not mean the same thing.
 
 Because these overlap, the longest matching pattern wins rather than the first, so a specific answer is never pre-empted by a generic one. Write a distinct entry for each phrasing you care about.
 
+Forms that offer choices rather than a bare Yes and No are handled as follows:
+
+- **TN counted in a choice.** Some forms put the definition in a choice, under a label that asks only about authorization: "I require, or in the future will require, sponsorship ... (e.g. H-1B, TN, etc.)". Your TN entry selects that choice. A yes and a no written out as sentences, or offered beside "Unsure", work the same way. A "Yes" naming another route, such as "Yes, H-1B", is never chosen for the TN decision.
+- **Citizenship lists.** "Please select your citizenship" over a list of countries is answered from `workAuthorization.citizenships` when it holds exactly one country. A second or dual citizenship question takes the form's "Not Applicable". Yes/no questions about citizenship still need an entry or a person.
+- **Answers the form cannot take.** If neither an entry nor the `statement` matches a choice the form offers, the answer is left blank and the question stays outstanding until you choose. The draft never carries the statement into a dropdown that does not offer it.
+
 These are legal attestations on a document you sign. Confirm your wording with an immigration lawyer, and remember that Form I-9 verifies status at onboarding.
 
 ## Narrative templates

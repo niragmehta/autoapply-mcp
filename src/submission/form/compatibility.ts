@@ -2,6 +2,7 @@ import type { DraftAnswer } from "../../domain/job.js";
 import { numberInputValue, valueShapeMismatch } from "../../drafting/valueShape.js";
 import { sponsorshipIntentMismatch, tnSponsorshipMismatch } from "../../text/workPermission.js";
 import { asksAbilityToMeetRequirement } from "../../text/requirementQuestion.js";
+import { opensAsYesNo } from "../../text/yesNoQuestion.js";
 import {
   aboutRelocation,
   acceptsRelocationInstead,
@@ -9,7 +10,7 @@ import {
   residenceOnlyInCondition,
 } from "../../text/questionIntent.js";
 import { sourceAnswerMismatch } from "../sourceQuestion.js";
-import { workdayDateParts } from "../workdayDates.js";
+import { datePickerParts } from "../workdayDates.js";
 import { BOOLEAN_ANSWER, DECLINE_ANSWER_PATTERN } from "./answerVocabulary.js";
 import { normalizeLabel, offersOptions, signatureDateField, type FieldDescriptor } from "./fieldModel.js";
 import { optionPolarityConflicts } from "./optionMatching.js";
@@ -21,19 +22,17 @@ const NAME_PART_FIELD = /\b(?:first|middle|last|given|family|sur)\s?name\b|^(?:n
 const HONORIFIC_FIELD = /^(?:name )?(?:prefix|suffix|salutation|honorific)$/;
 const HONORIFIC_VALUE = /^(?:mr|mrs|ms|miss|mx|dr|prof|sir|dame|rev|jr|sr|ii|iii|iv|v|esq|phd|md)\.?$/i;
 
-/**
- * A label that opens as a yes/no question, after any number a form puts in
- * front of it: Intel numbers its questions, and "3) Are you an immediate family
- * member ...?" read as a statement and took the stored location.
- */
-const YES_NO_LEAD =
-  /^\s*(?:(?:\(?\d{1,2}[.):]|\(?[a-z][.)]|q\d{1,2}[.:)]?)\s*)?(?:do|does|are|is|will|would|have|has|can|could|may|did)\s+(?:you|we|i)\b/i;
 const CONTACT_VALUE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$|^\+?[\d\s().-]{7,}$|^https?:\/\//i;
 const ASKS_FOR_CONTACT =
   /\b(?:e-?mail|phone|number|url|link|linkedin|website|profile|address|github|gitlab|portfolio|page|site|handle|account)\b/i;
-/** Answers drawn from stored facts about the candidate rather than from a decision. */
+/**
+ * Answers drawn from stored facts about the candidate rather than from a
+ * decision. The bank's own "legal-name" entry counts: once the derived name was
+ * refused, Breeze Airways' "Do the first and last names ... match your legal
+ * name ...?" took it through the pattern "legal name".
+ */
 const STORED_FACT_ANSWER =
-  /^(?:personal\.|identity\.|education\[|experience\[|location$|current[_-]location$|derived-(?:legal|full)-name$|first_name$|last_name$)/;
+  /^(?:personal\.|identity\.|education\[|experience\[|location$|current[_-]location$|(?:derived-)?(?:legal|full)[-_]name$|first_name$|last_name$)/;
 const POLAR_VALUE = /^\s*(?:yes|no|true|false)\b/i;
 
 /**
@@ -45,7 +44,7 @@ const POLAR_VALUE = /^\s*(?:yes|no|true|false)\b/i;
  */
 function yesNoQuestionTakesContact(label: string, value: string): boolean {
   const question = label.split("?")[0] ?? label;
-  return YES_NO_LEAD.test(question) && CONTACT_VALUE.test(value.trim()) && !ASKS_FOR_CONTACT.test(question);
+  return opensAsYesNo(label) && CONTACT_VALUE.test(value.trim()) && !ASKS_FOR_CONTACT.test(question);
 }
 
 /**
@@ -214,6 +213,8 @@ function namesDifferentLinkService(fieldLabel: string, answerLabel: string): boo
 }
 const DATE_COMPONENT_QUESTION = /\b(?:start|end|from|to)\s+date\s+(?:month|year|day)\b|^(?:start|end)\s+(?:month|year)\b/;
 const DURATION_ANSWER = /\b(?:weeks?|months?|days?)\b.*\b(?:notice|offer|acceptance|start)\b|\bnotice period\b/;
+/** Asks which place, in a normalized label: "which state will you reside in". */
+const WHICH_PLACE_QUESTION = /\b(?:which|what)\s+(?:u\s?s\s+)?(?:state|province|country|city|town|region|territory|location)\b/;
 const RESIDENCE_COUNTRY_FIELD = /^(?:(?:your|current|residence) )?country(?: (?:or )?(?:region|territory)| of(?: current)? residence)?$/;
 
 /**
@@ -356,8 +357,10 @@ export function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boo
   // stored location on the word "location"; GEICO's "Do you have a high school
   // diploma or equivalent?" took the stored university on the word "school". A
   // fact that is itself a yes or no - "currently employed by Hooli?" - stands.
+  // Intel numbers its questions, and Procore, Abbott and Breeze Airways open
+  // theirs with a time phrase, a statement or a condition; see yesNoQuestion.ts.
   if (
-    YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) &&
+    opensAsYesNo(field.label) &&
     STORED_FACT_ANSWER.test(answer.questionKey) &&
     !POLAR_VALUE.test(answer.answer)
   ) {
@@ -371,7 +374,7 @@ export function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boo
   // name? If so, please share it.") may still take it.
   if (
     offersOptions(field) &&
-    YES_NO_LEAD.test(field.label.split("?")[0] ?? field.label) &&
+    opensAsYesNo(field.label) &&
     namesAFieldNotADecision(answer)
   ) {
     return true;
@@ -432,12 +435,21 @@ export function isIncompatible(field: FieldDescriptor, answer: DraftAnswer): boo
   if (DATE_COMPONENT_QUESTION.test(fieldLabel) && DURATION_ANSWER.test(answer.answer.trim())) {
     return true;
   }
+  // Early Warning asked "As of your desired start date, which state will you
+  // reside in permanently?", and the notice period won it on "start date": a
+  // list of states was searched for "Approximately four weeks from offer
+  // acceptance." A question asking which place never takes a length of time.
+  if (WHICH_PLACE_QUESTION.test(fieldLabel) && DURATION_ANSWER.test(answer.answer.trim())) {
+    return true;
+  }
   // A date control accepts nothing but a date. Adobe's education block asks for
   // "From" and "To", which took the notice period and a bare "Yes" on word
   // overlap; the browser refused to type them, so the field stayed empty, the
   // step would not advance, and the run burned its whole step budget retrying.
+  // A picker asking when the candidate can start is the exception: the notice
+  // period says exactly that, and the fill turns it into a date.
   if (field.type === "date" && !(answer.notApplicable && !answer.answer.trim()) &&
-      workdayDateParts(answer.answer, field.domId) === null) {
+      datePickerParts(answer.answer, field.domId, field.label) === null) {
     return true;
   }
   if (namesDifferentPeriodEnd(fieldLabel, answerLabel)) {

@@ -1055,35 +1055,215 @@ describe("sponsorship questions phrased outside the stored patterns", () => {
     expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
   });
 
-  it("does not answer a generic authorization question whose choices count TN as sponsorship", () => {
+  // Waymo, Mixpanel, NexHealth and Lyft label the question as work authorization
+  // and put the definition in a choice: "...requires a renewal or sponsorship now
+  // or in the future (ie: H1-B, OPT, TN, etc.)". The generic "authorized to work
+  // for any employer" answer must never reach such a form; the choice counting TN
+  // as sponsorship is the one the standing TN decision makes.
+  const waymoTnOption =
+    "I require, or in the future will require, Waymo's sponsorship to obtain work authorization in the country in which this position is based (e.g. H-1B, TN, etc.)";
+  const waymoQuestion = question("Work Authorization", {
+    required: true,
+    type: "multi_value_single_select",
+    options: [
+      "I am authorized to work for any employer in the country in which this position is based.",
+      waymoTnOption,
+      "My status to work in the country in which this position is based is unknown.",
+    ],
+  });
+  const genericStatement = {
+    key: "work-authorization-statement",
+    label: "Work authorization statement",
+    patterns: ["work authorization"],
+    answer: "I am authorized to work for any employer in the country in which this position is based.",
+    alternatives: [],
+    allowAutoFill: true,
+  };
+
+  it("answers a generic authorization question from the choice that counts TN as sponsorship", () => {
+    const p = ProfileSchema.parse({ ...sponsorshipProfile, answers: [...sponsorshipProfile.answers, genericStatement] });
+    const { answers } = draftAnswers([waymoQuestion], p, campaign);
+    expect(answers[0]?.answer).toBe(waymoTnOption);
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("leaves it to a person, naming the TN choice, when no TN decision is stored", () => {
     const p = ProfileSchema.parse({
       ...sponsorshipProfile,
-      answers: [
-        ...sponsorshipProfile.answers,
-        {
-          key: "work-authorization-statement",
-          label: "Work authorization statement",
-          patterns: ["work authorization"],
-          answer: "I am authorized to work for any employer in the country in which this position is based.",
-          alternatives: [],
-          allowAutoFill: true,
-        },
-      ],
+      answers: [...sponsorshipProfile.answers.filter((entry) => entry.key !== "sponsorship-named-tn"), genericStatement],
     });
-    const tnOption =
-      "I require, or in the future will require, Waymo's sponsorship to obtain work authorization in the country in which this position is based (e.g. H-1B, TN, etc.)";
-    const asked = question("Work Authorization", {
+    const { answers } = draftAnswers([waymoQuestion], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.guidance).toContain(waymoTnOption);
+  });
+
+  it("answers the Mixpanel wording, whose label asks only about authorization", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const tnChoice = "My current work authorization requires a renewal or sponsorship now or in the future (ie: H1-B, OPT, TN, etc.)";
+    const asked = question("Are you currently authorized to work in the country outlined for this job (e.g. H-1B status)?", {
       required: true,
       type: "multi_value_single_select",
       options: [
-        "I am authorized to work for any employer in the country in which this position is based.",
-        tnOption,
-        "My status to work in the country in which this position is based is unknown.",
+        "I am authorized to work for any employer in the country outlined in this role (ie: citizen, permanent resident, etc.)",
+        tnChoice,
+        "My status to work in the country in this role's location is unknown",
       ],
     });
     const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe(tnChoice);
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  // CreativeX asked "...require employer sponsorship for an employment visa
+  // (e.g., H-1B, TN, O-1, or an OPT/STEM OPT extension)?" with its yes and no
+  // written out as sentences, and Redwood Materials offered Yes, No and Unsure
+  // after saying sponsorship "includes but is not limited to ... TN". The first
+  // offered no bare "Yes" to take the TN decision, and the second read "not
+  // limited to" as TN being left out. Both drafts fell back to the free-text
+  // statement and failed on the dropdown.
+  it("picks the affirmative sentence when a question naming TN spells out yes and no", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Will you now or in the future require employer sponsorship for an employment visa (e.g., H-1B, TN, O-1, or an OPT/STEM OPT extension)?",
+      {
+        required: true,
+        type: "multi_value_single_select",
+        options: [
+          "No, I will not require visa sponsorship now or in the future.",
+          "Yes, I will require visa sponsorship now or in the future.",
+        ],
+      },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Yes, I will require visa sponsorship now or in the future.");
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("reads 'not limited to' as a list that includes TN, not as an exclusion", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question(
+      "Will you now or in the future require any type of immigration/visa sponsorship or support? Sponsorship or support for an immigration-related employment benefit includes but is not limited to the following: H-1B, H-1B1, J-1, TN, E-3, O-1, job portability benefits.",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No", "Unsure"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Yes");
+    expect(answers[0]?.citation).toBe("profile.answers.sponsorship-named-tn");
+  });
+
+  it("does not take a yes that names another visa route for the TN decision", () => {
+    const p = ProfileSchema.parse(sponsorshipProfile);
+    const asked = question("Will you require sponsorship (e.g. H-1B, TN) to work for us?", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["Yes, H-1B", "No", "Unsure"],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).not.toBe("Yes, H-1B");
     expect(answers[0]?.requiresHuman).toBe(true);
-    expect(answers[0]?.guidance).toContain(tnOption);
+  });
+});
+
+// Navan asked "Are you currently eligible to work in the country outlined for
+// this position, and authorized to work for Navan on an ongoing indefinite
+// basis?" over Yes, No and Unknown - a scope no stored answer settles. The draft
+// still carried the free-text authorization statement as its answer, so every
+// readiness check counted the question as answered, the application was sent
+// for submission, and it failed on a dropdown offering nothing of the kind.
+// Ten more applications went the same way in the November 2026 round.
+describe("a work-authorization choice the draft cannot settle", () => {
+  const p = makeProfile({
+    workAuthorization: {
+      citizenships: ["Canada"],
+      authorizedIn: ["CA"],
+      requiresSponsorshipIn: [],
+      statement: "Example statement: may work in Canada; other countries need employer support.",
+      alwaysReviewManually: false,
+    },
+    answers: [],
+  });
+
+  it("is left blank for a person instead of carrying the statement", () => {
+    const asked = question(
+      "Are you currently eligible to work in the country outlined for this position, and authorized to work for Navan on an ongoing indefinite basis?",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No", "Unknown"] },
+    );
+    const { answers, blockingQuestions } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(blockingQuestions).toEqual([asked.label]);
+    expect(unresolvedRequired([asked], answers)).toEqual([asked.label]);
+  });
+
+  it("still suggests the statement where the answer is typed", () => {
+    const asked = question("Please describe your current work authorization status.", { required: true, type: "textarea" });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Example statement: may work in Canada; other countries need employer support.");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
+});
+
+// Spire asked "Please select your citizenship." over a list of countries and
+// "If you have dual citizenship, please select your second citizenship." over
+// the same list with "Not Applicable" added. Both drafts carried the free-text
+// authorization statement, which no country in the list reads.
+describe("citizenship chosen from a list", () => {
+  const p = makeProfile({
+    workAuthorization: {
+      citizenships: ["Canada"],
+      authorizedIn: ["CA"],
+      requiresSponsorshipIn: [],
+      statement: "Example statement: may work in Canada; other countries need employer support.",
+      alwaysReviewManually: false,
+    },
+    answers: [],
+  });
+  const countries = ["Brazil", "Canada", "France", "United States"];
+
+  it("selects the candidate's citizenship", () => {
+    const asked = question(
+      "Spire collects the following information to comply with international laws and regulations. Please select your citizenship.",
+      { required: true, type: "multi_value_single_select", options: countries },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Canada");
+    expect(answers[0]?.requiresHuman).toBe(false);
+    expect(answers[0]?.citation).toBe("profile.workAuthorization.citizenships");
+  });
+
+  it("selects Not Applicable for a second citizenship he does not hold", () => {
+    const asked = question("If you have dual citizenship, please select your second citizenship.", {
+      required: true,
+      type: "multi_value_single_select",
+      options: ["Not Applicable", ...countries],
+    });
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.answer).toBe("Not Applicable");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("does not answer a yes/no question about citizenship of listed countries", () => {
+    // Telnyx's OFAC question also asks about permanent residence, which the
+    // profile does not record.
+    const asked = question(
+      "OFAC: Please indicate whether you are either a citizen or lawful permanent resident of any of the following countries: Cuba, Crimea, Iran, North Korea, Russia, Syria or Sudan.",
+      { required: true, type: "multi_value_single_select", options: ["Yes", "No"] },
+    );
+    const { answers } = draftAnswers([asked], p, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
+    expect(answers[0]?.answer).toBe("");
+  });
+
+  it("leaves the choice to a person when the candidate reviews work authorization manually", () => {
+    const reviewed = makeProfile({ answers: [] });
+    const asked = question("Please select your citizenship.", {
+      required: true,
+      type: "multi_value_single_select",
+      options: countries,
+    });
+    const { answers } = draftAnswers([asked], reviewed, campaign);
+    expect(answers[0]?.requiresHuman).toBe(true);
   });
 });
 

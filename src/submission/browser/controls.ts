@@ -6,7 +6,7 @@ import { answerValueForField } from "../form/matching.js";
 import { pickOptionIndex } from "../form/optionMatching.js";
 import { optionSearchCandidates } from "../form/optionSearch.js";
 import { isGroupedOption, type FillPlan } from "../formFields.js";
-import { workdayDateParts } from "../workdayDates.js";
+import { datePickerParts } from "../workdayDates.js";
 import { fillWorkdayPrompt, isWorkdayPrompt } from "../workday/prompt.js";
 import { isWorkdayUrl } from "../workdayFlow.js";
 import { COLLECT_FIELDS } from "./collectFields.js";
@@ -108,9 +108,10 @@ export async function fillControl(
   // every one of them would otherwise be filled invisibly and reported filled.
   if (field.type !== "checkbox" && field.type !== "radio" && field.type !== "file" && isWorkdayUrl(page.url())) {
     // Workday has full dates, month/year employment dates and education years.
-    // Fill only the stated precision, in separately focused native sections.
+    // Fill only the stated precision, in separately focused native sections. A
+    // start-date picker takes the stored availability, worked out to a day.
     if (field.type === "date") {
-      const parts = workdayDateParts(value, field.domId);
+      const parts = datePickerParts(value, field.domId, field.label);
       if (!parts) throw new Error("Date answer is invalid or has the wrong precision for this control");
       // The section inputs are visually hidden spinbuttons behind their own
       // display divs, so Playwright refuses to click them. Focusing through the
