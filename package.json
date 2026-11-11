@@ -43,7 +43,8 @@
     "prepublishOnly": "npm run build && npm test",
     "dashboard": "node dist/cli/dashboard.js",
     "update": "node dist/cli/update.js",
-    "harvest": "node dist/cli/harvest.js"
+    "harvest": "node dist/cli/harvest.js",
+    "home": "node dist/cli/homeBundle.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

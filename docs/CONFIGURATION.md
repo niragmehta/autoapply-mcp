@@ -447,3 +447,4 @@ Accounts and mailboxes (never written to a file):
 | `AUTOAPPLY_ATS_PASSWORD`, `AUTOAPPLY_ATS_EMAIL` | Candidate accounts on Workday and similar tenants (see above) |
 | `AUTOAPPLY_OTP_IMAP_USER`, `_PASSWORD`, `_HOST`, `_PORT`, `AUTOAPPLY_OTP_MAILBOX`, `AUTOAPPLY_OTP_FROM` | Mailbox read for one-time verification codes (see above) |
 | `AUTOAPPLY_INBOX_IMAP_USER`, `_PASSWORD`, `_HOST`, `_PORT`, `_MAILBOX` | Mailbox read for employer replies; each falls back to its `AUTOAPPLY_OTP_IMAP_*` counterpart ([AFTER_APPLY.md](AFTER_APPLY.md)) |
+| `AUTOAPPLY_BUNDLE_PASSPHRASE` | Passphrase that encrypts and opens a home bundle, 20 or more characters ([CLOUD.md](CLOUD.md)) |

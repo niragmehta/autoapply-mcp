@@ -14,6 +14,8 @@ coverage/
 *.sqlite
 *.sqlite-journal
 *.db
+# Encrypted AUTOAPPLY_HOME bundles (docs/CLOUD.md): personal data, even encrypted.
+*.aahb
 
 .env
 .env.*

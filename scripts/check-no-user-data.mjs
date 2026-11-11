@@ -14,6 +14,7 @@ const FORBIDDEN = [
   { pattern: /(^|\/)(profile|campaign|companies|resume)\.json$/i, reason: "campaign config file" },
   { pattern: /\.(sqlite|sqlite-journal|sqlite-wal|db)$/i, reason: "database" },
   { pattern: /\.(pdf|docx?)$/i, reason: "resume or document" },
+  { pattern: /\.aahb$/i, reason: "encrypted home bundle" },
   { pattern: /(^|\/)\.env(\.(?!example$)[^/]+)?$/i, reason: "secrets file" },
   { pattern: /^(config|data|artifacts|resumes|documents|reports|exports|backups)\//i, reason: "data directory" },
 ];

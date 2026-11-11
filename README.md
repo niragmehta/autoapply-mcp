@@ -175,6 +175,7 @@ Browser submission covers Greenhouse, Lever, Ashby, Workday and the Google, Meta
 | [AFTER_APPLY.md](docs/AFTER_APPLY.md) | Inbox replies, follow-ups, outcomes and analytics |
 | [CAREER.md](docs/CAREER.md) | Story bank, interviews, contacts, outreach and offers |
 | [DASHBOARD.md](docs/DASHBOARD.md) | The dashboard and the run queue |
+| [CLOUD.md](docs/CLOUD.md) | Moving your workspace to another machine or a cloud sandbox |
 | [SAFETY.md](docs/SAFETY.md) | The guarantees and their limits |
 
 ## Development
