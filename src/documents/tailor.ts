@@ -24,11 +24,12 @@ import { aliasMap, extractJobTerms, namingTerms, round, scoreTerms, termSet, typ
  * strongly) wherever they suit the posting at least as well, and when allowed
  * swaps in a few other reserve bullets, each only where it clearly suits the
  * posting better than the printed bullet it displaces. Bullets marked keep are
- * never displaced and lead their group. It adds the reserve skills the posting
- * names. When asked to, it drops the least relevant bullets to fit the page,
- * never a kept one, never below a minimum per role and never a group's last
- * bullet. It never edits or rewords a bullet, and every change is logged with
- * the terms that caused it.
+ * never displaced, and only a bullet that clearly suits the posting better
+ * goes ahead of one. It adds the reserve skills the posting names. When asked
+ * to, it drops the least relevant bullets to fit the page, never a kept one,
+ * never below a minimum per role and never a group's last bullet. It never
+ * edits or rewords a bullet, and every change is logged with the terms that
+ * caused it.
  */
 
 const DEFAULT_MIN_BULLETS_PER_ROLE = 2;
@@ -37,6 +38,12 @@ const DEFAULT_MIN_BULLETS_PER_ROLE = 2;
 const MIN_RESERVE_SCORE = 4;
 /** ...and beat the bullet it displaces by at least this much: about one more requirement term. */
 const SWAP_MARGIN = 2;
+/**
+ * A kept bullet ranks as if it matched about one more requirement term, so a
+ * strong outcome stays ahead of work that suits the posting only a little
+ * better, but not of work that clearly suits it better.
+ */
+const KEPT_LEAD = 2;
 
 type TailorOptions = {
   /** Fewest bullets a role keeps when bullets are dropped to fit the page. */
@@ -92,10 +99,10 @@ type Tailored<T> = { value: T; changes: TailorChange[] };
 const EXPLAIN_TERMS = 6;
 
 /** Stable sort by score, highest first; ties keep their incoming order. */
-function rank<T>(items: ReadonlyArray<Scored<T>>): Array<Scored<T>> {
+function rank<T>(items: ReadonlyArray<Scored<T>>, scoreOf: (entry: Scored<T>) => number = (entry) => entry.match.score): Array<Scored<T>> {
   return items
-    .map((entry, index) => ({ entry, index }))
-    .sort((a, b) => b.entry.match.score - a.entry.match.score || a.index - b.index)
+    .map((entry, index) => ({ entry, index, score: scoreOf(entry) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
     .map(({ entry }) => entry);
 }
 
@@ -138,8 +145,8 @@ function makeScorer(jobTerms: ReadonlyMap<string, JobTerm>, aliases: AliasMap, p
 
 function tailorGroup(group: BulletGroup, place: string, scorer: Scorer): Tailored<Scored<BulletGroup>> {
   const before = group.bullets.map((bullet) => ({ item: bullet, match: scorer.bullet(bullet) }));
-  // Kept bullets are the candidate's anchors: they lead their group, each part ordered by relevance.
-  const after = [...rank(before.filter((entry) => entry.item.keep)), ...rank(before.filter((entry) => !entry.item.keep))];
+  // Kept bullets are the candidate's anchors: they hold their place against work that fits only a little better.
+  const after = rank(before, (entry) => entry.match.score + (entry.item.keep ? KEPT_LEAD : 0));
   const kept = new Set(group.bullets.filter((bullet) => bullet.keep).map((bullet) => bullet.id));
   const changes = movedUp(before, after, (bullet) => bullet.id, (id, from, to, terms) => ({
     kind: "bullet-moved",

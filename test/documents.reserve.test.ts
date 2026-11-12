@@ -229,11 +229,63 @@ describe("bullets marked keep", () => {
     expect(tailored.droppable).not.toContain("cloud-policy-figures");
   });
 
-  it("lead their group, ahead of more relevant bullets that are not kept", () => {
+  it("move ahead of bullets that share nothing with the posting, and say why", () => {
+    const tailored = tailorResume(resume({ cloud: cloud("cloud-alerts") }), "main", UNRELATED, profile);
+    expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-alerts", "cloud-policy-figures", "cloud-firewall"]);
+    expect(tailored.changes.find((change) => change.target === "cloud-alerts")?.message).toMatch(/from 3 to 1 .* because it is marked keep$/);
+  });
+
+  it("stay ahead of a bullet that suits the posting only a little better", () => {
+    const posting = docJob({ title: "Firewall Engineer", descriptionText: "Requirements\n- Alerting" });
+    const tailored = tailorResume(resume({ cloud: cloud("cloud-alerts") }), "main", posting, profile);
+    const score = (id: string) => tailored.scores.find((entry) => entry.id === id)?.score ?? 0;
+    // cloud-firewall fits better, by less than one requirement term.
+    expect(score("cloud-firewall")).toBeGreaterThan(score("cloud-alerts"));
+    expect(score("cloud-firewall") - score("cloud-alerts")).toBeLessThan(2);
+    expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-alerts", "cloud-firewall", "cloud-policy-figures"]);
+  });
+
+  it("give way to a bullet that clearly suits the posting better", () => {
     const firewall = docJob({ title: "Host Security Engineer", descriptionText: "Requirements\n- Host firewall enforcement for Windows servers" });
     const tailored = tailorResume(resume({ cloud: cloud("cloud-alerts") }), "main", firewall, profile);
-    expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-alerts", "cloud-firewall", "cloud-policy-figures"]);
-    expect(tailored.changes.find((change) => change.target === "cloud-alerts")?.message).toMatch(/from 3 to 1 .* because it is marked keep$/);
+    expect(groupBullets(tailored.document, "cloud")).toEqual(["cloud-firewall", "cloud-alerts", "cloud-policy-figures"]);
+    expect(tailored.changes.find((change) => change.target === "cloud-firewall")?.message).toMatch(/from 2 to 1 .* because of terms \[/);
+  });
+
+  it("are ordered with everything else when a role prints as one list", () => {
+    const oneList = parseResumeSource({
+      version: 1,
+      header: { name: "Alex Candidate" },
+      experience: [
+        {
+          organization: "Northwind Logistics",
+          roles: [
+            {
+              title: "Security Engineer",
+              dates: "2021 - Present",
+              groups: [
+                {
+                  id: "work",
+                  bullets: [
+                    { id: "cloud-policy", text: "Built Azure Policy governance controls for production subscriptions.", keep: true },
+                    { id: "cloud-alerts", text: "Added alerting for extension failures." },
+                    { id: "ai-guardrail", text: "Built guardrails for LLM agents that block prompt injection in tool calls." },
+                    { id: "ai-benchmark", reserve: true, text: BENCHMARK, tags: ["red teaming", "llm"] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const tailored = tailorResume(oneList, "main", AI_POSTING, profile, { maxSwaps: 1 });
+    expect(tailored.document.experience[0]?.roles[0]?.groups.map((group) => [group.id, group.label])).toEqual([["work", undefined]]);
+    // The kept bullet is never the one swapped out, but it no longer outranks work that clearly suits the posting better.
+    expect(tailored.swaps).toEqual([expect.objectContaining({ in: "ai-benchmark", out: "cloud-alerts" })]);
+    const order = groupBullets(tailored.document, "work") ?? [];
+    expect(order.slice(0, 2).sort()).toEqual(["ai-benchmark", "ai-guardrail"]);
+    expect(order[2]).toBe("cloud-policy");
   });
 });
 

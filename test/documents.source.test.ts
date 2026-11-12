@@ -69,13 +69,14 @@ describe("resume source schema", () => {
             roles: [{ title: "Engineer", dates: "2020", groups: [{ id: "g", bullets: [{ id: "same", text: "A." }, { id: "same", text: "B." }] }] }],
           },
         ],
-        variants: { backend: { groupOrder: ["nope"], excludeBullets: ["ghost"], skillOrder: ["missing"] } },
+        variants: { backend: { groupOrder: ["nope"], excludeBullets: ["ghost"], skillOrder: ["missing"], bulletOrder: ["phantom"] } },
       }),
     );
     expect(message).toContain('duplicate bullet id "same"');
     expect(message).toContain('variants.backend.groupOrder.0: unknown group id "nope"');
     expect(message).toContain('unknown bullet id "ghost"');
     expect(message).toContain('unknown skill category id "missing"');
+    expect(message).toContain('variants.backend.bulletOrder.0: unknown bullet id "phantom"');
   });
 
   it("rejects an unclosed metric marker", () => {
@@ -146,6 +147,19 @@ describe("variants", () => {
     const { document } = applyVariant(source, "short");
     expect(placedBullets(document).map((spot) => spot.bullet.id)).toEqual(["k8s-migration", "load-testing"]);
     expect(document.experience[0]?.roles[0]?.groups.map((group) => group.id)).toEqual(["platform"]);
+  });
+
+  it("orders bullets inside each group by the variant's bulletOrder, the rest following in source order", () => {
+    const source = parseResumeSource({
+      ...(exampleResumeJson() as object),
+      variants: { ops: { bulletOrder: ["canary-releases", "incident-paging", "reporting-airflow"] } },
+    });
+    const groups = applyVariant(source, "ops").document.experience[0]?.roles[0]?.groups ?? [];
+    const bulletsOf = (id: string) => groups.find((group) => group.id === id)?.bullets.map((bullet) => bullet.id);
+    expect(groups.map((group) => group.id)).toEqual(["reliability", "platform", "data"]);
+    expect(bulletsOf("reliability")).toEqual(["canary-releases", "incident-paging", "payments-cache", "payments-latency"]);
+    expect(bulletsOf("platform")).toEqual(["k8s-migration", "ci-rebuild", "service-template"]);
+    expect(bulletsOf("data")).toEqual(["reporting-airflow", "shipments-sharding", "backfill-framework"]);
   });
 
   it("orders by a preferred id list and keeps everything else in its original order", () => {

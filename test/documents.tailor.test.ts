@@ -58,6 +58,14 @@ describe("tailorResume", () => {
     expect(tailored.changes).toEqual([]);
   });
 
+  it("keeps a variant's bullet order when the posting shares nothing with the resume", () => {
+    const ordered = parseResumeSource({ ...(exampleResumeJson() as object), variants: { ops: { bulletOrder: ["canary-releases", "incident-paging"] } } });
+    const unrelated = docJob({ title: "Pastry Chef", descriptionText: "Requirements\n- Laminated dough\n- Sourdough starters" });
+    const tailored = tailorResume(ordered, "ops", unrelated, profile);
+    expect(tailored.document).toEqual(applyVariant(ordered, "ops").document);
+    expect(groupsOf(tailored.document)?.[0]).toEqual(["reliability", ["canary-releases", "incident-paging", "payments-cache", "payments-latency"]]);
+  });
+
   it("drops the least relevant bullets first, never below the per-role minimum or a group's last bullet", () => {
     const tailored = tailorResume(source, "backend", docJob(), profile, { dropBullets: 3 });
     expect(tailored.droppable.slice(0, 3)).toEqual(["backfill-framework", "shipments-sharding", "canary-releases"]);

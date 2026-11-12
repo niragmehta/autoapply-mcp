@@ -356,7 +356,8 @@ back to awaiting approval (or keeps it held while questions remain). Check facts
 source and profile and lists any figure or claim they do not hold; it informs and never blocks. Skipped applications
 cannot be edited. The Resume tab's Tailor resume... asks first and says what happens for this application's status:
 one waiting on a person stays held for you, any other goes back to awaiting approval, and any approval is void;
-bullets marked `keep` lead their group and are never swapped out or dropped. The result shows the swaps (an
+bullets marked `keep` are never swapped out or dropped, and only a bullet that clearly suits the posting better goes
+ahead of one. The result shows the swaps (an
 upgrade is "a stronger statement of the same work"), the reserve skills added, the moves, the bullets dropped to fit
 the page, the posting's strongest terms and a link to the PDF; every earlier tailoring stays listed with its change
 log.

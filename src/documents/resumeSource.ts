@@ -80,7 +80,7 @@ const ResumeBulletSchema = z.object({
    * posting at least as well, without counting it against the swap limit.
    */
   upgrade: z.boolean().default(false),
-  /** For a printed bullet: tailoring never swaps it out or drops it to fit the page, and it leads its group. Its upgrade may still restate it. */
+  /** For a printed bullet: tailoring never swaps it out or drops it to fit the page, and only a bullet that clearly suits the posting better goes ahead of it. Its upgrade may still restate it. */
   keep: z.boolean().default(false),
 });
 
@@ -135,6 +135,8 @@ const ResumeVariantSchema = z.object({
   headline: z.string().trim().min(1).optional(),
   /** Group ids in print order; unlisted groups follow in source order. */
   groupOrder: z.array(nonEmpty).optional(),
+  /** Bullet ids in print order within their group; unlisted bullets follow in source order. */
+  bulletOrder: z.array(nonEmpty).optional(),
   /** Skill category ids in print order; unlisted categories follow in source order. */
   skillOrder: z.array(nonEmpty).optional(),
   /** When set, only these bullets print. */
@@ -151,7 +153,7 @@ const SectionTitlesSchema = z
   })
   .prefault({});
 
-type ReferenceField = "groupOrder" | "skillOrder" | "includeBullets" | "excludeBullets";
+type ReferenceField = "groupOrder" | "bulletOrder" | "skillOrder" | "includeBullets" | "excludeBullets";
 
 type PrintedSpot = { groupId: string; keep: boolean };
 type Problem = { message: string; path: Array<string | number> };
@@ -243,6 +245,7 @@ const ResumeSourceSchema = z
     });
     const references: Array<[ReferenceField, Set<string>, string]> = [
       ["groupOrder", groupIds, "group"],
+      ["bulletOrder", bulletIds, "bullet"],
       ["skillOrder", categoryIds, "skill category"],
       ["includeBullets", bulletIds, "bullet"],
       ["excludeBullets", bulletIds, "bullet"],

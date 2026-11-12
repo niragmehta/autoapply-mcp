@@ -43,11 +43,11 @@ export function orderByIds<T>(items: readonly T[], order: readonly string[] | un
 }
 
 /**
- * Applies a fixed track variant: its headline, group and skill order, and
- * bullet selection. Reserve bullets stay out unless the variant names them in
- * includeBullets; the rest are returned for tailoring to draw on. A variant id
- * the source does not define renders the source as written, which the caller
- * reports.
+ * Applies a fixed track variant: its headline, group, bullet and skill order,
+ * and bullet selection. Reserve bullets stay out unless the variant names them
+ * in includeBullets; the rest are returned for tailoring to draw on. A variant
+ * id the source does not define renders the source as written, which the
+ * caller reports.
  */
 export function applyVariant(source: ResumeSource, variantId: string | null): VariantResult {
   // hasOwn, because a record parsed from JSON still inherits "constructor" and friends.
@@ -69,7 +69,7 @@ export function applyVariant(source: ResumeSource, variantId: string | null): Va
       return {
         ...role,
         groups: orderByIds(role.groups, variant?.groupOrder, (group) => group.id)
-          .map((group) => ({ ...group, bullets: group.bullets.filter(printed) }))
+          .map((group) => ({ ...group, bullets: orderByIds(group.bullets.filter(printed), variant?.bulletOrder, (bullet) => bullet.id) }))
           .filter((group) => group.bullets.length > 0),
       };
     }),
