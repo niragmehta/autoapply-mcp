@@ -65,6 +65,65 @@ function education(part: "institution" | "credential" | "field" | "end"): Resolv
   };
 }
 
+/** Degree levels, lowest first, as a question names them. */
+const ASKED_DEGREE_LEVELS: ReadonlyArray<readonly [number, RegExp]> = [
+  [1, /\bassociate(?:'|\u2019)?s?\s+degree\b/i],
+  [2, /\bbachelor(?:'|\u2019)?s?\b|\bundergraduate degree\b/i],
+  [3, /\bmaster(?:'|\u2019)?s?\b|\bmba\b/i],
+  [4, /\bdoctorate\b|\bdoctoral\b|\bph\.?\s?d\b/i],
+];
+/** The same levels as a recorded credential spells them, abbreviations included. */
+const CREDENTIAL_LEVELS: ReadonlyArray<readonly [number, RegExp]> = [
+  [1, /\bassociate\b|\ba\.?a\.?s?\.?\b/i],
+  [2, /\bbachelor|\bb\.?\s?sc?\b|\bb\.?a\.?\b|\bb\.?eng\b|\bbcs\b/i],
+  [3, /\bmaster|\bm\.?\s?sc?\b|\bm\.?eng\b|\bmba\b/i],
+  [4, /\bdoctor|\bph\.?\s?d\b/i],
+];
+const HOLDS_DEGREE =
+  /^\s*(?:i\s+(?:have|hold|possess)|(?:do|does)\s+you\s+(?:have|hold|possess)|have\s+you\s+(?:completed|earned|obtained|received|attained))\b/i;
+const DEGREE_FIELD = /\b(?:degree|bachelor(?:'|\u2019)?s?|master(?:'|\u2019)?s?|doctorate|ph\.?\s?d)\b[^?]*?\bin\s+([^?]+)/i;
+const OPEN_FIELD = /\b(?:related|equivalent|similar|any|technical)\b/i;
+/** Years or experience alongside the degree make it a compound requirement. */
+const ALSO_ASKS_EXPERIENCE = /\b\d+\s*\+?\s*(?:years?|yrs)\b|\bexperience\b/i;
+
+function highestCredentialLevel(profile: Profile): number {
+  let highest = 0;
+  for (const entry of profile.education) {
+    for (const [level, pattern] of CREDENTIAL_LEVELS) {
+      if (pattern.test(entry.credential)) highest = Math.max(highest, level);
+    }
+  }
+  return highest;
+}
+
+/**
+ * Whether the candidate holds the degree a question or statement names. Nike's
+ * Workday step states "I have at least a Bachelor's degree in Information
+ * Technology, Computer Science" and offers Yes and No; the degree resolver
+ * answered "Bachelor of Science (BSc)", which neither option could take, and
+ * the required field failed the run three times.
+ *
+ * Undefined when the label does not ask whether a degree is held; null when it
+ * does but the profile cannot settle it - no recorded degree, a field other
+ * than the recorded one, or a compound requirement that also counts years -
+ * which leaves the question to a person; otherwise Yes or No. A level above the
+ * recorded one is a No whatever field it names.
+ */
+function degreeHeldAnswer(label: string, profile: Profile): "Yes" | "No" | null | undefined {
+  const text = label.replace(/\s+/g, " ");
+  if (!HOLDS_DEGREE.test(text)) return undefined;
+  const asked = ASKED_DEGREE_LEVELS.filter(([, pattern]) => pattern.test(text)).map(([level]) => level);
+  if (asked.length === 0) return undefined;
+  const held = highestCredentialLevel(profile);
+  if (held === 0) return null;
+  if (held < Math.min(...asked)) return "No";
+  if (ALSO_ASKS_EXPERIENCE.test(text)) return null;
+  const field = DEGREE_FIELD.exec(text)?.[1];
+  if (!field || OPEN_FIELD.test(field)) return "Yes";
+  const recorded = profile.education.map((entry) => entry.field.trim().toLowerCase()).filter((value) => value.length > 0);
+  return recorded.some((value) => field.toLowerCase().includes(value)) ? "Yes" : null;
+}
+
 const MONTH_NAMES = [
   "January",
   "February",
@@ -337,6 +396,9 @@ export function resolvePersonal(label: string, profile: Profile): (PersonalResol
   if (asksAboutOwnResidence(label.toLowerCase(), profile) || asksAboutOwnResidence(normalized, profile)) {
     return { answer: "Yes", citation: "identity.location", authorized: true, category: "contact" };
   }
+  const degreeHeld = degreeHeldAnswer(label, profile);
+  if (degreeHeld === null) return null;
+  if (degreeHeld) return { answer: degreeHeld, citation: "education[0].credential", authorized: true, category: "education" };
   // SCAN asks whether the candidate can meet a tuberculosis-screening
   // requirement "unless you have a disability / medical reason". A question
   // about meeting a requirement never asks for a characteristic, so no

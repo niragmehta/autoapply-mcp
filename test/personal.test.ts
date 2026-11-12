@@ -285,6 +285,43 @@ describe("education resolution", () => {
     );
     expect(disability?.category ?? null).not.toBe("education");
   });
+
+  // Nike's Workday step states "I have at least a Bachelor's degree in
+  // Information Technology, Computer Science" and offers Yes and No. The degree
+  // resolver answered "Bachelor of Science (BSc)", which no option could take,
+  // and the required field failed the run three times.
+  describe("whether a degree is held", () => {
+    it("answers yes when the recorded degree meets the level and field asked", () => {
+      const held = resolvePersonal("I have at least a Bachelor’s degree in Information Technology, Computer Science", graduate);
+      expect(held?.answer).toBe("Yes");
+      expect(held?.authorized).toBe(true);
+      expect(resolvePersonal("Do you have a bachelor's degree or higher?", graduate)?.answer).toBe("Yes");
+      expect(resolvePersonal("Have you completed a Bachelor's degree in a technical or related field?", graduate)?.answer).toBe(
+        "Yes",
+      );
+    });
+
+    it("answers no when the level asked is above the recorded degree", () => {
+      expect(resolvePersonal("Do you have a Master's degree?", graduate)?.answer).toBe("No");
+      expect(resolvePersonal("Do you hold a PhD in Computer Science?", graduate)?.answer).toBe("No");
+    });
+
+    it("takes the lowest level a list of degrees accepts", () => {
+      expect(resolvePersonal("Do you have a Bachelor's or Master's degree in Computer Science?", graduate)?.answer).toBe("Yes");
+    });
+
+    it("leaves a degree in another field to a person", () => {
+      expect(resolvePersonal("Do you have a Bachelor's degree in Mechanical Engineering?", graduate)).toBeNull();
+    });
+
+    it("still answers which degree is held with the degree itself", () => {
+      expect(resolvePersonal("Highest degree obtained", graduate)?.answer).toBe("Bachelor of Science (BSc)");
+    });
+
+    it("stays silent without recorded education", () => {
+      expect(resolvePersonal("Do you have a bachelor's degree?", makeProfile())).toBeNull();
+    });
+  });
 });
 
 describe("voluntary self-identification wording", () => {
