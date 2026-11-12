@@ -80,6 +80,18 @@ describe("classifyQuestion", () => {
       classifyQuestion("If you are selected for this role, will you require visa sponsorship to continue working?"),
     ).toBe("sponsorship");
   });
+
+  it("keeps a contact field whose request only points back at the condition", () => {
+    // ShopMy: with the condition dropped, "please share its URL" names nothing.
+    expect(classifyQuestion("If you have a LinkedIn Profile, please share its URL")).toBe("contact");
+    expect(classifyQuestion("If you have a GitHub profile, please provide the link here")).toBe("contact");
+    const { answers } = draftAnswers(
+      [question("If you have a LinkedIn Profile, please share its URL", { required: true })],
+      profile,
+      campaign,
+    );
+    expect(answers[0]).toMatchObject({ answer: "https://linkedin.com/in/alex", source: "profile", requiresHuman: false });
+  });
 });
 
 describe("optional questions do not gate approval", () => {

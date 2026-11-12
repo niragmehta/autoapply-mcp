@@ -103,6 +103,14 @@ export function withoutConditionals(label: string): string {
   return label.replace(CONDITIONAL_CLAUSE, " ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * A request that names nothing itself and points back at what the condition
+ * named. ShopMy asks "If you have a LinkedIn Profile, please share its URL":
+ * without the condition, "please share its URL" says nothing about LinkedIn,
+ * so the contact field was classified as a general question and left blank.
+ */
+const POINTS_BACK = /\b(?:it|its|the\s+(?:url|link))\b/i;
+
 export function classifyQuestion(label: string): string {
   const raw = withoutAsides(label).trim();
   if (raw.length === 0) return "general";
@@ -118,7 +126,8 @@ export function classifyQuestion(label: string): string {
     const unconditional = withoutConditionals(raw);
     if (unconditional.length < 20 || unconditional === raw) return category;
     if (pattern.test(unconditional) || pattern.test(normalizeQuestionLabel(unconditional))) return category;
-    return classifyQuestion(unconditional);
+    const rest = classifyQuestion(unconditional);
+    return category === "contact" && rest === "general" && POINTS_BACK.test(unconditional) ? category : rest;
   }
   return "general";
 }
