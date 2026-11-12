@@ -170,4 +170,41 @@ describe("companies file", () => {
     expect(existsSync(`${path}.tmp`)).toBe(false);
     expect(JSON.parse(readFileSync(path, "utf8"))).toMatchObject({ version: 1 });
   });
+
+  // "Pure Storage" was saved beside the existing "Everpure" on the same
+  // Greenhouse board. Discovery then relabelled every posting with whichever
+  // name ran last, splitting the per-company counts the caps are kept by.
+  it("refuses a board already tracked under another name", () => {
+    const path = tempFile();
+    writeFileSync(
+      path,
+      JSON.stringify({ version: 1, companies: [{ name: "Everpure", ats: "greenhouse", board: "purestorage", tier: "A" }] }),
+      "utf8",
+    );
+
+    const result = upsertCompany(path, { name: "Pure Storage", ats: "greenhouse", board: "PureStorage" });
+
+    expect(result.action).toBe("already-tracked");
+    expect(result.company.name).toBe("Everpure");
+    expect(readCompanyFile(path).map((entry) => entry.name)).toEqual(["Everpure"]);
+  });
+
+  it("still lets a company keep or change its own board", () => {
+    const path = tempFile();
+    writeFileSync(
+      path,
+      JSON.stringify({ version: 1, companies: [{ name: "Everpure", ats: "greenhouse", board: "purestorage" }] }),
+      "utf8",
+    );
+
+    expect(upsertCompany(path, { name: "Everpure", ats: "greenhouse", board: "purestorage", tier: "B" }).action).toBe("updated");
+    expect(readCompanyFile(path)[0]!.tier).toBe("B");
+  });
+
+  it("allows the same slug on a different system", () => {
+    const path = tempFile();
+    writeFileSync(path, JSON.stringify({ version: 1, companies: [{ name: "Acme", ats: "greenhouse", board: "acme" }] }), "utf8");
+
+    expect(upsertCompany(path, { name: "Acme Labs", ats: "ashby", board: "acme" }).action).toBe("added");
+  });
 });

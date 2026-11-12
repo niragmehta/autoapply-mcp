@@ -36,7 +36,8 @@ function writeCompanyFile(path: string, companies: Company[]): void {
 }
 
 export type AddBoardResult = {
-  action: "added" | "updated";
+  /** "already-tracked": the board is listed under another name, which is returned unchanged. */
+  action: "added" | "updated" | "already-tracked";
   company: Company;
   total: number;
 };
@@ -47,11 +48,23 @@ export type AddBoardResult = {
  * Matching is by name, case-insensitively, so re-adding a company corrects its
  * board rather than silently creating a duplicate that would then be fetched
  * twice and surface every posting twice in the queue.
+ *
+ * A board already listed under a different name is left alone. "Pure Storage"
+ * was saved beside the existing "Everpure" on the same Greenhouse board, and
+ * discovery then relabelled every posting with whichever name ran last,
+ * splitting the per-company counts the application caps are kept by.
  */
 export function upsertCompany(path: string, candidate: unknown): AddBoardResult {
   const company = CompanySchema.parse(candidate);
   const companies = readCompanyFile(path);
-  const index = companies.findIndex((entry) => entry.name.toLowerCase() === company.name.toLowerCase());
+  const name = company.name.toLowerCase();
+  const index = companies.findIndex((entry) => entry.name.toLowerCase() === name);
+
+  const board = company.board.toLowerCase();
+  const tracked = companies.find(
+    (entry) => entry.name.toLowerCase() !== name && entry.ats === company.ats && entry.board.toLowerCase() === board,
+  );
+  if (tracked) return { action: "already-tracked", company: tracked, total: companies.length };
 
   const next = [...companies];
   const action: AddBoardResult["action"] = index >= 0 ? "updated" : "added";

@@ -66,7 +66,7 @@ export function registerDiscoveryTools(server: McpServer): void {
     {
       title: "Verify and save a company's board",
       description:
-        "Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.",
+        "Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. A board already listed under another company name is not saved again; the existing name is reported as alreadyTrackedAs. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.",
       inputSchema: {
         name: z.string().min(1).describe("Company name as it should appear in the queue."),
         ats: AtsKindSchema.exclude(["external"]).describe("The board's ATS. Each kind's board format is in docs/CONFIGURATION.md and the SOURCES docs."),
@@ -120,6 +120,16 @@ export function registerDiscoveryTools(server: McpServer): void {
       }
 
       const result = upsertCompany(workspace.paths.companies, candidate);
+      if (result.action === "already-tracked") {
+        return ok({
+          saved: false,
+          verified: true,
+          company: candidate.name,
+          board: candidate.board,
+          alreadyTrackedAs: result.company.name,
+          reason: `this board is already tracked as ${result.company.name}`,
+        });
+      }
       appendEvent(workspace.db, "board.added", "campaign", {
         company: candidate.name,
         ats: candidate.ats,
@@ -192,15 +202,17 @@ export function registerDiscoveryTools(server: McpServer): void {
         }
         let saved = false;
         if (args.save === true) {
-          upsertCompany(workspace.paths.companies, candidate);
-          appendEvent(workspace.db, "board.added", "campaign", {
-            company: candidate.name,
-            ats: candidate.ats,
-            board: candidate.board,
-            source: "hacker-news",
-            thread: thread.id,
-          });
-          saved = true;
+          const written = upsertCompany(workspace.paths.companies, candidate);
+          if (written.action !== "already-tracked") {
+            appendEvent(workspace.db, "board.added", "campaign", {
+              company: candidate.name,
+              ats: candidate.ats,
+              board: candidate.board,
+              source: "hacker-news",
+              thread: thread.id,
+            });
+            saved = true;
+          }
         }
         verified.push({
           company: candidate.name,

@@ -98,6 +98,15 @@ export function registerRoutes(router: Router): void {
       });
     }
     const result = upsertCompany(workspace.paths.companies, candidate);
+    if (result.action === "already-tracked") {
+      return new JsonReply(409, {
+        error: { code: "board_already_tracked", message: `This board is already tracked as ${result.company.name}.` },
+        saved: false,
+        verified: true,
+        company: candidate.name,
+        alreadyTrackedAs: result.company.name,
+      });
+    }
     appendEvent(workspace.db, "board.added", "campaign", {
       company: candidate.name,
       ats: candidate.ats,
@@ -124,6 +133,9 @@ export function registerRoutes(router: Router): void {
     const existing = readCompanyFile(workspace.paths.companies).find((company) => company.name.toLowerCase() === name.toLowerCase());
     if (!existing) throw new AppError("company_not_found", `no company named ${name} in companies.json`);
     const result = upsertCompany(workspace.paths.companies, { ...existing, ...body });
+    if (result.action === "already-tracked") {
+      throw new AppError("board_already_tracked", `that board is already tracked as ${result.company.name}`);
+    }
     appendEvent(workspace.db, "board.updated", "campaign", { company: existing.name, changes: body, via: "dashboard" });
     invalidateWorkspace();
     return { company: result.company };

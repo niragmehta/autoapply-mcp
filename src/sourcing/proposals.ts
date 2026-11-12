@@ -202,6 +202,10 @@ export async function acceptCompanyProposals(
       continue;
     }
     const written = upsertCompany(workspace.paths.companies, company);
+    if (written.action === "already-tracked") {
+      result.rejected.push({ company: company.name, ats: company.ats, board: company.board, reason: `board already tracked as ${written.company.name}` });
+      continue;
+    }
     const key = companyKey(company.name);
     const leadIds = listLeads(workspace.db, { status: "new", limit: 5000 })
       .filter((lead) => companyKey(lead.company) === key)
