@@ -22,6 +22,8 @@ import {
 } from "../../text/questionIntent.js";
 import { countsYearsAsLookback, statesUnrelatedExperience } from "../experienceSubject.js";
 import { ratingSubjectMismatch } from "../ratingSubject.js";
+import { DECLINE_ANSWER_PATTERN } from "../../submission/form/answerVocabulary.js";
+import { isDeclinePhrase } from "../../submission/form/optionMatching.js";
 import type { FormQuestion } from "./formQuestion.js";
 
 /**
@@ -266,7 +268,23 @@ export function resolveApprovedValue(
   const preferences = [entry.answer, ...entry.alternatives].filter((value) => value.trim().length > 0);
   const options = profile ? claimableOptions(question.options ?? [], profile) : question.options;
   const match = selectBestOption(preferences, options);
+  if (!match.matchedOption) {
+    const decline = offeredDecline(entry.answer, options ?? []);
+    if (decline) return { value: decline, unmatchedChoice: false };
+  }
   return { value: match.value, unmatchedChoice: !match.matchedOption };
+}
+
+/**
+ * A stored refusal to disclose is carried by any offered refusal, however it is
+ * worded. Sand's required Gender list offered "Prefer not to answer", which
+ * none of the stored decline wordings spells exactly, so a settled answer went
+ * to a person. The fill step already searches this way; drafting now agrees
+ * with it. Only an option that itself declines may be taken.
+ */
+function offeredDecline(answer: string, options: readonly string[]): string | undefined {
+  if (!DECLINE_ANSWER_PATTERN.test(answer.trim())) return undefined;
+  return options.find((option) => isDeclinePhrase(option));
 }
 
 export function blocked(

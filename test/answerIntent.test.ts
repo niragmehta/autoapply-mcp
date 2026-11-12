@@ -635,4 +635,48 @@ describe("a decline with a value for forms that offer no decline", () => {
 
     expect(answers[0]?.answer).not.toBe("Male");
   });
+
+  // Sand's required Gender list offers "Prefer not to answer", a wording none
+  // of the stored declines spells exactly, so the settled answer went to a person.
+  it("selects an offered decline worded differently from every stored one", () => {
+    const { answers } = draftAnswers(
+      [choice("Gender", ["Female", "Male", "Prefer not to answer"])],
+      profileWith([gender]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("Prefer not to answer");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  it("selects a contracted decline", () => {
+    const { answers } = draftAnswers(
+      [choice("What is your gender?", ["Male", "Female", "I'd rather not say"])],
+      profileWith([gender]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("I'd rather not say");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+
+  // Only a stored refusal to disclose may become an offered one.
+  it("never turns an answer that is not a decline into one", () => {
+    const sponsorship = makeBankEntry({
+      key: "visa-sponsorship",
+      label: "Sponsorship",
+      patterns: ["require sponsorship"],
+      answer: "Not applicable",
+      alternatives: [],
+      allowAutoFill: true,
+    });
+    const { answers } = draftAnswers(
+      [choice("Will you require sponsorship?", ["Yes", "No", "Prefer not to answer"])],
+      profileWith([sponsorship]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("");
+    expect(answers[0]?.requiresHuman).toBe(true);
+  });
 });

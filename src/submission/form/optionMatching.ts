@@ -89,7 +89,7 @@ function optionContradictsDecline(optionText: string, candidate: string): boolea
   return !isDeclinePhrase(optionText);
 }
 
-function isDeclinePhrase(text: string): boolean {
+export function isDeclinePhrase(text: string): boolean {
   const normalized = normalizeOptionText(text);
   if (normalized.length === 0) return false;
   if (DECLINE_ANSWER_PATTERN.test(text.trim())) return true;
