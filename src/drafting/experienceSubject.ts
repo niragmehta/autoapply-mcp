@@ -122,8 +122,18 @@ const LOOKBACK_WINDOW =
   /\b(?:in|within|during|over|for)\s+the\s+(?:past|last|previous|preceding|prior)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen)\s+(?:years?|months?)\b/i;
 const ABOUT_EXPERIENCE = /\bexperience\b/i;
 
-/** True when an entry about experience meets a question whose years are a lookback window, not experience. */
+/**
+ * An entry that states a length of experience, whose years a lookback window
+ * can be mistaken for. Mentioning experience is not enough: one government
+ * employment pattern ends "public institution employment experience", so
+ * McKesson's "Within the last three years, have you been employed by a
+ * government entity" was refused the standing "No" and failed the form.
+ */
+const COUNTS_YEARS_OF_EXPERIENCE =
+  /\b(?:\d+|n)\s*\+?\s*(?:years?|yrs?)\b|\byears?\s+of\s+(?:\w+\s+){0,3}experience\b|\bhow many years\b/i;
+
+/** True when an entry about years of experience meets a question whose years are a lookback window. */
 export function countsYearsAsLookback(label: string, describedBy: readonly string[]): boolean {
-  if (!describedBy.some((text) => ABOUT_EXPERIENCE.test(text))) return false;
+  if (!describedBy.some((text) => COUNTS_YEARS_OF_EXPERIENCE.test(text))) return false;
   return LOOKBACK_WINDOW.test(label) && !ABOUT_EXPERIENCE.test(label);
 }

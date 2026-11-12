@@ -680,3 +680,25 @@ describe("a decline with a value for forms that offer no decline", () => {
     expect(answers[0]?.requiresHuman).toBe(true);
   });
 });
+
+describe("an employment-history answer under a lookback window", () => {
+  const government = makeBankEntry({
+    key: "government-employment",
+    label: "Employment by a government entity",
+    patterns: ["employed by a government entity", "united states government or public institution employment experience"],
+    answer: "No",
+    alternatives: [],
+    allowAutoFill: true,
+  });
+
+  it("answers a government-employment question bounded to recent years", () => {
+    const { answers } = draftAnswers(
+      [yesNo("Within the last three years, have you been employed by a government entity in the United States?")],
+      profileWith([government]),
+      makeCampaign(),
+    );
+
+    expect(answers[0]?.answer).toBe("No");
+    expect(answers[0]?.requiresHuman).toBe(false);
+  });
+});

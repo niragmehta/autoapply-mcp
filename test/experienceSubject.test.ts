@@ -83,4 +83,24 @@ describe("countsYearsAsLookback", () => {
       false,
     );
   });
+
+  // McKesson's government-employment question lost the standing "No" because
+  // one of that entry's patterns ends in "employment experience".
+  it("does not hold back an employment entry that only mentions experience", () => {
+    const governmentEntry = [
+      "Employment by a government entity",
+      "employed by a government entity",
+      "united states government or public institution employment experience",
+    ];
+    expect(
+      countsYearsAsLookback(
+        "Within the last three years, have you been employed by a government entity in the United States?",
+        governmentEntry,
+      ),
+    ).toBe(false);
+  });
+
+  it("still recognises an entry that counts years of experience in words", () => {
+    expect(countsYearsAsLookback(lived, ["Years of experience", "how many years of professional experience"])).toBe(true);
+  });
 });
