@@ -27,7 +27,7 @@ Prompts:
 
 ### `add_company_board`
 
-**Verify and save a company's board.** Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.
+**Verify and save a company's board.** Checks that a candidate board actually serves postings, then saves it to companies.json. Nothing is saved unless postings were seen, because a wrong slug often answers 200 with a generic page rather than an error. A board already listed under another company name is not saved again; the existing name is reported as alreadyTrackedAs. Use this to record boards found elsewhere — a careers-page URL or a web search — including Workday, which cannot be probed by guessing.
 
 | Input | Type | Required | Notes |
 |---|---|---|---|
