@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { optionSearchCandidates } from "../src/submission/form/optionSearch.js";
+import { DECLINE_OPTION_CANDIDATES } from "../src/submission/form/answerVocabulary.js";
 import { fillWorkdayPrompt, isWorkdayPrompt } from "../src/submission/workday/prompt.js";
 import type { Locator, Page } from "../src/submission/workday/types.js";
 import { makeDraftAnswer } from "./factories.js";
@@ -980,6 +981,38 @@ describe("a single-select that a probe replaced", () => {
     const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), ["wish to answer", "Decline to self identify"]);
 
     expect(result.detail).not.toContain("kept");
+    expect(result.strayValue).toBeFalsy();
+    expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
+  });
+
+  // Altera's optional "Please indicate if you are Hispanic or Latino." offers
+  // only Yes and No. Typing two dozen decline wordings into a three-row list
+  // spent the whole 90-second budget before the run could move on.
+  it("stops at once when a short list offers no way to decline", async () => {
+    const prompt = new FakePrompt({ "Select One": null, Yes: null, No: null }, "dropdown");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), [...DECLINE_OPTION_CANDIDATES]);
+
+    expect(result.filled).toBe(false);
+    expect(result.detail).toContain("no way to decline");
+    expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
+  });
+
+  it("still takes the value stored for a required list with no way to decline", async () => {
+    const prompt = new FakePrompt({ "Select One": null, Yes: null, No: null }, "dropdown");
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), [...DECLINE_OPTION_CANDIDATES, "No"]);
+
+    expect(result.filled).toBe(true);
+    expect(prompt.selected).toEqual(["No"]);
+  });
+
+  it("still clears an earlier run's answer on a list with no way to decline", async () => {
+    const prompt = new FakePrompt({ "Select One": null, Yes: null, No: null }, "dropdown");
+    prompt.selected = ["Yes"];
+
+    const result = await fillWorkdayPrompt(prompt.asPage(), fieldOf(prompt), [...DECLINE_OPTION_CANDIDATES]);
+
     expect(result.strayValue).toBeFalsy();
     expect(prompt.selected.filter((value) => value !== "Select One")).toEqual([]);
   });

@@ -1,4 +1,6 @@
 import { pickNumericBandIndex } from "../../drafting/numericBands.js";
+import { isDeclineSearch } from "../form/answerVocabulary.js";
+import { isDeclinePhrase } from "../form/optionMatching.js";
 import {
   announcesNewSelection, bestRanked, expand, isRefusal, matches, sameOptions, sameValueSet, textGained, tookAnswer,
   type RankedOption,
@@ -33,6 +35,9 @@ const WD_PROMPT_BUDGET_MS = 90_000;
  * only burn the budget.
  */
 const WD_MAX_OPEN_FAILURES = 3;
+
+/** A list this short is read in full by the first look, with nothing left to search for. */
+const WD_SHORT_LIST = 12;
 
 /** True when this field is one of Workday's prompt widgets rather than a text input. */
 export async function isWorkdayPrompt(field: Locator): Promise<boolean> {
@@ -377,6 +382,23 @@ export async function fillWorkdayPrompt(
         }
       }
       trace.push(`offered match ${JSON.stringify(hit)} did not take`);
+    }
+    // A decline is asked of a short demographic list, which this first read
+    // shows in full. When nothing on it declines, typing each of two dozen
+    // decline wordings can only narrow it further: Altera's optional "Please
+    // indicate if you are Hispanic or Latino." offers Yes and No, and the
+    // search spent the whole budget before the run could move on. A value an
+    // earlier run left still goes through the full pass, which clears it.
+    if (
+      !hit &&
+      stale.length === 0 &&
+      isDeclineSearch(candidates) &&
+      offered.length > 0 &&
+      offered.length <= WD_SHORT_LIST &&
+      !offered.some((option) => isDeclinePhrase(option))
+    ) {
+      await closeMenu(page);
+      return { filled: false, detail: `offers no way to decline: ${JSON.stringify(offered)}` };
     }
   }
 
