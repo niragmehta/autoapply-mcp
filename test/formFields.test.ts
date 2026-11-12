@@ -2843,6 +2843,18 @@ describe("the employer's own site answers a careers-page source", () => {
     expect(optionSearchCandidates(source, careers, "Adobe")).not.toContain("Adobe");
   });
 
+  it("reaches the employer's site filed as its corporate site", () => {
+    // Equifax lists "Corporate Site" among job boards and social networks, and
+    // no careers-page wording matched it, so a required question failed the run.
+    const options = ["Select One", "CareerBuilder", "Career Fair", "Corporate Site", "Dice", "Indeed", "LinkedIn", "TAG Careers Site"];
+    expect(options[pickOptionIndex(options, optionSearchCandidates(source, careers, "Equifax"))]).toBe("Corporate Site");
+  });
+
+  it("offers a corporate site only for an approved careers-page answer", () => {
+    const linkedIn = answer("How did you hear about us?", "LinkedIn");
+    expect(optionSearchCandidates(source, linkedIn, "Equifax")).not.toContain("Corporate Site");
+  });
+
   it("adds no employer wording without an employer", () => {
     expect(optionSearchCandidates(source, careers).some((candidate) => candidate.endsWith(".com"))).toBe(false);
   });
@@ -4112,5 +4124,33 @@ describe("an availability question on a date picker", () => {
 
   it("still refuses it on a date that is not about starting", () => {
     expect(matchFields([field("Date of birth", { type: "date", required: true })], [notice])[0]?.answer).toBeNull();
+  });
+});
+
+/**
+ * Nike asks whether he will work with an employee he has a close personal
+ * relationship with, and offers only "Yes" and "Not to my knowledge". The
+ * stored "No" matched neither, so a settled question failed the run.
+ */
+describe("a no the form words as a hedge", () => {
+  const relation = field(
+    "If hired for this role, will you be working for or with a NIKE employee with whom you have a close personal relationship?",
+    { type: "select", required: true },
+  );
+  const no = answer("Close personal relationship with an employee", "No");
+
+  it("takes the hedged no when the form offers no plain No", () => {
+    const options = ["Select One", "Yes", "Not to my knowledge"];
+    expect(options[pickOptionIndex(options, optionSearchCandidates(relation, no, "Nike"))]).toBe("Not to my knowledge");
+  });
+
+  it("still prefers a plain No", () => {
+    const options = ["Select One", "Yes", "No", "Not to my knowledge"];
+    expect(options[pickOptionIndex(options, optionSearchCandidates(relation, no, "Nike"))]).toBe("No");
+  });
+
+  it("never turns a yes into a hedge", () => {
+    const yes = answer("Close personal relationship with an employee", "Yes");
+    expect(optionSearchCandidates(relation, yes, "Nike")).not.toContain("Not to my knowledge");
   });
 });

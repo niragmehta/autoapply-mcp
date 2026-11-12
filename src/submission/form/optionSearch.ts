@@ -69,8 +69,23 @@ export function optionSearchCandidates(pageField: FieldDescriptor, answer: Draft
   // separator became "Around USD 222", a figure that landed in CVS Health's
   // "Under $20,000" pay band.
   const locality = value.split(/,(?!\d)/)[0]?.trim() ?? "";
+  if (/^no$/i.test(value.trim()) && ASKS_WHAT_IS_KNOWN.test(normalizeLabel(field.label))) {
+    return [value, ...HEDGED_NEGATIVE_CANDIDATES];
+  }
   return locality.length > 1 && locality !== value ? [value, locality] : [value];
 }
+
+/**
+ * A no the form words as a hedge. Nike asks whether he will work with an
+ * employee he has a close personal relationship with and offers only "Yes"
+ * and "Not to my knowledge". A hedged no claims less than the stored no, never
+ * more, so it is tried only after the plain word, and only where the question
+ * is about relationships or awareness - a hedge would read oddly on a
+ * question of fact such as work authorization.
+ */
+const ASKS_WHAT_IS_KNOWN =
+  /\b(?:relationships?|related|relatives?|family|familial|know|knowledge|aware|acquainted|conflicts? of interest)\b/;
+const HEDGED_NEGATIVE_CANDIDATES = ["Not to my knowledge", "Not that I know of", "None to my knowledge", "None that I know of"] as const;
 
 /**
  * The approved work-authorization answer is a sentence - "I am authorized to
@@ -314,9 +329,16 @@ function sourceCandidates(field: FieldDescriptor, value: string, employer?: stri
   if (SOCIAL_SOURCE_PATTERN.test(value)) {
     return [value, "Friend", "Referral", ...IMPERSONAL_SOURCE_CANDIDATES];
   }
-  const ownSite = OWN_SITE_SOURCE.test(value) ? employerSiteCandidates(employer) : [];
+  const ownSite = OWN_SITE_SOURCE.test(value) ? [...employerSiteCandidates(employer), ...CORPORATE_SITE_CANDIDATES] : [];
   return [value, ...ownSite, ...IMPERSONAL_SOURCE_CANDIDATES];
 }
+
+/**
+ * The employer's own site in the company's own words. Equifax lists "Corporate
+ * Site" among job boards and social networks, and none of the careers-page
+ * wordings shares a whole word with it.
+ */
+const CORPORATE_SITE_CANDIDATES = ["Corporate Site", "Corporate Website", "Corporate Careers"] as const;
 
 function employerSiteCandidates(employer?: string): string[] {
   const name = employer?.trim() ?? "";
