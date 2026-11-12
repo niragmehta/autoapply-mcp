@@ -108,4 +108,28 @@ describe("numeric band matching", () => {
     expect(pickNumericBandIndex(pay, [stated])).toBe(4);
     expect(pickNumericBandIndex(["$100K - $150K", "$150K - $200K", "$200K+"], ["Around USD 180,000 base"])).toBe(1);
   });
+
+  it("reads 'within' a period as an upper bound", () => {
+    // Micron's Workday asks "When would you be available if an offer was
+    // accepted?" over "Within 1 month after offer acceptance" and the like. Each
+    // "within" band read as exactly that many months, so the stored "four weeks"
+    // - just under a month - fell between them and the required field stopped
+    // the run.
+    const micron = [
+      "Select One",
+      "Immediately after offer acceptance",
+      "Within 1 month after offer acceptance",
+      "Within 2 months after offer acceptance",
+      "More than 2 months after offer acceptance",
+      "After Graduation (For current grads)",
+    ];
+    const stated = "Approximately four weeks from offer acceptance.";
+    expect(micron[pickNumericBandIndex(micron, [stated])]).toBe("Within 1 month after offer acceptance");
+    expect(micron[pickNumericBandIndex(micron, ["Six weeks"])]).toBe("Within 2 months after offer acceptance");
+  });
+
+  it("prefers the tighter of two bounds that both hold the period", () => {
+    const reversed = ["Within 2 months", "Within 1 month", "Up to 3 months"];
+    expect(reversed[pickNumericBandIndex(reversed, ["Approximately four weeks"])]).toBe("Within 1 month");
+  });
 });

@@ -62,7 +62,10 @@ function parseBand(option: string): Band | undefined {
   const orMore = /^(?:\D*?)(\d+(?:\.\d+)?)\s*(?:or more|or above|or greater|and above|and up)\b/.exec(text);
   if (orMore) return { min: Number(orMore[1]), max: Number.POSITIVE_INFINITY };
 
-  const under = /^(?:less than|under|fewer than|below)\s*(\d+(?:\.\d+)?)/.exec(text);
+  // "Within 1 month" and "Up to 3 months" bound a period from above, as "under"
+  // does: Micron offers them for availability, and read as exact figures they
+  // left a stated "four weeks" - just under a month - between two bands.
+  const under = /^(?:less than|under|fewer than|below|within|up to|no more than)\s*(\d+(?:\.\d+)?)/.exec(text);
   if (under) return { min: 0, max: Number(under[1]) };
 
   const over = /^(?:more than|over|at least|greater than)\s*(\d+(?:\.\d+)?)/.exec(text);
@@ -128,7 +131,8 @@ function figureInUnit(candidate: string, unit: Unit | undefined): number | undef
  *
  * Where two bands touch at the boundary ("5 - 10" and "10+" both contain 10)
  * the one that starts at the figure wins, because a stored "10+ years" means
- * the open-ended band.
+ * the open-ended band. Bands starting at the same point ("Within 1 month",
+ * "Within 2 months") give way to the tighter one, the closer statement of it.
  */
 export function pickNumericBandIndex(
   optionTexts: readonly string[],
@@ -152,7 +156,8 @@ export function pickNumericBandIndex(
       const band = bands[index];
       if (!band) continue;
       if (figure < band.min || figure > band.max) continue;
-      if (best < 0 || band.min > bands[best]!.min) best = index;
+      const current = best < 0 ? undefined : bands[best]!;
+      if (!current || band.min > current.min || (band.min === current.min && band.max < current.max)) best = index;
     }
     if (best >= 0) return best;
   }
