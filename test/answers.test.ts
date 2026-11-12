@@ -92,6 +92,19 @@ describe("classifyQuestion", () => {
     );
     expect(answers[0]).toMatchObject({ answer: "https://linkedin.com/in/alex", source: "profile", requiresHuman: false });
   });
+
+  it("finds the candidate's province in a location list written country first", () => {
+    // Dropbox lists "Canada - British Columbia", which "Vancouver, British Columbia, Canada" neither contains nor is contained in.
+    const bc = { ...profile, identity: { ...profile.identity, location: { ...profile.identity.location, region: "British Columbia" } } };
+    const location = (options: string[]) =>
+      draftAnswers([question("Current Location", { required: true, type: "multi_value_single_select", options })], bc, campaign).answers[0];
+    expect(location(["Australia", "Canada - Alberta", "Canada - British Columbia", "US - California"])).toMatchObject({
+      answer: "Canada - British Columbia",
+      requiresHuman: false,
+    });
+    // The country alone would pick the first province listed, so a list without the province is handed back.
+    expect(location(["Canada - Alberta", "Canada - Ontario", "US - Other"])).toMatchObject({ answer: "", requiresHuman: true });
+  });
 });
 
 describe("optional questions do not gate approval", () => {

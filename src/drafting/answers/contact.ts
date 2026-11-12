@@ -46,6 +46,19 @@ function formatLocation(profile: Profile): string {
 }
 
 /**
+ * Other ways a closed list may write the same contact fact. Dropbox's "Current
+ * Location" offers "Canada - British Columbia", which neither contains nor is
+ * contained in "Vancouver, British Columbia, Canada", so the region alone is
+ * tried next. The country alone is deliberately not: on a list split by
+ * province it would pick whichever province happens to come first.
+ */
+export function contactAlternatives(citation: string, profile: Profile): string[] {
+  if (citation !== "identity.location") return [];
+  const region = profile.identity.location.region.trim();
+  return region.length > 0 ? [region] : [];
+}
+
+/**
  * A contact field asking for someone else's details: a referrer, a reference, a
  * recruiter, a manager or an emergency contact. The profile holds only the
  * candidate's own details, so none of its values can answer one. Tubi's

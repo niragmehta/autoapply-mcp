@@ -16,7 +16,7 @@ import {
   SELF_EVIDENT_CONSENT_CATEGORIES, declinesDemographics, isConsentingAnswer, soleConsentOption,
   soleDocumentConsentOption,
 } from "./answers/consent.js";
-import { CONTACT_RESOLVERS, contactResolverFor } from "./answers/contact.js";
+import { CONTACT_RESOLVERS, contactAlternatives, contactResolverFor } from "./answers/contact.js";
 import { citizenshipChoice } from "./answers/citizenship.js";
 import type { FormQuestion } from "./answers/formQuestion.js";
 import {
@@ -352,7 +352,9 @@ function answerOne(
     // handed back. Demographic fields are left to the decline handling at fill
     // time, which knows each board's wording for declining.
     const offered = personal.category === "contact" && personal.answer.trim().length > 0 && (question.options?.length ?? 0) > 0;
-    const resolved = offered ? resolveApprovedValue({ answer: personal.answer, alternatives: [] }, question, profile) : undefined;
+    const resolved = offered
+      ? resolveApprovedValue({ answer: personal.answer, alternatives: contactAlternatives(personal.citation, profile) }, question, profile)
+      : undefined;
     const unusable = resolved?.unmatchedChoice === true;
     return {
       questionKey: question.key,
@@ -470,7 +472,7 @@ function answerOne(
       // decorated - Instacart lists "(CAN) British Columbia", not "British
       // Columbia". Handing the bare value to a closed list submits something the
       // form does not offer, so resolve it against the options when there are any.
-      const resolved = resolveApprovedValue({ answer: plain, alternatives: [] }, question, profile);
+      const resolved = resolveApprovedValue({ answer: plain, alternatives: contactAlternatives(resolver[2], profile) }, question, profile);
       const value = resolved.unmatchedChoice ? plain : resolved.value;
       const unusable = resolved.unmatchedChoice && (question.options?.length ?? 0) > 0;
       return {
